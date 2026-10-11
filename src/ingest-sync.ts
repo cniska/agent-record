@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import { isRefusal } from "./coded-error";
 import { writeTransaction } from "./db";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
-import { createIngester, type FileSpec } from "./ingest";
+import { createIngester, type FileSpec, type SourceFile } from "./ingest";
 import { type GitReport, ingestCommits, repoRoots } from "./ingest-git";
 import { SESSION_SOURCES, type SessionSource } from "./ingest-sources";
 import { TOOLS, type Tool } from "./ingest-tools";
@@ -40,13 +40,15 @@ export function sync(db: Database, env: Env = process.env): SyncReport {
     report.failures.push({ path, error: error instanceof Error ? error.message : String(error) });
   };
 
-  const run = (spec: FileSpec): void => {
+  const run = (spec: FileSpec): boolean => {
     try {
       const result = ingester.ingestFile(spec);
       if (result.read) report.filesRead += 1;
       if (result.dropped.length > 0) report.dropped.push({ path: spec.path, lines: result.dropped });
+      return result.reset;
     } catch (error) {
       fail(spec.path, error);
+      return false;
     }
   };
 
@@ -65,14 +67,22 @@ export function sync(db: Database, env: Env = process.env): SyncReport {
     const source = SESSION_SOURCES[tool];
     const files = source.list(env);
     const titles = titlesOf(source);
+    const ingest = (file: SourceFile): boolean => {
+      const reset = run({ ...file, tool });
+      const title = titles?.get(file.sessionId);
+      if (title) writeTransaction(db, () => setTitle.run(title, file.sessionId));
+      return reset;
+    };
+    const resetSessions = new Set<string>();
     for (const file of files) {
       if (file.parentId && !sessionExists.get(file.parentId)) {
         report.orphanSubagents.push(file.sessionId);
         file.parentId = undefined;
       }
-      run({ ...file, tool });
-      const title = titles?.get(file.sessionId);
-      if (title) writeTransaction(db, () => setTitle.run(title, file.sessionId));
+      if (ingest(file)) resetSessions.add(file.sessionId);
+    }
+    for (const file of files) {
+      if (resetSessions.has(file.sessionId)) ingest(file);
     }
     report.sources.push({ tool, files: files.length });
   }

@@ -3,7 +3,7 @@ import { TOOLS } from "./ingest-tools";
 const sqlList = (values: readonly string[]): string => values.map((value) => `'${value}'`).join(",");
 const TOOLS_SQL = sqlList(TOOLS);
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS source_file (
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS source_file (
   cursor_state    TEXT,
   ingested_at     TEXT
 );
-CREATE UNIQUE INDEX IF NOT EXISTS source_file_session ON source_file(session_id, kind);
+CREATE INDEX IF NOT EXISTS source_file_session ON source_file(session_id, kind);
 
 CREATE TABLE IF NOT EXISTS session (
   id              TEXT PRIMARY KEY,

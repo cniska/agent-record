@@ -315,6 +315,69 @@ describe("ingest", () => {
     }
   });
 
+  const sidecarLines = [
+    { type: "custom-title", customTitle: "Side", sessionId: SESSION },
+    { type: "last-prompt", lastPrompt: "Go on.", sessionId: SESSION },
+  ];
+
+  function writeTwoFileSession(env: Env, transcriptLines: number, sidecarCount: number): void {
+    const lines = claudeTranscriptLines(SESSION);
+    writePrefix(
+      join(claudeProjectsDir(env), "-Users-x-code-demo", `${SESSION}.jsonl`),
+      lines,
+      bytesThroughLine(lines, transcriptLines - 1),
+    );
+    writePrefix(
+      join(claudeProjectsDir(env), "-Users-x-code-demo--claude-worktrees-w", `${SESSION}.jsonl`),
+      sidecarLines,
+      bytesThroughLine(sidecarLines, sidecarCount - 1),
+    );
+  }
+
+  test("reads two coexisting files of one session once each, keeping every row", () => {
+    const root = newRoot();
+    const env = scratchEnv(root);
+    writeTwoFileSession(env, claudeTranscriptLines(SESSION).length, sidecarLines.length);
+    const db = run(env);
+    try {
+      const before = snapshot(db, root);
+      const second = sync(db, env);
+      expect(second.failures).toEqual([]);
+      expect(second.filesRead).toBe(0);
+      expect(snapshot(db, root)).toEqual(before);
+      expect(before.messages.length).toBeGreaterThan(0);
+      expect(db.prepare("SELECT count(*) AS n FROM source_file").get()).toEqual({ n: 2 });
+    } finally {
+      db.close();
+    }
+  });
+
+  for (const shrunk of ["transcript", "sidecar"] as const) {
+    test(`re-reads every file of a session in one sync when its ${shrunk} shrank`, () => {
+      const full = claudeTranscriptLines(SESSION).length;
+      const after: [number, number] = shrunk === "transcript" ? [2, sidecarLines.length] : [full, 1];
+
+      const oneRoot = newRoot();
+      const oneEnv = scratchEnv(oneRoot);
+      writeTwoFileSession(oneEnv, ...after);
+      const oneDb = run(oneEnv);
+      const expected = snapshot(oneDb, oneRoot);
+      oneDb.close();
+
+      const root = newRoot();
+      const env = scratchEnv(root);
+      writeTwoFileSession(env, full, sidecarLines.length);
+      const db = run(env);
+      writeTwoFileSession(env, ...after);
+      try {
+        expect(sync(db, env).failures).toEqual([]);
+        expect(snapshot(db, root)).toEqual(expected);
+      } finally {
+        db.close();
+      }
+    });
+  }
+
   test("a rollout Codex archives keeps one source row and is not read twice", () => {
     const root = newRoot();
     const env = scratchEnv(root);
@@ -333,6 +396,29 @@ describe("ingest", () => {
       expect(db.prepare("SELECT count(*) AS n FROM source_file").get()).toEqual({ n: 1 });
       const src = db.prepare<{ src_file: string }, []>("SELECT src_file FROM message LIMIT 1").get();
       expect(src?.src_file).toContain("archived_sessions");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("reads a new file of a session from the start when an older one under another name is gone", () => {
+    const root = newRoot();
+    const env = scratchEnv(root);
+    const from = writeCodexRollout(env, "sessions", THREAD);
+    const db = run(env);
+    try {
+      const to = join(dirname(from), `rollout-2026-09-16T11-00-00-${THREAD}.jsonl`);
+      renameSync(from, to);
+      const report = sync(db, env);
+      expect(report.failures).toEqual([]);
+      expect(report.filesRead).toBe(1);
+      expect(
+        db
+          .prepare<{ bytes_ingested: number }, [string]>(
+            "SELECT bytes_ingested FROM source_file WHERE path = ?",
+          )
+          .get(to),
+      ).toEqual({ bytes_ingested: fullBytes(codexRolloutLines(THREAD, { withIds: true })) });
     } finally {
       db.close();
     }

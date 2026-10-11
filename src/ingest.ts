@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
-import { statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
+import { basename } from "node:path";
 import { writeTransaction } from "./db";
 import { gitSubcommands } from "./git-operations";
 import { readChunk } from "./ingest-chunk";
@@ -66,12 +67,13 @@ function foldSession(facts: SessionFacts[]) {
 }
 
 export function createIngester(db: Database) {
-  const selectCursor = db.prepare<CursorRow, [string, string]>(
+  const selectCursor = db.prepare<CursorRow, [string]>(
+    "SELECT path, bytes_ingested, lines_ingested, cursor_state FROM source_file WHERE path = ?",
+  );
+  const selectSessionFiles = db.prepare<CursorRow, [string, string]>(
     "SELECT path, bytes_ingested, lines_ingested, cursor_state FROM source_file WHERE session_id = ? AND kind = ?",
   );
-  const movePath = db.prepare<void, [string, string, string]>(
-    "UPDATE source_file SET path = ? WHERE session_id = ? AND kind = ?",
-  );
+  const movePath = db.prepare<void, [string, string]>("UPDATE source_file SET path = ? WHERE path = ?");
   const insertSourceFile = db.prepare<void, [string, string, string, string]>(
     `INSERT INTO source_file (path, tool, kind, session_id)
      VALUES (?, ?, ?, ?) ON CONFLICT(path) DO NOTHING`,
@@ -232,18 +234,28 @@ export function createIngester(db: Database) {
        cli_version = NULL, entrypoint = NULL, started_at = NULL, last_seen_at = NULL, title = NULL
      WHERE id = ?`,
   );
-  const resetCursor = db.prepare<void, [string]>(
-    "UPDATE source_file SET bytes_ingested = 0, lines_ingested = 0, cursor_state = NULL WHERE path = ?",
+  const resetCursors = db.prepare<void, [string]>(
+    "UPDATE source_file SET bytes_ingested = 0, lines_ingested = 0, cursor_state = NULL WHERE session_id = ?",
   );
 
-  function resetSession(sessionId: string, path: string): void {
+  function resetSession(sessionId: string): void {
     deleteSkillLoads.run(sessionId);
     deleteToolCalls.run(sessionId);
     deleteTurns.run(sessionId);
     deleteUsage.run(sessionId);
     deleteMessages.run(sessionId);
     clearTranscriptFields.run(sessionId);
-    resetCursor.run(path);
+    resetCursors.run(sessionId);
+  }
+
+  function claimMovedRow(spec: FileSpec): CursorRow | null {
+    const name = basename(spec.path);
+    const moved = selectSessionFiles
+      .all(spec.sessionId, spec.kind)
+      .find((row) => basename(row.path) === name && !existsSync(row.path));
+    if (!moved) return null;
+    writeTransaction(db, () => movePath.run(spec.path, moved.path));
+    return moved;
   }
 
   function applyChunk(spec: FileSpec, parsed: ParsedChunk, bytes: number, lines: number): void {
@@ -397,11 +409,7 @@ export function createIngester(db: Database) {
   function ingestFile(spec: FileSpec): FileResult {
     const stat = statSync(spec.path);
 
-    const existing = selectCursor.get(spec.sessionId, spec.kind);
-    if (existing && existing.path !== spec.path) {
-      writeTransaction(db, () => movePath.run(spec.path, spec.sessionId, spec.kind));
-    }
-
+    const existing = selectCursor.get(spec.path) ?? claimMovedRow(spec);
     let cursor = existing?.bytes_ingested ?? 0;
     let lines = existing?.lines_ingested ?? 0;
     let state = existing?.cursor_state ?? null;
@@ -414,13 +422,13 @@ export function createIngester(db: Database) {
     const nothing = { read: false, bytes: 0, lines: 0, reset, dropped: [] };
     const chunk = stat.size === cursor ? null : readChunk(spec.path, cursor);
     if (!chunk || chunk.bytes === 0) {
-      if (reset) writeTransaction(db, () => resetSession(spec.sessionId, spec.path));
+      if (reset) writeTransaction(db, () => resetSession(spec.sessionId));
       return nothing;
     }
 
     const parsed = spec.parse(chunk.lines, lines + 1, state);
     writeTransaction(db, () => {
-      if (reset) resetSession(spec.sessionId, spec.path);
+      if (reset) resetSession(spec.sessionId);
       applyChunk(spec, parsed, cursor + chunk.bytes, lines + chunk.lines.length);
     });
 
