@@ -28,7 +28,10 @@ export type FileResult = {
   dropped: number[];
 };
 
+const FROM_ANOTHER_FILE = "message.src_file IS NOT excluded.src_file";
+
 const MERGED_TEXT = `CASE
+  WHEN ${FROM_ANOTHER_FILE} THEN excluded.text
   WHEN excluded.text IS NULL THEN message.text
   WHEN message.text IS NULL THEN excluded.text
   ELSE message.text || char(10) || excluded.text END`;
@@ -122,7 +125,8 @@ export function createIngester(db: Database) {
        text                   = ${MERGED_TEXT},
        text_chars             = length(${MERGED_TEXT}),
        src_file               = excluded.src_file,
-       src_line               = min(message.src_line, excluded.src_line),
+       src_line               = CASE WHEN ${FROM_ANOTHER_FILE} THEN excluded.src_line
+                                  ELSE min(message.src_line, excluded.src_line) END,
        extra                  = coalesce(excluded.extra, message.extra)`,
   );
 

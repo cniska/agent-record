@@ -424,6 +424,37 @@ describe("ingest", () => {
     }
   });
 
+  test("points a message read again from a file under another name at that file's line", () => {
+    const lines = codexRolloutLines(THREAD, { withIds: true });
+    const shifted = [lines[0], lines[1], ...lines.slice(1)];
+    const writeShifted = (env: Env): void =>
+      writePrefix(
+        join(codexDir(env), "sessions", "2026", "09", "16", `rollout-2026-09-16T11-00-00-${THREAD}.jsonl`),
+        shifted,
+        fullBytes(shifted),
+      );
+
+    const freshRoot = newRoot();
+    const freshEnv = scratchEnv(freshRoot);
+    writeShifted(freshEnv);
+    const freshDb = run(freshEnv);
+    const expected = snapshot(freshDb, freshRoot).messages;
+    freshDb.close();
+
+    const root = newRoot();
+    const env = scratchEnv(root);
+    const from = writeCodexRollout(env, "sessions", THREAD);
+    const db = run(env);
+    try {
+      rmSync(from);
+      writeShifted(env);
+      expect(sync(db, env).failures).toEqual([]);
+      expect(snapshot(db, root).messages).toEqual(expected);
+    } finally {
+      db.close();
+    }
+  });
+
   test("titles a Codex session from the thread Codex keeps, while Codex is not running", () => {
     const root = newRoot();
     const env = scratchEnv(root);
