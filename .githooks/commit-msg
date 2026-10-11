@@ -1,0 +1,35 @@
+#!/bin/sh
+# agent-gate:commit-subject:2
+set -eu
+
+message=$(sed '/^# -\{24\} >8 -\{24\}$/,$d' "$1" | tr -d '\r')
+case "$message" in
+  "amend! "*) message=$(printf '%s\n' "$message" | tail -n +2 | sed '/./,$!d') ;;
+esac
+subject=$(printf '%s\n' "$message" | head -n 1)
+body=$(printf '%s\n' "$message" | tail -n +2 | grep -v '^#' | grep -v '^[[:space:]]*$' || true)
+
+[ -f "$(git rev-parse --git-path MERGE_HEAD)" ] && exit 0
+
+judged=$subject
+while :; do
+  case "$judged" in
+    "fixup! "*) judged=${judged#"fixup! "} ;;
+    "squash! "*) judged=${judged#"squash! "} ;;
+    *) break ;;
+  esac
+done
+
+refuse() {
+  echo "commit-msg: $1" >&2
+  echo "  got: $subject" >&2
+  exit 1
+}
+
+[ -n "$(printf '%s' "$judged" | tr -d '[:space:]')" ] || refuse "subject is empty."
+[ -z "$body" ] || refuse "commit has a body. The subject is the whole message."
+printf '%s\n' "$judged" | grep -Eq '^(feat|fix|refactor|docs|test|chore|style|perf|build|ci)(\([a-z0-9-]+\))?!?: [^[:space:]]' ||
+  refuse "subject is not a Conventional Commit (type(scope): what changed)."
+if printf '%s' "$judged" | LC_ALL=C grep -q '[^ -~]'; then refuse "subject is not ASCII."; fi
+[ "$(printf '%s' "$judged" | wc -c)" -le 50 ] || refuse "subject is $(printf '%s' "$judged" | wc -c | tr -d ' ') characters, over the 50 allowed."
+exit 0

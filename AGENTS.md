@@ -8,4 +8,4 @@ A local record of coding-agent sessions and the queries over it. [`README.md`](R
 - The record carries one schema version as `PRAGMA user_version` (`src/db-schema.ts`). A change to the tables bumps it; every reader and writer refuses another version and names `agent-record rebuild` as the repair.
 - Fix the cause, never work around it, and add no debt.
 - Code carries no comments, tool contracts aside. A why goes into a name, a test, or this file.
-- Commit directly to `main`, in Conventional Commits.
+- Commit directly to `main`. `.githooks/commit-msg` judges the message: one Conventional Commit subject, ASCII, at most 50 characters, and no body.

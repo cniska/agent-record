@@ -13,7 +13,8 @@
     "lint": "bunx biome check --error-on-warnings src",
     "typecheck": "bunx tsc --noEmit",
     "test": "bun test",
-    "check": "bun run lint && bun run typecheck && bun test"
+    "check": "bun run lint && bun run typecheck && bun test",
+    "prepare": "! git rev-parse --git-dir >/dev/null 2>&1 || git config core.hooksPath .githooks"
   },
   "devDependencies": {
     "@babel/parser": "^7.29.9",

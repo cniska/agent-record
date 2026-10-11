@@ -1,0 +1,48 @@
+# agent-gate:commit-subject:2
+name: Commits
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  commits:
+    name: Commits
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Resolve the pushed range, or the head alone when the base names no commit
+        id: range
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          if git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null; then
+            echo "range=$BASE_SHA..$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          elif git rev-parse -q --verify "$HEAD_SHA^" >/dev/null; then
+            echo "range=$HEAD_SHA^..$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          else
+            echo "range=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Judge each subject
+        id: judge
+        env:
+          RANGE: ${{ steps.range.outputs.range }}
+        run: |
+          shas=$(git rev-list --no-merges "$RANGE")
+          for sha in $shas; do
+            git log -1 --format=%B "$sha" > "$RUNNER_TEMP/message"
+            case "$(head -n 1 "$RUNNER_TEMP/message")" in
+              "fixup! "* | "squash! "* | "amend! "*) echo "$sha is an autosquash commit left in the range; squash it into the commit it names." >&2; exit 1 ;;
+            esac
+            sh .githooks/commit-msg "$RUNNER_TEMP/message"
+          done
