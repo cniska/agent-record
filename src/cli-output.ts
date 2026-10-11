@@ -1,0 +1,29 @@
+import { type Command, UsageError } from "./cli-contract";
+import { BUG, CodedError, type RefusalRecord, recordOf } from "./coded-error";
+
+function errorRecord(error: unknown, usage: string): RefusalRecord {
+  if (error instanceof UsageError) return { ...recordOf(error), resolve: usage.replace(/^usage: /, "") };
+  if (error instanceof CodedError) return recordOf(error);
+  return {
+    code: "command_failed",
+    message: error instanceof Error ? error.message : String(error),
+    meta: {},
+    resolve: BUG,
+  };
+}
+
+export function writeResult(command: string, value: unknown): number {
+  process.stdout.write(`${JSON.stringify({ command, ok: true, result: value ?? null })}\n`);
+  return 0;
+}
+
+export function writeError(command: string, error: unknown, usage: string): number {
+  process.stderr.write(`${JSON.stringify({ command, ok: false, error: errorRecord(error, usage) })}\n`);
+  return 1;
+}
+
+export function listing(commands: readonly Command[]): {
+  commands: { name: string; usage: string; summary: string }[];
+} {
+  return { commands: commands.map(({ name, usage, summary }) => ({ name, usage, summary })) };
+}

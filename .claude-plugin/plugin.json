@@ -1,0 +1,10 @@
+{
+  "name": "cniska-record",
+  "description": "Keeps the agent-record session record current: each new session starts an agent-record sync in the background when the CLI is installed.",
+  "author": {
+    "name": "Christoffer Niska"
+  },
+  "homepage": "https://github.com/cniska/agent-record",
+  "repository": "https://github.com/cniska/agent-record",
+  "license": "MIT"
+}

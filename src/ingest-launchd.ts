@@ -1,0 +1,65 @@
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { copyBackup } from "./file-backup";
+import { type Env, resolveHomeDir, stateDir } from "./paths";
+
+export const AGENT_LABEL = "dev.agentrecord.sync";
+const INTERVAL_SECONDS = 900;
+
+export function agentPlistPath(env: Env = process.env): string {
+  return join(resolveHomeDir(env), "Library", "LaunchAgents", `${AGENT_LABEL}.plist`);
+}
+
+export function syncLogPath(env: Env = process.env): string {
+  return join(stateDir(env), "sync.log");
+}
+
+function xmlText(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+export function agentPlist(bunPath: string, repoDir: string, env: Env = process.env): string {
+  const args = [bunPath, "run", join(repoDir, "src", "cli.ts"), "sync"];
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${AGENT_LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+${args.map((a) => `    <string>${xmlText(a)}</string>`).join("\n")}
+  </array>
+  <key>WorkingDirectory</key>
+  <string>${xmlText(repoDir)}</string>
+  <key>StartInterval</key>
+  <integer>${INTERVAL_SECONDS}</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>${xmlText(syncLogPath(env))}</string>
+  <key>StandardErrorPath</key>
+  <string>${xmlText(syncLogPath(env))}</string>
+</dict>
+</plist>
+`;
+}
+
+export type AgentPlan = { path: string; contents: string; unchanged: boolean };
+
+function planAgent(env: Env = process.env): AgentPlan {
+  const path = agentPlistPath(env);
+  const contents = agentPlist(process.execPath, resolve(import.meta.dir, ".."), env);
+  const unchanged = existsSync(path) && readFileSync(path, "utf8") === contents;
+  return { path, contents, unchanged };
+}
+
+export function installAgent(env: Env = process.env): AgentPlan {
+  const plan = planAgent(env);
+  if (plan.unchanged) return plan;
+  mkdirSync(dirname(plan.path), { recursive: true });
+  mkdirSync(dirname(syncLogPath(env)), { recursive: true });
+  if (existsSync(plan.path)) copyBackup(plan.path);
+  writeFileSync(plan.path, plan.contents);
+  return plan;
+}

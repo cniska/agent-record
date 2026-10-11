@@ -1,0 +1,41 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+  "files": {
+    "includes": ["src/**/*.ts"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 110
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "suspicious": {
+        "noConsole": { "level": "error", "options": { "allow": ["log"] } }
+      },
+      "performance": {
+        "noBarrelFile": "error",
+        "noReExportAll": "error"
+      },
+      "style": {
+        "noExportedImports": "error"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["src/**/*.ts"],
+      "linter": { "rules": { "nursery": { "noUnsafeTypeAssertion": "error" } } }
+    }
+  ],
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  }
+}
