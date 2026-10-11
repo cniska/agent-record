@@ -1,0 +1,119 @@
+import type { Database } from "bun:sqlite";
+import { describe, expect, test } from "bun:test";
+import { invariant } from "./assert";
+import type { QueryResult } from "./query";
+import { ctx, seeded } from "./query.test-support";
+import { findQuery } from "./query-registry";
+
+const found = findQuery("thread");
+invariant(found !== undefined, "the thread query is registered");
+const thread = found;
+
+function column(result: QueryResult, name: string): readonly unknown[] {
+  const at = result.columns.indexOf(name);
+  invariant(at !== -1, `thread prints a ${name} column`);
+  return result.rows.map((row) => row[at]);
+}
+
+function withActions(): Database {
+  const db = seeded();
+  db.run(
+    `INSERT INTO message (id, session_id, ts, role, text, src_file, src_line, denial_kind, user_feedback)
+     VALUES ('m-denied', 's1', '2026-09-01T10:34:00Z', 'user', NULL, '/f.jsonl', 5, 'user-rejected', 'not that file')`,
+  );
+  db.run(
+    `INSERT INTO message (id, session_id, ts, role, text, src_file, src_line)
+     VALUES ('m-after', 's1', '2026-09-01T10:40:00Z', 'assistant', 'Edited the sync instead.', '/f.jsonl', 6)`,
+  );
+  const call = db.prepare(
+    `INSERT INTO tool_call (id, session_id, ts_call, tool_name, file_path, command, is_error, exit_code, interrupted, src_file, src_line_call)
+     VALUES (?, 's1', ?, ?, ?, ?, ?, ?, ?, '/f.jsonl', ?)`,
+  );
+  call.run("t-bash", "2026-09-01T10:32:00Z", "Bash", null, "bun test\nsrc", 1, 1, 0, 3);
+  call.run("t-edit", "2026-09-01T10:33:00Z", "Edit", "/w/src/sync.ts", null, 0, null, 0, 4);
+  call.run("t-search", "2026-09-01T10:35:00Z", "WebSearch", null, null, null, null, 1, 5);
+  call.run("t-lost", null, "Read", "/w/no-time.ts", null, null, null, null, 7);
+  return db;
+}
+
+describe("thread", () => {
+  test("reads a session whose own id holds an at-sign", () => {
+    const db = seeded();
+    const id = "a0064e811b74a81cb@79e9c9bc-3a0b-46f6-b935-7a25be925124";
+    db.run(
+      `INSERT INTO session (id, tool, cwd, project, started_at, last_seen_at)
+       VALUES (?, 'claude', '/w', '/home/code/demo', '2026-09-01T10:00:00Z', '2026-09-01T11:00:00Z')`,
+      [id],
+    );
+    db.run(
+      `INSERT INTO message (id, session_id, ts, role, text, src_file, src_line)
+       VALUES ('m-sub', ?, '2026-09-01T10:45:00.000Z', 'assistant', 'What the delegate settled.', '/f.jsonl', 3)`,
+      [id],
+    );
+    const whole = thread.run(db, { ...ctx, arg: id });
+    expect(whole.denominator).toContain("1 messages anyone said");
+    expect(whole.denominator).not.toContain("centered on");
+
+    const passage = thread.run(db, { ...ctx, arg: `${id}@2026-09-01T10:45:00.000Z` });
+    expect(passage.denominator).toContain("centered on 2026-09-01T10:45:00.000Z");
+    expect(passage.rows.length).toBe(1);
+    db.close();
+  });
+
+  test("reads tool calls and denials between what was said, in time order", () => {
+    const db = withActions();
+    const whole = thread.run(db, { ...ctx, arg: "s1" });
+    expect(column(whole, "role")).toEqual(["assistant", "tool", "tool", "user", "tool", "assistant"]);
+    expect(column(whole, "text")).toEqual([
+      "Undo what an agent wrote without touching the user's own checkout.",
+      "Bash: bun test src → exit 1",
+      "Edit: /w/src/sync.ts",
+      "denied (user-rejected): not that file",
+      "WebSearch → interrupted",
+      "Edited the sync instead.",
+    ]);
+    expect(whole.denominator).toBe(
+      "session s1: 2 messages anyone said, 1 denials and 3 tool calls; 1 tool calls with no time are not shown",
+    );
+    expect(whole.note).toContain("A tool row names its command or file and how it ended, not its result.");
+    db.close();
+  });
+
+  test("puts what was said before the tool calls made at the same moment", () => {
+    const db = withActions();
+    db.run(
+      `INSERT INTO tool_call (id, session_id, ts_call, tool_name, command, src_file, src_line_call)
+       VALUES ('t-same', 's1', '2026-09-01T10:40:00Z', 'Bash', 'git commit', '/f.jsonl', 6)`,
+    );
+    const whole = thread.run(db, { ...ctx, arg: "s1" });
+    expect(column(whole, "text").slice(-2)).toEqual(["Edited the sync instead.", "Bash: git commit"]);
+    db.close();
+  });
+
+  test("centers on a timestamp with half the rows on each side, and says how many it left out", () => {
+    const db = withActions();
+    const call = db.prepare(
+      `INSERT INTO tool_call (id, session_id, ts_call, tool_name, file_path, src_file)
+       VALUES (?, 's1', ?, 'Read', ?, '/f.jsonl')`,
+    );
+    for (let minute = 10; minute < 30; minute += 1) {
+      call.run(`t-read-${minute}`, `2026-09-01T10:${minute}:00Z`, `/w/before-${minute}.ts`);
+    }
+    const passage = thread.run(db, { ...ctx, arg: "s1@2026-09-01T10:34:00Z", maxRows: 4 });
+    expect(column(passage, "text")).toEqual([
+      "Edit: /w/src/sync.ts",
+      "denied (user-rejected): not that file",
+      "WebSearch → interrupted",
+      "Edited the sync instead.",
+    ]);
+    expect(passage.denominator).toEndWith(
+      "centered on 2026-09-01T10:34:00Z; 22 earlier and 0 later rows not shown, --rows <n> to widen; 1 tool calls with no time are not shown",
+    );
+
+    const wide = thread.run(db, { ...ctx, arg: "s1@2026-09-01T10:34:00Z", maxRows: 60 });
+    expect(wide.denominator).toEndWith(
+      "centered on 2026-09-01T10:34:00Z; 1 tool calls with no time are not shown",
+    );
+    db.close();
+  });
+});
