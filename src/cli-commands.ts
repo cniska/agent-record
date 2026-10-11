@@ -6,6 +6,7 @@ const LOADERS: Record<string, () => Promise<Command>> = {
   query: () => import("./query-command").then((m) => m.queryCommand),
   sql: () => import("./sql-command").then((m) => m.sqlCommand),
   agent: () => import("./agent-command").then((m) => m.agentCommand),
+  doctor: () => import("./doctor-command").then((m) => m.doctorCommand),
 };
 
 export const COMMAND_NAMES: readonly string[] = Object.keys(LOADERS);

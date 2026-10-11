@@ -50,8 +50,8 @@ describe("launchd agent", () => {
     const dir = newRoot();
     const e = env(dir);
     expect(agentPlistPath(e)).toBe(join(dir, "Library", "LaunchAgents", `${AGENT_LABEL}.plist`));
-    expect(installAgent(e).unchanged).toBe(false);
-    expect(installAgent(e).unchanged).toBe(true);
+    expect(installAgent(e).state).toBe("missing");
+    expect(installAgent(e).state).toBe("current");
   });
 
   test("keeps the previous plists when overwriting one", async () => {

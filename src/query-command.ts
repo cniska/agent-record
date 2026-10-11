@@ -1,4 +1,4 @@
-import { type Command, UsageError } from "./cli-contract";
+import { type Command, Ran, UsageError } from "./cli-contract";
 import { parseArgs } from "./cli-flags";
 import { listQueries, runQuery } from "./query-ops";
 import { findQuery } from "./query-registry";
@@ -12,7 +12,7 @@ export const queryCommand: Command = {
     const [name, ...rest] = args;
     if (name === undefined || name === "list") {
       parseArgs(rest, { positionals: [0, 0], flags: [] }, "agent-record query list");
-      return listQueries();
+      return new Ran(listQueries(), 0);
     }
     const query = findQuery(name);
     if (query === undefined)
@@ -22,6 +22,6 @@ export const queryCommand: Command = {
       { positionals: [0, 1], flags: ["rows"] },
       `agent-record query ${name}`,
     );
-    return runQuery(query, positionals[0] ?? null, rowsOf(flags.rows));
+    return new Ran(runQuery(query, positionals[0] ?? null, rowsOf(flags.rows)), 0);
   },
 };

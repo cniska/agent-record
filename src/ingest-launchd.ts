@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
+import { invariant } from "./assert";
 import { copyBackup } from "./file-backup";
 import { type Env, resolveHomeDir, stateDir } from "./paths";
 
@@ -45,21 +46,44 @@ ${args.map((a) => `    <string>${xmlText(a)}</string>`).join("\n")}
 `;
 }
 
-export type AgentPlan = { path: string; contents: string; unchanged: boolean };
+export type AgentState = "missing" | "stale" | "current";
 
-function planAgent(env: Env = process.env): AgentPlan {
+export type AgentPlan = { path: string; contents: string; state: AgentState };
+
+function agentState(path: string, contents: string): AgentState {
+  if (!existsSync(path)) return "missing";
+  return readFileSync(path, "utf8") === contents ? "current" : "stale";
+}
+
+export function planAgent(env: Env = process.env): AgentPlan {
   const path = agentPlistPath(env);
   const contents = agentPlist(process.execPath, resolve(import.meta.dir, ".."), env);
-  const unchanged = existsSync(path) && readFileSync(path, "utf8") === contents;
-  return { path, contents, unchanged };
+  return { path, contents, state: agentState(path, contents) };
 }
 
 export function installAgent(env: Env = process.env): AgentPlan {
   const plan = planAgent(env);
-  if (plan.unchanged) return plan;
+  if (plan.state === "current") return plan;
   mkdirSync(dirname(plan.path), { recursive: true });
   mkdirSync(dirname(syncLogPath(env)), { recursive: true });
-  if (existsSync(plan.path)) copyBackup(plan.path);
+  if (plan.state === "stale") copyBackup(plan.path);
   writeFileSync(plan.path, plan.contents);
   return plan;
+}
+
+export function bootstrapCommand(path: string): string {
+  return `launchctl bootstrap gui/$(id -u) ${path}`;
+}
+
+export function bootoutCommand(): string {
+  return `launchctl bootout gui/$(id -u)/${AGENT_LABEL}`;
+}
+
+export function agentLoaded(): boolean {
+  const uid = process.getuid?.();
+  invariant(uid !== undefined, "launchd runs only where processes have a user id");
+  return Bun.spawnSync(["launchctl", "print", `gui/${uid}/${AGENT_LABEL}`], {
+    stdout: "ignore",
+    stderr: "ignore",
+  }).success;
 }

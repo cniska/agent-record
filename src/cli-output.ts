@@ -12,9 +12,8 @@ function errorRecord(error: unknown, usage: string): RefusalRecord {
   };
 }
 
-export function writeResult(command: string, value: unknown): number {
+export function writeResult(command: string, value: unknown): void {
   process.stdout.write(`${JSON.stringify({ command, ok: true, result: value ?? null })}\n`);
-  return 0;
 }
 
 export function writeError(command: string, error: unknown, usage: string): number {

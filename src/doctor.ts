@@ -1,0 +1,146 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+import { z } from "zod";
+import { unreachable } from "./assert";
+import { type CodedError, isRefusal } from "./coded-error";
+import { openReadOnly } from "./db-read";
+import { SCHEMA_VERSION } from "./db-schema";
+import { type AgentPlan, bootoutCommand, bootstrapCommand, planAgent } from "./ingest-launchd";
+import { claudeDir, dbPath, type Env } from "./paths";
+import { readSyncStamp, type SyncStamp } from "./sync-stamp";
+
+const HOUR_MS = 3_600_000;
+const SYNC_STOPPED_AFTER_MS = 24 * HOUR_MS;
+const CLAUDE_CODE_DEFAULT_CLEANUP_DAYS = 30;
+const RETENTION_WANTED_DAYS = 365;
+const SYNC = "agent-record sync";
+
+type Health = {
+  readonly name: string;
+  readonly state: "ok" | "warn" | "fail";
+  readonly detail: string;
+  readonly fix: string | null;
+};
+
+type DoctorReport = { readonly checks: readonly Health[]; readonly failing: number };
+
+export type DoctorProbes = { readonly agentLoaded: () => boolean; readonly now: number };
+
+function recordRefusal(env: Env): CodedError | null {
+  try {
+    openReadOnly(dbPath(env)).close();
+    return null;
+  } catch (error) {
+    if (!isRefusal(error)) throw error;
+    return error;
+  }
+}
+
+function recordHealth(env: Env): Health {
+  const name = "record";
+  const refusal = recordRefusal(env);
+  if (refusal !== null) return { name, state: "fail", detail: refusal.message, fix: refusal.resolve };
+  return { name, state: "ok", detail: `schema version ${SCHEMA_VERSION}`, fix: null };
+}
+
+function syncHealth(stamp: SyncStamp, now: number): Health {
+  const name = "sync";
+  switch (stamp.kind) {
+    case "never":
+      return { name, state: "fail", detail: "no sync has ever finished", fix: SYNC };
+    case "unreadable":
+      return { name, state: "fail", detail: `${stamp.path} holds no sync time`, fix: SYNC };
+    case "synced": {
+      const age = now - stamp.at.getTime();
+      const detail = `last sync finished ${Math.round(age / HOUR_MS)} hours ago`;
+      if (age > SYNC_STOPPED_AFTER_MS)
+        return { name, state: "warn", detail, fix: `${SYNC}, and fix any error it reports` };
+      return { name, state: "ok", detail, fix: null };
+    }
+    default:
+      return unreachable(stamp);
+  }
+}
+
+function agentHealth(plan: AgentPlan, loaded: () => boolean): Health {
+  const name = "agent";
+  switch (plan.state) {
+    case "missing":
+      return {
+        name,
+        state: "warn",
+        detail: "no launchd agent, so the record syncs only when something runs agent-record sync",
+        fix: "agent-record agent install",
+      };
+    case "stale":
+      return {
+        name,
+        state: "warn",
+        detail: "the launchd agent runs a different checkout or Bun than this agent-record",
+        fix: `agent-record agent install, then ${bootoutCommand()} and ${bootstrapCommand(plan.path)}`,
+      };
+    case "current":
+      if (!loaded())
+        return {
+          name,
+          state: "warn",
+          detail: "the launchd agent is written but not loaded",
+          fix: bootstrapCommand(plan.path),
+        };
+      return { name, state: "ok", detail: "the launchd agent is loaded", fix: null };
+    default:
+      return unreachable(plan.state);
+  }
+}
+
+const ClaudeSettings = z.looseObject({ cleanupPeriodDays: z.number().optional() });
+
+type CleanupRead = { kind: "read"; days: number | null } | { kind: "unreadable"; why: string };
+
+function readCleanupDays(path: string): CleanupRead {
+  if (!existsSync(path)) return { kind: "read", days: null };
+  let json: unknown;
+  try {
+    json = JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return { kind: "unreadable", why: "is not JSON" };
+  }
+  const parsed = ClaudeSettings.safeParse(json);
+  if (!parsed.success)
+    return { kind: "unreadable", why: "is not a settings object with a numeric cleanupPeriodDays" };
+  return { kind: "read", days: parsed.data.cleanupPeriodDays ?? null };
+}
+
+function retentionHealth(env: Env): Health {
+  const name = "retention";
+  const path = join(claudeDir(env), "settings.json");
+  const read = readCleanupDays(path);
+  if (read.kind === "unreadable")
+    return { name, state: "fail", detail: `${path} ${read.why}`, fix: `repair ${path} by hand` };
+  const { days } = read;
+  if (days === null)
+    return {
+      name,
+      state: "fail",
+      detail: `cleanupPeriodDays is unset, so Claude Code deletes transcripts after ${CLAUDE_CODE_DEFAULT_CLEANUP_DAYS} days`,
+      fix: `set "cleanupPeriodDays": ${RETENTION_WANTED_DAYS} or more in ${path}`,
+    };
+  if (days < RETENTION_WANTED_DAYS)
+    return {
+      name,
+      state: "warn",
+      detail: `Claude Code keeps transcripts ${days} days`,
+      fix: `set "cleanupPeriodDays": ${RETENTION_WANTED_DAYS} or more in ${path}`,
+    };
+  return { name, state: "ok", detail: `Claude Code keeps transcripts ${days} days`, fix: null };
+}
+
+export function recordDoctor(env: Env, { agentLoaded, now }: DoctorProbes): DoctorReport {
+  const checks = [
+    recordHealth(env),
+    syncHealth(readSyncStamp(env), now),
+    agentHealth(planAgent(env), agentLoaded),
+    retentionHealth(env),
+  ];
+  return { checks, failing: checks.filter(({ state }) => state === "fail").length };
+}

@@ -24,6 +24,10 @@ export function dbPath(env: Env = process.env): string {
   return join(xdgBase(env, "XDG_DATA_HOME", [".local", "share"]), NAME, "sessions.db");
 }
 
+export function syncStampPath(env: Env = process.env): string {
+  return join(stateDir(env), "last-sync");
+}
+
 export function locksDir(env: Env = process.env): string {
   return join(stateDir(env), "locks");
 }

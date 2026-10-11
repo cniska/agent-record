@@ -7,7 +7,8 @@ const [name, ...args] = process.argv.slice(2);
 const command = await findCommand(name);
 
 if (name === undefined) {
-  process.exitCode = writeResult("agent-record", listing(await allCommands()));
+  writeResult("agent-record", listing(await allCommands()));
+  process.exitCode = 0;
 } else if (command === undefined) {
   process.exitCode = writeError(
     "agent-record",
@@ -16,8 +17,9 @@ if (name === undefined) {
   );
 } else {
   try {
-    const value = await command.run(args);
-    process.exitCode = writeResult(command.name, value);
+    const ran = command.run(args);
+    writeResult(command.name, ran.value);
+    process.exitCode = ran.exitCode;
   } catch (error) {
     process.exitCode = writeError(command.name, error, command.usage);
   }

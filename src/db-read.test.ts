@@ -141,7 +141,7 @@ describe("each reader of the record", () => {
     try {
       const failsAtRow50 = `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 100)
         SELECT CASE WHEN i = 50 THEN abs(-9223372036854775808) ELSE i END AS i FROM n`;
-      const result = await asDataHome(home, () => sqlCommand.run([failsAtRow50]));
+      const { value: result } = await asDataHome(home, () => sqlCommand.run([failsAtRow50]));
       expect(result).toMatchObject({
         denominator: "more than 40 rows",
         more: "more rows than 40; --rows <n> to widen",

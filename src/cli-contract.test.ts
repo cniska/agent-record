@@ -78,6 +78,7 @@ describe("the command contract", () => {
         ["sync", "extra"],
         ["rebuild", "extra"],
         ["agent", "install", "extra"],
+        ["doctor", "extra"],
       ]) {
         const name = args.join(" ");
         const run = Bun.spawnSync([process.execPath, join(SRC, "cli.ts"), ...args], {

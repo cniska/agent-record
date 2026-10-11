@@ -19,6 +19,7 @@ Each command prints one JSON line.
 | `agent-record sync` | Read every new byte of every tool's session files, then the commits and files of the repos they name |
 | `agent-record rebuild` | Drop the record and read it again from the session files |
 | `agent-record agent install` | Write a launchd agent that runs `sync` every 15 minutes |
+| `agent-record doctor` | Judge whether the record is current and readable, naming the fix for each problem; exits 1 when a check fails |
 | `agent-record query list` | Name the queries |
 | `agent-record query search "<words>"` | Find messages by keyword |
 | `agent-record query thread <id-prefix>[@<ts>]` | Read the exchange around a hit |

@@ -1,6 +1,6 @@
-import { type Command, UsageError } from "./cli-contract";
+import { type Command, Ran, UsageError } from "./cli-contract";
 import { parseArgs } from "./cli-flags";
-import { AGENT_LABEL, installAgent } from "./ingest-launchd";
+import { bootoutCommand, bootstrapCommand, installAgent } from "./ingest-launchd";
 
 const USAGE = "usage: agent-record agent install";
 
@@ -12,13 +12,8 @@ export const agentCommand: Command = {
     const [verb, ...rest] = args;
     if (verb !== "install") throw new UsageError(USAGE);
     parseArgs(rest, { positionals: [0, 0], flags: [] }, "agent-record agent install");
-    const { path, unchanged } = installAgent();
-    if (unchanged) return { path, unchanged };
-    return {
-      path,
-      unchanged,
-      next: `launchctl bootstrap gui/$(id -u) ${path}`,
-      remove: `launchctl bootout gui/$(id -u)/${AGENT_LABEL}`,
-    };
+    const { path, state } = installAgent();
+    if (state === "current") return new Ran({ path, unchanged: true }, 0);
+    return new Ran({ path, unchanged: false, next: bootstrapCommand(path), remove: bootoutCommand() }, 0);
   },
 };

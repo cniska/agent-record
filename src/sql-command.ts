@@ -1,4 +1,4 @@
-import { type Command, UsageError } from "./cli-contract";
+import { type Command, Ran, UsageError } from "./cli-contract";
 import { parseArgs } from "./cli-flags";
 import { openReadOnly } from "./db-read";
 import { dbPath } from "./paths";
@@ -25,11 +25,14 @@ export const sqlCommand: Command = {
         rows.push(row);
         if (rows.length > maxRows) break;
       }
-      return {
-        denominator: rows.length > maxRows ? `more than ${maxRows} rows` : `${rows.length} rows`,
-        ...capRows(rows, maxRows),
-        note: rows.length === 0 ? "the statement ran and matched nothing" : null,
-      };
+      return new Ran(
+        {
+          denominator: rows.length > maxRows ? `more than ${maxRows} rows` : `${rows.length} rows`,
+          ...capRows(rows, maxRows),
+          note: rows.length === 0 ? "the statement ran and matched nothing" : null,
+        },
+        0,
+      );
     } finally {
       db.close();
     }
