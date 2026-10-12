@@ -38,14 +38,10 @@ export function refused(repo: string, args: readonly string[], run: GitRun) {
   });
 }
 
-export function ranRaw(repo: string, args: readonly string[]): string {
+export function ran(repo: string, args: readonly string[]): string {
   const run = git(repo, args);
   if (run.status !== 0) throw refused(repo, args, run);
   return run.out;
-}
-
-export function ran(repo: string, args: readonly string[]): string {
-  return ranRaw(repo, args).trim();
 }
 
 function answered(repo: string, args: readonly string[]): string | null {

@@ -95,7 +95,7 @@ export function sync(db: Database, env: Env = process.env): SyncReport {
     report.sources.push({ tool, files: files.length });
   }
 
-  const checkouts = probeCheckouts(repoRoots(db, fail), fail);
+  const checkouts = probeCheckouts(repoRoots(db), fail);
   report.git = ingestCommits(db, checkouts, fail);
   report.repoFiles = indexRepoFiles(db, checkouts, fail);
   return report;

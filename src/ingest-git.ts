@@ -1,27 +1,26 @@
 import type { Database } from "bun:sqlite";
+import { existsSync, realpathSync } from "node:fs";
 import { writeTransaction } from "./db";
+import { checkoutRoot } from "./git-checkout";
 import { type Checkout, probeCheckout } from "./git-probe";
 import { originLabel } from "./git-remote";
 import type { Failure } from "./ingest-contract";
-import { type Commit, readCommits, repoRoot } from "./ingest-git-source";
+import { type Commit, readCommits } from "./ingest-git-source";
 import { isScratchRepo } from "./ingest-scratch";
 
 export type GitReport = { repos: number; commits: number; files: number; unchanged: number };
 
 const OVERLAP_DAYS = 7;
 
-export function repoRoots(db: Database, fail: Failure): readonly string[] {
+export function repoRoots(db: Database): readonly string[] {
   const cwds = db
     .query<{ cwd: string }, []>("SELECT DISTINCT cwd FROM session WHERE cwd IS NOT NULL ORDER BY cwd")
     .all();
   const roots = new Set<string>();
   for (const { cwd } of cwds) {
-    try {
-      const root = repoRoot(cwd);
-      if (root !== null && !isScratchRepo(root)) roots.add(root);
-    } catch (error) {
-      fail(cwd, error);
-    }
+    if (!existsSync(cwd) || isScratchRepo(cwd)) continue;
+    const root = checkoutRoot(cwd);
+    if (root !== null) roots.add(realpathSync(root));
   }
   return [...roots];
 }

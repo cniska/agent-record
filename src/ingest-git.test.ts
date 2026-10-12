@@ -1,8 +1,8 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { SCHEMA_SQL } from "./db-schema";
 import { errorCode } from "./error-code";
 import { repoWithWorktree } from "./git-fixtures.test-support";
@@ -29,12 +29,6 @@ function repoWithCommit(content = "x"): string {
   git("add", "a.ts");
   git("-c", "user.name=T", "-c", "user.email=t@example.com", "commit", "--no-verify", "-q", "-m", "feat: a");
   return repo;
-}
-
-function brokenCheckout(): string {
-  const broken = dir("broken");
-  writeFileSync(join(broken, ".git"), "gitdir: /nonexistent/agent-record-test\n");
-  return broken;
 }
 
 const failing = (path: string, error: unknown) => {
@@ -167,11 +161,35 @@ describe("reading the repos the sessions ran in", () => {
     expect(db.query("SELECT path FROM checkout ORDER BY path").all()).toEqual(
       [breaking, healthy].sort().map((path) => ({ path })),
     );
-
-    db.run("INSERT INTO session (id, tool, cwd) VALUES ('s1', 'claude', ?)", [brokenCheckout()]);
-    failed.length = 0;
-    expect(repoRoots(db, fail)).toEqual([]);
-    expect(failed).toMatchObject([{ code: "git_failed" }]);
     db.close();
+  });
+});
+
+describe("finding the checkouts the sessions ran in", () => {
+  const thisCheckout = dirname(import.meta.dir);
+  const rootsOf = (cwds: readonly string[]): readonly string[] => {
+    const db = freshDb();
+    cwds.forEach((cwd, i) => {
+      db.run("INSERT INTO session (id, tool, cwd) VALUES (?, 'claude', ?)", [`s${i}`, cwd]);
+    });
+    const roots = repoRoots(db);
+    db.close();
+    return roots;
+  };
+
+  test("climbs from each cwd to its checkout, once per checkout", () => {
+    expect(rootsOf([thisCheckout, import.meta.dir, join(import.meta.dir, "..", "plugin")])).toEqual([
+      thisCheckout,
+    ]);
+  });
+
+  test("skips a cwd that is gone, so a repo above it is not mistaken for its checkout", () => {
+    expect(rootsOf([join(import.meta.dir, "agent-record-a-directory-that-is-gone")])).toEqual([]);
+  });
+
+  test("skips a scratch tree without asking git, even one whose .git is empty", () => {
+    const scratch = dir("scratch");
+    mkdirSync(join(scratch, ".git"));
+    expect(rootsOf([scratch])).toEqual([]);
   });
 });

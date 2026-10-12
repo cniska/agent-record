@@ -1,6 +1,4 @@
-import { existsSync } from "node:fs";
-import { ran, ranRaw } from "./git";
-import { checkoutRoot } from "./git-checkout";
+import { ran } from "./git";
 import { refuseGit } from "./git-contract";
 
 export type Commit = {
@@ -21,11 +19,6 @@ export function commitKind(subject: string): string | null {
   return match?.[1] ?? null;
 }
 
-export function repoRoot(dir: string): string | null {
-  if (!existsSync(dir) || checkoutRoot(dir) === null) return null;
-  return ran(dir, ["rev-parse", "--show-toplevel"]);
-}
-
 export function readCommits(checkout: string, head: string, since: string | null): Commit[] {
   const args = [
     "log",
@@ -36,7 +29,7 @@ export function readCommits(checkout: string, head: string, since: string | null
     "--no-renames",
   ];
   if (since) args.push(`--since=${since}`);
-  return commitsOf(ranRaw(checkout, args), `git ${args.join(" ")}`);
+  return commitsOf(ran(checkout, args), `git ${args.join(" ")}`);
 }
 
 export function commitsOf(output: string, command: string): Commit[] {

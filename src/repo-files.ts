@@ -1,14 +1,14 @@
 import type { Database } from "bun:sqlite";
 import { join } from "node:path";
 import { writeTransaction } from "./db";
-import { nulFields, ranRaw } from "./git";
+import { nulFields, ran } from "./git";
 import type { Checkout } from "./git-probe";
 import type { Failure } from "./ingest-contract";
 
 export type RepoFileReport = { repos: number; files: number; unchanged: number };
 
 export function trackedFiles(repo: string): string[] {
-  return nulFields(ranRaw(repo, ["ls-files", "-z"]), "git ls-files -z").map((path) => join(repo, path));
+  return nulFields(ran(repo, ["ls-files", "-z"]), "git ls-files -z").map((path) => join(repo, path));
 }
 
 export function indexRepoFiles(db: Database, checkouts: readonly Checkout[], fail: Failure): RepoFileReport {

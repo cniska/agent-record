@@ -2,8 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { invariant } from "./assert";
-import { commitKind, commitsOf, readCommits, repoRoot } from "./ingest-git-source";
+import { commitKind, commitsOf, readCommits } from "./ingest-git-source";
 
 function git(args: string[], cwd: string): void {
   Bun.spawnSync(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
@@ -90,9 +89,7 @@ describe("reading a repo", () => {
   test("reads each commit with the files it touched", () => {
     const dir = repoWith(["feat: one", "fix: two"]);
     try {
-      const root = repoRoot(dir);
-      invariant(root !== null, "the fixture is a repo");
-      const commits = readCommits(root, "HEAD", null);
+      const commits = readCommits(dir, "HEAD", null);
       expect(commits.length).toBe(2);
       const fix = commits.find((c) => c.subject === "fix: two");
       expect(fix?.kind).toBe("fix");
@@ -100,26 +97,6 @@ describe("reading a repo", () => {
       expect(fix?.ts).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     } finally {
       rmSync(dir, { recursive: true, force: true });
-    }
-  });
-
-  test("a directory that is gone or was never a repo has no root", () => {
-    expect(repoRoot("/no/such/directory/anywhere")).toBeNull();
-    const plain = mkdtempSync(join(tmpdir(), "agent-record-plain-"));
-    try {
-      expect(repoRoot(plain)).toBeNull();
-    } finally {
-      rmSync(plain, { recursive: true, force: true });
-    }
-  });
-
-  test("a checkout git cannot read is refused", () => {
-    const broken = mkdtempSync(join(tmpdir(), "agent-record-broken-"));
-    try {
-      writeFileSync(join(broken, ".git"), "gitdir: /nonexistent/agent-record-test\n");
-      expect(() => repoRoot(broken)).toThrow(expect.objectContaining({ code: "git_failed" }));
-    } finally {
-      rmSync(broken, { recursive: true, force: true });
     }
   });
 });
