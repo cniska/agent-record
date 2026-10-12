@@ -1,4 +1,7 @@
-export type ErrorKind = "refusal" | "fault";
+import { z } from "zod";
+
+const ErrorKind = z.enum(["refusal", "fault"]);
+export type ErrorKind = z.infer<typeof ErrorKind>;
 
 export const BUG =
   "stop and hand this error to the owner as a bug in agent-record; no command you run resolves it";
@@ -17,13 +20,16 @@ export class CodedError<Code extends string = string, Meta extends object = obje
   }
 }
 
-export type ErrorRecord = {
-  readonly kind: ErrorKind;
-  readonly code: string;
-  readonly message: string;
-  readonly meta: Record<string, unknown>;
-  readonly resolve: string;
-};
+export const ErrorRecord = z
+  .strictObject({
+    kind: ErrorKind,
+    code: z.string(),
+    message: z.string(),
+    meta: z.record(z.string(), z.unknown()),
+    resolve: z.string(),
+  })
+  .readonly();
+export type ErrorRecord = z.infer<typeof ErrorRecord>;
 
 export function errorRecord({ kind, code, message, meta, resolve }: CodedError): ErrorRecord {
   return { kind, code, message, meta: { ...meta }, resolve };
@@ -49,3 +55,16 @@ function coder(kind: ErrorKind) {
 export const refuser = coder("refusal");
 
 export const faulter = coder("fault");
+
+const faultUnexpected = faulter<{ readonly command_failed: { readonly detail: string } }>({
+  command_failed: {
+    message: ({ detail }) => `the command failed unexpectedly: ${detail}`,
+    resolve: () => BUG,
+  },
+});
+
+export function codedOf(error: unknown): CodedError {
+  if (error instanceof CodedError) return error;
+  const detail = error instanceof Error ? error.message : String(error);
+  return faultUnexpected("command_failed", { detail });
+}

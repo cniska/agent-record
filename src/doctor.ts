@@ -44,8 +44,24 @@ function syncHealth(stamp: SyncStamp, now: number): Health {
     case "never":
       return { name, state: "fail", detail: "no sync has ever finished", fix: SYNC };
     case "unreadable":
-      return { name, state: "fail", detail: `${stamp.path} holds no sync time`, fix: SYNC };
-    case "synced": {
+      return { name, state: "fail", detail: `${stamp.path} holds no sync outcome`, fix: SYNC };
+    case "failed":
+      return {
+        name,
+        state: "fail",
+        detail: `the last sync failed: ${stamp.error.message}`,
+        fix: stamp.error.resolve,
+      };
+    case "finished": {
+      if (stamp.failures !== null) {
+        const { count, first } = stamp.failures;
+        return {
+          name,
+          state: "warn",
+          detail: `${count} ${count === 1 ? "file" : "files"} failed in the last sync, first ${first}`,
+          fix: `${SYNC}, and read the failures it reports`,
+        };
+      }
       const age = now - stamp.at.getTime();
       const detail = `last sync finished ${Math.round(age / HOUR_MS)} hours ago`;
       if (age > SYNC_STOPPED_AFTER_MS)

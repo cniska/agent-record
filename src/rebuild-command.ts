@@ -4,7 +4,7 @@ import { withDb } from "./db";
 import { withLock } from "./db-lock";
 import { rebuild } from "./ingest-sync";
 import { dbPath } from "./paths";
-import { writeSyncStamp } from "./sync-stamp";
+import { stampingOutcome } from "./sync-stamp";
 
 export const rebuildCommand: Command = {
   name: "rebuild",
@@ -12,8 +12,7 @@ export const rebuildCommand: Command = {
   summary: "forget every cursor and read the archive from the start",
   run(args) {
     parseFlags(args, [], rebuildCommand.usage);
-    const report = withLock(() => withDb(dbPath(), rebuild, { forRebuild: true }));
-    writeSyncStamp(new Date());
+    const report = withLock(() => stampingOutcome(() => withDb(dbPath(), rebuild, { forRebuild: true })));
     return new Ran(report, 0);
   },
 };

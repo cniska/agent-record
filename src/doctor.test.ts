@@ -7,8 +7,9 @@ import { openDb } from "./db";
 import { recordDoctor } from "./doctor";
 import { runCli, scratchEnv } from "./fixtures.test-support";
 import { agentPlistPath, installAgent } from "./ingest-launchd";
-import { dbPath, type Env, syncStampPath } from "./paths";
-import { writeSyncStamp } from "./sync-stamp";
+import { sync } from "./ingest-sync";
+import { claudeProjectsDir, dbPath, type Env, syncStampPath } from "./paths";
+import { stampingOutcome, writeSyncStamp } from "./sync-stamp";
 
 const NOW = Date.parse("2026-10-11T12:00:00Z");
 const roots: string[] = [];
@@ -16,6 +17,10 @@ const roots: string[] = [];
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
+
+function finished(at: string) {
+  return { kind: "finished", at: new Date(at), failures: null } as const;
+}
 
 function newEnv(): Env {
   const root = mkdtempSync(join(tmpdir(), "agent-record-doctor-"));
@@ -63,7 +68,7 @@ describe("agent-record doctor", () => {
     });
   });
 
-  test("fails when no sync has ever finished, or the stamp holds no time", () => {
+  test("fails when no sync has ever finished, or the stamp holds no outcome", () => {
     const env = newEnv();
     expect(check(env, "sync")).toEqual({
       name: "sync",
@@ -76,26 +81,50 @@ describe("agent-record doctor", () => {
     expect(check(env, "sync")).toEqual({
       name: "sync",
       state: "fail",
-      detail: `${syncStampPath(env)} holds no sync time`,
+      detail: `${syncStampPath(env)} holds no sync outcome`,
       fix: "agent-record sync",
     });
   });
 
   test("warns once the last finished sync is over a day old, and passes inside a day", () => {
     const env = newEnv();
-    writeSyncStamp(new Date("2026-10-10T11:00:00Z"), env);
+    writeSyncStamp(finished("2026-10-10T11:00:00Z"), env);
     expect(check(env, "sync")).toEqual({
       name: "sync",
       state: "warn",
       detail: "last sync finished 25 hours ago",
       fix: "agent-record sync, and fix any error it reports",
     });
-    writeSyncStamp(new Date("2026-10-10T13:00:00Z"), env);
+    writeSyncStamp(finished("2026-10-10T13:00:00Z"), env);
     expect(check(env, "sync")).toEqual({
       name: "sync",
       state: "ok",
       detail: "last sync finished 23 hours ago",
       fix: null,
+    });
+  });
+
+  test("fails when the last sync threw, naming its error and fix", () => {
+    const env = newEnv();
+    writeSyncStamp(
+      {
+        kind: "failed",
+        at: new Date("2026-10-11T11:00:00Z"),
+        error: {
+          kind: "refusal",
+          code: "record_locked",
+          message: "another agent-record holds the record",
+          meta: {},
+          resolve: "run again once the other agent-record ends",
+        },
+      },
+      env,
+    );
+    expect(check(env, "sync")).toEqual({
+      name: "sync",
+      state: "fail",
+      detail: "the last sync failed: another agent-record holds the record",
+      fix: "run again once the other agent-record ends",
     });
   });
 
@@ -133,7 +162,7 @@ describe("agent-record doctor", () => {
     const env = newEnv();
     expect(recordDoctor(env, { agentLoaded: () => true, now: NOW }).failing).toBe(2);
     writeRecord(env);
-    writeSyncStamp(new Date(NOW), env);
+    writeSyncStamp(finished("2026-10-11T12:00:00Z"), env);
     expect(recordDoctor(env, { agentLoaded: () => true, now: NOW }).failing).toBe(0);
   });
 });
@@ -144,5 +173,27 @@ describe("agent-record doctor through the CLI", () => {
     expect(ran.exitCode).toBe(1);
     expect(ran.stderr).toBe("");
     expect(JSON.parse(ran.stdout)).toMatchObject({ command: "doctor", ok: true, result: { failing: 2 } });
+  });
+
+  test("warns when the last sync finished with failures, naming the first", () => {
+    const env = newEnv();
+    const parent = "11111111-2222-3333-4444-555555555555";
+    const subagents = join(claudeProjectsDir(env), "-Users-x-code-demo", parent, "subagents");
+    mkdirSync(join(subagents, "agent-a1.meta.json"), { recursive: true });
+    writeFileSync(join(subagents, "agent-a1.jsonl"), "\n");
+
+    const db = openDb(dbPath(env));
+    try {
+      const report = stampingOutcome(() => sync(db, env), env);
+      expect(report.failures).toHaveLength(1);
+      expect(check(env, "sync")).toEqual({
+        name: "sync",
+        state: "warn",
+        detail: `1 file failed in the last sync, first ${report.failures[0]?.path}`,
+        fix: "agent-record sync, and read the failures it reports",
+      });
+    } finally {
+      db.close();
+    }
   });
 });

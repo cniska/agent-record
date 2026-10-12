@@ -1,11 +1,5 @@
-import { type Command, faultCommand } from "./cli-contract";
-import { CodedError, errorRecord } from "./coded-error";
-
-function codedOf(error: unknown): CodedError {
-  if (error instanceof CodedError) return error;
-  const detail = error instanceof Error ? error.message : String(error);
-  return faultCommand("command_failed", { detail });
-}
+import type { Command } from "./cli-contract";
+import { codedOf, errorRecord } from "./coded-error";
 
 export function writeResult(command: string, value: unknown): void {
   process.stdout.write(`${JSON.stringify({ command, ok: true, result: value ?? null })}\n`);
