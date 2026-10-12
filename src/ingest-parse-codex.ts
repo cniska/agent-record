@@ -252,12 +252,18 @@ export function parseCodexChunk(
 
     if (line.type === "token_usage_record" && p.response_id) {
       const u = p.usage ?? {};
+      const input = u.input_tokens ?? 0;
+      const cached = u.cached_input_tokens ?? 0;
+      if (cached > input) {
+        dropped.push(srcLine);
+        continue;
+      }
       usage.push({
         responseId: p.response_id,
         ts,
         model: current.model,
-        inputTokens: u.input_tokens ?? 0,
-        cacheReadTokens: u.cached_input_tokens ?? 0,
+        inputTokens: input - cached,
+        cacheReadTokens: cached,
         cacheWriteTokens: u.cache_write_input_tokens ?? 0,
         outputTokens: u.output_tokens ?? 0,
       });

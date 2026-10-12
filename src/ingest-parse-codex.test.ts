@@ -30,17 +30,32 @@ describe("parseCodexChunk", () => {
     }
   });
 
-  test("maps the token fields Codex reports, with input including cached reads", () => {
+  test("maps the token fields Codex reports, with input excluding cached reads", () => {
     const parsed = parseCodexChunk(modern, 1, THREAD, {});
     expect(parsed.usage).toHaveLength(1);
     expect(parsed.usage[0]).toMatchObject({
       responseId: `resp-${THREAD}-1`,
-      inputTokens: 18018,
+      inputTokens: 8034,
       cacheReadTokens: 9984,
       cacheWriteTokens: 0,
       outputTokens: 305,
       model: "gpt-5.6-luna",
     });
+  });
+
+  test("drops a token record that reports more cached input than input", () => {
+    const record = JSON.stringify({
+      type: "token_usage_record",
+      timestamp: "2026-09-16T10:05:00.000Z",
+      payload: {
+        thread_id: THREAD,
+        response_id: "resp-cached",
+        usage: { input_tokens: 10, cached_input_tokens: 11, output_tokens: 1 },
+      },
+    });
+    const parsed = parseCodexChunk([record], 7, THREAD, {});
+    expect(parsed.usage).toEqual([]);
+    expect(parsed.dropped).toEqual([7]);
   });
 
   test("resumes the turn in effect when a chunk starts after the turn_context", () => {

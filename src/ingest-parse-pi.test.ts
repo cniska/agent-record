@@ -144,7 +144,7 @@ describe("a Pi or omp session", () => {
     ]);
   });
 
-  test("records the tokens each response used", () => {
+  test("records the tokens each response used, input as pi reports it, apart from cache reads", () => {
     const { usage } = parsePiChunk(LINES, 1);
 
     expect(usage).toEqual([
