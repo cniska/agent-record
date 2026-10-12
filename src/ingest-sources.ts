@@ -1,13 +1,14 @@
 import type { SourceFile } from "./ingest";
 import { listClaudeSessions } from "./ingest-claude-source";
 import { codexTitlesPath, listCodexRollouts, readCodexTitles } from "./ingest-codex-source";
+import type { Failure } from "./ingest-contract";
 import { listGrokSessions } from "./ingest-grok-source";
 import { listPiSessions } from "./ingest-pi-source";
 import type { Tool } from "./ingest-tools";
 import { type Env, ompSessionsDir, piSessionsDir } from "./paths";
 
 export type SessionSource = {
-  list(env: Env): SourceFile[];
+  list(env: Env, fail: Failure): SourceFile[];
   titles?: { path(env: Env): string; read(path: string): ReadonlyMap<string, string> };
 };
 

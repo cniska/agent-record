@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { openDb } from "./db";
+import { errorCode } from "./error-code";
 import { scratchEnv } from "./fixtures.test-support";
 import { listGrokSessions } from "./ingest-grok-source";
 import { parseGrokChunk } from "./ingest-parse-grok";
@@ -261,11 +262,43 @@ describe("grok sessions", () => {
     expect(parsed.toolCalls.map((call) => call.id)).toEqual(["call-8"]);
   });
 
-  test("ignores a summary.json that fails its schema", () => {
+  test("names a summary.json that fails its schema as unreadable and lists the session without it", () => {
     const env = scratchEnv(newRoot());
-    writeSession(env, ORPHAN, [], { info: { id: 5 }, parent_session_id: PARENT });
-    const [spec] = listGrokSessions(env);
+    const path = writeSession(env, ORPHAN, [], { info: { id: 5 }, parent_session_id: PARENT });
+    const summary = join(dirname(path), "summary.json");
+    const failures: { path: string; error: unknown }[] = [];
+    const [spec] = listGrokSessions(env, (failed, error) => failures.push({ path: failed, error }));
     expect(spec?.sessionId).toBe(ORPHAN);
     expect(spec?.parentId).toBeUndefined();
+    expect(failures).toEqual([
+      {
+        path: summary,
+        error: expect.objectContaining({
+          kind: "refusal",
+          code: "sidecar_unreadable",
+          meta: { path: summary, detail: "info.id: Invalid input: expected string, received number" },
+        }),
+      },
+    ]);
+  });
+
+  test("names a summary.json that is not JSON as unreadable", () => {
+    const env = scratchEnv(newRoot());
+    const path = writeSession(env, ORPHAN, [], {});
+    const summary = join(dirname(path), "summary.json");
+    writeFileSync(summary, "{ cut");
+    const failures: { path: string; code: unknown }[] = [];
+    listGrokSessions(env, (failed, error) => failures.push({ path: failed, code: errorCode(error) }));
+    expect(failures).toEqual([{ path: summary, code: "sidecar_unreadable" }]);
+  });
+
+  test("names nothing for a session with no summary.json", () => {
+    const env = scratchEnv(newRoot());
+    const path = writeSession(env, ORPHAN, [], {});
+    rmSync(join(dirname(path), "summary.json"));
+    const failures: unknown[] = [];
+    const [spec] = listGrokSessions(env, (_, error) => failures.push(error));
+    expect(spec?.sessionId).toBe(ORPHAN);
+    expect(failures).toEqual([]);
   });
 });

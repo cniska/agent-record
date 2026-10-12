@@ -12,7 +12,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-function parseWithState(state: unknown) {
+function parseWithRawState(state: string) {
   const root = mkdtempSync(join(tmpdir(), "agent-record-test-"));
   roots.push(root);
   const env = scratchEnv(root);
@@ -21,19 +21,32 @@ function parseWithState(state: unknown) {
   const lines = codexRolloutLines(THREAD, { withIds: true })
     .map((l) => JSON.stringify(l))
     .filter((l) => l.includes("response_item"));
-  return spec?.parse(lines, 1, JSON.stringify(state));
+  return spec?.parse(lines, 1, state);
 }
 
 describe("listCodexRollouts", () => {
-  test("reads cursor state that fails its schema as empty", () => {
-    const parsed = parseWithState({ model: 5 });
-    const assistant = parsed?.messages.find((m) => m.role === "assistant");
-    expect(assistant).toBeDefined();
-    expect(assistant?.model).toBeUndefined();
+  test("faults on cursor state that fails its schema, since agent-record wrote it", () => {
+    expect(() => parseWithRawState(JSON.stringify({ model: 5 }))).toThrow(
+      expect.objectContaining({
+        kind: "fault",
+        code: "cursor_state_corrupt",
+        meta: {
+          thread: THREAD,
+          state: '{"model":5}',
+          detail: "model: Invalid input: expected string, received number",
+        },
+      }),
+    );
+  });
+
+  test("faults on cursor state that is not JSON", () => {
+    expect(() => parseWithRawState("{ cut")).toThrow(
+      expect.objectContaining({ kind: "fault", code: "cursor_state_corrupt" }),
+    );
   });
 
   test("carries the model from cursor state that passes its schema", () => {
-    const parsed = parseWithState({ model: "gpt-x" });
+    const parsed = parseWithRawState(JSON.stringify({ model: "gpt-x" }));
     expect(parsed?.messages.find((m) => m.role === "assistant")?.model).toBe("gpt-x");
   });
 });

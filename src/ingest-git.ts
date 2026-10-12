@@ -1,16 +1,15 @@
 import type { Database } from "bun:sqlite";
 import { writeTransaction } from "./db";
 import { originLabel } from "./git-remote";
+import type { Failure } from "./ingest-contract";
 import { type Commit, readCommits, repoRoot, repositoryOf } from "./ingest-git-source";
 import { isScratchRepo } from "./ingest-scratch";
 
 export type GitReport = { repos: number; commits: number; files: number };
 
-export type RepoFailure = (path: string, error: unknown) => void;
-
 const OVERLAP_DAYS = 7;
 
-export function repoRoots(db: Database, fail: RepoFailure): readonly string[] {
+export function repoRoots(db: Database, fail: Failure): readonly string[] {
   const cwds = db
     .query<{ cwd: string }, []>("SELECT DISTINCT cwd FROM session WHERE cwd IS NOT NULL ORDER BY cwd")
     .all();
@@ -26,7 +25,7 @@ export function repoRoots(db: Database, fail: RepoFailure): readonly string[] {
   return [...roots];
 }
 
-export function ingestCommits(db: Database, roots: readonly string[], fail: RepoFailure): GitReport {
+export function ingestCommits(db: Database, roots: readonly string[], fail: Failure): GitReport {
   const insertCommit = db.prepare(
     `INSERT INTO repo_commit (sha, repo, label, ts, author, subject, kind)
      VALUES (?, ?, ?, ?, ?, ?, ?)

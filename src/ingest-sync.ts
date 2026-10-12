@@ -66,7 +66,7 @@ export function sync(db: Database, env: Env = process.env): SyncReport {
 
   for (const tool of TOOLS) {
     const source = SESSION_SOURCES[tool];
-    const files = source.list(env);
+    const files = source.list(env, fail);
     const titles = titlesOf(source);
     const ingest = (file: SourceFile): boolean => {
       const reset = run({ ...file, tool });

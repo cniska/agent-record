@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import { join } from "node:path";
 import { writeTransaction } from "./db";
 import { nulFields, ranRaw } from "./git";
-import type { RepoFailure } from "./ingest-git";
+import type { Failure } from "./ingest-contract";
 
 export type RepoFileReport = { repos: number; files: number };
 
@@ -10,7 +10,7 @@ export function trackedFiles(repo: string): string[] {
   return nulFields(ranRaw(repo, ["ls-files", "-z"]), "git ls-files -z").map((path) => join(repo, path));
 }
 
-export function indexRepoFiles(db: Database, roots: readonly string[], fail: RepoFailure): RepoFileReport {
+export function indexRepoFiles(db: Database, roots: readonly string[], fail: Failure): RepoFileReport {
   const clear = db.prepare("DELETE FROM repo_file WHERE repo = ?");
   const insert = db.prepare("INSERT INTO repo_file (repo, path) VALUES (?, ?) ON CONFLICT DO NOTHING");
 

@@ -3,8 +3,9 @@ import { existsSync } from "node:fs";
 import { basename, join } from "node:path";
 import { Glob } from "bun";
 import type { SourceFile } from "./ingest";
+import { faultIngest } from "./ingest-contract";
 import { CodexState, parseCodexChunk } from "./ingest-parse-codex";
-import { readingSource } from "./ingest-source-read";
+import { parseJson, readingSource } from "./ingest-source-read";
 import { codexDir, type Env } from "./paths";
 
 const ROLLOUT_NAME = /^rollout-[0-9T:-]+-([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})$/;
@@ -13,14 +14,12 @@ export function threadIdOf(path: string): string | undefined {
   return ROLLOUT_NAME.exec(basename(path, ".jsonl"))?.[1];
 }
 
-function readState(raw: string | null): CodexState {
+function readState(thread: string, raw: string | null): CodexState {
   if (!raw) return {};
-  try {
-    const parsed = CodexState.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : {};
-  } catch {
-    return {};
-  }
+  const read = parseJson(raw, CodexState);
+  if (read.kind === "invalid")
+    throw faultIngest("cursor_state_corrupt", { thread, state: raw, detail: read.detail });
+  return read.value;
 }
 
 export function listCodexRollouts(env: Env = process.env): SourceFile[] {
@@ -35,7 +34,7 @@ export function listCodexRollouts(env: Env = process.env): SourceFile[] {
         path,
         kind: "rollout",
         sessionId: threadId,
-        parse: (lines, first, state) => parseCodexChunk(lines, first, threadId, readState(state)),
+        parse: (lines, first, state) => parseCodexChunk(lines, first, threadId, readState(threadId, state)),
       });
     }
   }

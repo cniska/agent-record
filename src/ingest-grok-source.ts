@@ -1,10 +1,12 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { Glob } from "bun";
 import { z } from "zod";
 import type { SourceFile } from "./ingest";
+import type { Failure } from "./ingest-contract";
 import { parseGrokChunk } from "./ingest-parse-grok";
 import { projectOf, type SessionFacts } from "./ingest-session-records";
+import { readSidecar } from "./ingest-source-read";
 import { type Env, grokDir } from "./paths";
 
 type GrokSummary = {
@@ -31,19 +33,8 @@ function nonEmpty(value: string | null | undefined): string | undefined {
   return value != null && value !== "" ? value : undefined;
 }
 
-function readSummaryFile(path: string): z.infer<typeof SummaryFile> | undefined {
-  try {
-    const parsed = SummaryFile.safeParse(JSON.parse(readFileSync(path, "utf8")));
-    return parsed.success ? parsed.data : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function readGrokSummary(sessionDir: string): GrokSummary | undefined {
-  const path = join(sessionDir, "summary.json");
-  if (!existsSync(path)) return undefined;
-  const file = readSummaryFile(path);
+function readGrokSummary(sessionDir: string, fail: Failure): GrokSummary | undefined {
+  const file = readSidecar(join(sessionDir, "summary.json"), SummaryFile, fail);
   if (!file) return undefined;
   const id = nonEmpty(file.info?.id) ?? basename(sessionDir);
   const cwd = nonEmpty(file.info?.cwd);
@@ -72,13 +63,13 @@ function summaryFacts(summary: GrokSummary | undefined): SessionFacts[] {
   ];
 }
 
-export function listGrokSessions(env: Env = process.env): SourceFile[] {
+export function listGrokSessions(env: Env, fail: Failure): SourceFile[] {
   const root = join(grokDir(env), "sessions");
   if (!existsSync(root)) return [];
   const specs: SourceFile[] = [];
   for (const path of new Glob("*/*/updates.jsonl").scanSync({ cwd: root, absolute: true })) {
     const sessionDir = dirname(path);
-    const summary = readGrokSummary(sessionDir);
+    const summary = readGrokSummary(sessionDir, fail);
     const facts = summaryFacts(summary);
     specs.push({
       path,

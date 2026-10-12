@@ -636,7 +636,7 @@ describe("ingest", () => {
     }
   });
 
-  test("ignores a subagent meta file whose agentType is not a string", () => {
+  test("names a subagent meta file whose agentType is not a string, and records the subagent untyped", () => {
     const root = newRoot();
     const env = scratchEnv(root);
     writeClaudeTranscript(env, "-Users-x-code-demo", SESSION);
@@ -649,9 +649,22 @@ describe("ingest", () => {
         .map((l) => JSON.stringify(l))
         .join("\n")}\n`,
     );
-    writeFileSync(join(agentDir, `agent-${agentId}.meta.json`), JSON.stringify({ agentType: 5 }));
-    const db = run(env);
+    const meta = join(agentDir, `agent-${agentId}.meta.json`);
+    writeFileSync(meta, JSON.stringify({ agentType: 5 }));
+    const db = openDb(dbPath(env));
     try {
+      expect(sync(db, env).failures).toEqual([
+        {
+          path: meta,
+          error: {
+            kind: "refusal",
+            code: "sidecar_unreadable",
+            message: `cannot read ${meta}: agentType: Invalid input: expected string, received number; its session is recorded without it`,
+            meta: { path: meta, detail: "agentType: Invalid input: expected string, received number" },
+            resolve: `if ${meta} is unreadable, make it readable and run agent-record sync; if the detail names a field or a JSON error, the tool changed its format: hand this to the owner to update agent-record, and leave the file in place`,
+          },
+        },
+      ]);
       expect(
         db.prepare("SELECT parent_id, agent_type FROM session WHERE id = ?").get(`${agentId}@${SESSION}`),
       ).toEqual({ parent_id: SESSION, agent_type: null });

@@ -1,9 +1,11 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { Glob } from "bun";
 import { z } from "zod";
 import type { SourceFile } from "./ingest";
+import type { Failure } from "./ingest-contract";
 import { parseClaudeChunk } from "./ingest-parse-claude";
+import { readSidecar } from "./ingest-source-read";
 import { claudeProjectsDir, type Env } from "./paths";
 import { listInstalledSkills } from "./skill-installed";
 
@@ -12,11 +14,11 @@ function parserFor(env: Env) {
   return (lines: string[], firstLineNumber: number) => parseClaudeChunk(lines, firstLineNumber, known);
 }
 
-export function listClaudeSessions(env: Env = process.env): SourceFile[] {
+export function listClaudeSessions(env: Env, fail: Failure): SourceFile[] {
   const root = claudeProjectsDir(env);
   if (!existsSync(root)) return [];
   const parse = parserFor(env);
-  return [...transcripts(root, parse), ...subagents(root, parse)];
+  return [...transcripts(root, parse), ...subagents(root, parse, fail)];
 }
 
 function transcripts(root: string, parse: SourceFile["parse"]): SourceFile[] {
@@ -34,18 +36,12 @@ function scan(root: string, pattern: string): string[] {
 
 const SubagentMeta = z.looseObject({ agentType: z.string().optional() });
 
-function agentTypeOf(path: string): string | undefined {
-  const meta = join(dirname(path), `${basename(path, ".jsonl")}.meta.json`);
-  if (!existsSync(meta)) return undefined;
-  try {
-    const parsed = SubagentMeta.safeParse(JSON.parse(readFileSync(meta, "utf8")));
-    return parsed.success ? parsed.data.agentType || undefined : undefined;
-  } catch {
-    return undefined;
-  }
+function agentTypeOf(path: string, fail: Failure): string | undefined {
+  const meta = readSidecar(join(dirname(path), `${basename(path, ".jsonl")}.meta.json`), SubagentMeta, fail);
+  return meta?.agentType || undefined;
 }
 
-function subagents(root: string, parse: SourceFile["parse"]): SourceFile[] {
+function subagents(root: string, parse: SourceFile["parse"], fail: Failure): SourceFile[] {
   return scan(root, "*/*/subagents/*.jsonl").map((path) => {
     const parentId = basename(dirname(dirname(path)));
     return {
@@ -53,7 +49,7 @@ function subagents(root: string, parse: SourceFile["parse"]): SourceFile[] {
       kind: "subagent",
       sessionId: `${basename(path, ".jsonl").replace(/^agent-/, "")}@${parentId}`,
       parentId,
-      agentType: agentTypeOf(path),
+      agentType: agentTypeOf(path, fail),
       parse,
     };
   });
