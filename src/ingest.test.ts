@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { openDb } from "./db";
@@ -491,9 +491,60 @@ describe("ingest", () => {
     const db = openDb(dbPath(env));
     try {
       expect(sync(db, env).failures).toEqual([
-        { path: statePath, error: expect.stringContaining("no such column: title") },
+        {
+          path: statePath,
+          error: {
+            kind: "refusal",
+            code: "titles_unreadable",
+            message: `cannot read Codex thread titles from ${statePath}: no such column: title; its sessions are recorded untitled`,
+            meta: { path: statePath, detail: "no such column: title" },
+            resolve: `if ${statePath} is unreadable, make it readable and run agent-record sync; if the detail names a missing table or column, Codex changed its thread store: hand this to the owner to update agent-record, and leave the file in place`,
+          },
+        },
       ]);
       expect(db.prepare("SELECT count(*) AS n FROM session WHERE id = ?").get(THREAD)).toEqual({ n: 1 });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("names a session file it cannot read as a refusal and still reads the others", () => {
+    const root = newRoot();
+    const env = scratchEnv(root);
+    const locked = writeClaudeTranscript(env, "-Users-x-code-demo", SESSION);
+    writeCodexRollout(env, "sessions", THREAD);
+    chmodSync(locked, 0o000);
+
+    const db = openDb(dbPath(env));
+    try {
+      expect(sync(db, env).failures).toEqual([
+        {
+          path: locked,
+          error: expect.objectContaining({
+            kind: "refusal",
+            code: "source_unreadable",
+            meta: { path: locked, detail: expect.stringContaining("EACCES") },
+          }),
+        },
+      ]);
+      expect(db.prepare("SELECT count(*) AS n FROM session WHERE id = ?").get(SESSION)).toEqual({ n: 0 });
+      expect(db.prepare("SELECT count(*) AS n FROM session WHERE id = ?").get(THREAD)).toEqual({ n: 1 });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("stops on a fault while recording a session rather than listing it as a failure", () => {
+    const root = newRoot();
+    const env = scratchEnv(root);
+    writeClaudeTranscript(env, "-Users-x-code-demo", SESSION);
+
+    const db = openDb(dbPath(env));
+    try {
+      db.run(
+        "CREATE TEMP TRIGGER refuse_message BEFORE INSERT ON message BEGIN SELECT RAISE(ABORT, 'no'); END",
+      );
+      expect(() => sync(db, env)).toThrow("no");
     } finally {
       db.close();
     }

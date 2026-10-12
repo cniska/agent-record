@@ -17,6 +17,18 @@ export class CodedError<Code extends string = string, Meta extends object = obje
   }
 }
 
+export type ErrorRecord = {
+  readonly kind: ErrorKind;
+  readonly code: string;
+  readonly message: string;
+  readonly meta: Record<string, unknown>;
+  readonly resolve: string;
+};
+
+export function errorRecord({ kind, code, message, meta, resolve }: CodedError): ErrorRecord {
+  return { kind, code, message, meta: { ...meta }, resolve };
+}
+
 export function isRefusal(error: unknown): error is CodedError {
   return error instanceof CodedError && error.kind === "refusal";
 }

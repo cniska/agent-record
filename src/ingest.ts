@@ -5,6 +5,7 @@ import { writeTransaction } from "./db";
 import { gitSubcommands } from "./git-operations";
 import { readChunk } from "./ingest-chunk";
 import type { ParsedChunk, SessionFacts } from "./ingest-session-records";
+import { readingSource } from "./ingest-source-read";
 import type { Tool } from "./ingest-tools";
 import { worktreeOf } from "./worktree";
 export type Kind = "transcript" | "subagent" | "rollout";
@@ -411,7 +412,7 @@ export function createIngester(db: Database) {
   }
 
   function ingestFile(spec: FileSpec): FileResult {
-    const stat = statSync(spec.path);
+    const stat = readingSource("source_unreadable", spec.path, () => statSync(spec.path));
 
     const existing = selectCursor.get(spec.path) ?? claimMovedRow(spec);
     let cursor = existing?.bytes_ingested ?? 0;
@@ -424,7 +425,10 @@ export function createIngester(db: Database) {
       state = null;
     }
     const nothing = { read: false, bytes: 0, lines: 0, reset, dropped: [] };
-    const chunk = stat.size === cursor ? null : readChunk(spec.path, cursor);
+    const chunk =
+      stat.size === cursor
+        ? null
+        : readingSource("source_unreadable", spec.path, () => readChunk(spec.path, cursor));
     if (!chunk || chunk.bytes === 0) {
       if (reset) writeTransaction(db, () => resetSession(spec.sessionId));
       return nothing;

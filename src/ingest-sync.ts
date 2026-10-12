@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { isRefusal } from "./coded-error";
+import { type ErrorRecord, errorRecord, isRefusal } from "./coded-error";
 import { writeTransaction } from "./db";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
 import { createIngester, type FileSpec, type SourceFile } from "./ingest";
@@ -13,7 +13,7 @@ export type SyncReport = {
   sources: { tool: Tool; files: number }[];
   filesRead: number;
   orphanSubagents: string[];
-  failures: { path: string; error: string }[];
+  failures: { path: string; error: ErrorRecord }[];
   dropped: { path: string; lines: number[] }[];
   git: GitReport;
   repoFiles: RepoFileReport;
@@ -37,7 +37,8 @@ export function sync(db: Database, env: Env = process.env): SyncReport {
   };
 
   const fail = (path: string, error: unknown): void => {
-    report.failures.push({ path, error: error instanceof Error ? error.message : String(error) });
+    if (!isRefusal(error)) throw error;
+    report.failures.push({ path, error: errorRecord(error) });
   };
 
   const run = (spec: FileSpec): boolean => {
@@ -87,13 +88,9 @@ export function sync(db: Database, env: Env = process.env): SyncReport {
     report.sources.push({ tool, files: files.length });
   }
 
-  const failRefused = (path: string, error: unknown): void => {
-    if (!isRefusal(error)) throw error;
-    fail(path, error);
-  };
-  const roots = repoRoots(db, failRefused);
-  report.git = ingestCommits(db, roots, failRefused);
-  report.repoFiles = indexRepoFiles(db, roots, failRefused);
+  const roots = repoRoots(db, fail);
+  report.git = ingestCommits(db, roots, fail);
+  report.repoFiles = indexRepoFiles(db, roots, fail);
   return report;
 }
 

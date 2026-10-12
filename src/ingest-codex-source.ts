@@ -4,6 +4,7 @@ import { basename, join } from "node:path";
 import { Glob } from "bun";
 import type { SourceFile } from "./ingest";
 import { CodexState, parseCodexChunk } from "./ingest-parse-codex";
+import { readingSource } from "./ingest-source-read";
 import { codexDir, type Env } from "./paths";
 
 const ROLLOUT_NAME = /^rollout-[0-9T:-]+-([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})$/;
@@ -45,21 +46,23 @@ export function codexTitlesPath(env: Env = process.env): string {
   return join(codexDir(env), "state_5.sqlite");
 }
 
-export function readCodexTitles(statePath: string): Map<string, string> {
-  const titles = new Map<string, string>();
-  if (!existsSync(statePath)) return titles;
+function threadRows(statePath: string): { id: string; title: string | null }[] {
   const db = new Database(
     `file:${statePath}?immutable=1`,
     constants.SQLITE_OPEN_READONLY | constants.SQLITE_OPEN_URI,
   );
   try {
-    for (const row of db
-      .prepare<{ id: string; title: string | null }, []>("SELECT id, title FROM threads")
-      .all()) {
-      if (row.title) titles.set(row.id, row.title);
-    }
+    return db.prepare<{ id: string; title: string | null }, []>("SELECT id, title FROM threads").all();
   } finally {
     db.close();
+  }
+}
+
+export function readCodexTitles(statePath: string): Map<string, string> {
+  const titles = new Map<string, string>();
+  if (!existsSync(statePath)) return titles;
+  for (const row of readingSource("titles_unreadable", statePath, () => threadRows(statePath))) {
+    if (row.title) titles.set(row.id, row.title);
   }
   return titles;
 }

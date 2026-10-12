@@ -1,13 +1,5 @@
 import { type Command, faultCommand } from "./cli-contract";
-import { CodedError, type ErrorKind } from "./coded-error";
-
-type ErrorRecord = {
-  readonly kind: ErrorKind;
-  readonly code: string;
-  readonly message: string;
-  readonly meta: Record<string, unknown>;
-  readonly resolve: string;
-};
+import { CodedError, errorRecord } from "./coded-error";
 
 function codedOf(error: unknown): CodedError {
   if (error instanceof CodedError) return error;
@@ -15,17 +7,12 @@ function codedOf(error: unknown): CodedError {
   return faultCommand("command_failed", { detail });
 }
 
-function errorRecord(error: unknown): ErrorRecord {
-  const { kind, code, message, meta, resolve } = codedOf(error);
-  return { kind, code, message, meta: { ...meta }, resolve };
-}
-
 export function writeResult(command: string, value: unknown): void {
   process.stdout.write(`${JSON.stringify({ command, ok: true, result: value ?? null })}\n`);
 }
 
 export function writeError(command: string, error: unknown): number {
-  process.stderr.write(`${JSON.stringify({ command, ok: false, error: errorRecord(error) })}\n`);
+  process.stderr.write(`${JSON.stringify({ command, ok: false, error: errorRecord(codedOf(error)) })}\n`);
   return 1;
 }
 
