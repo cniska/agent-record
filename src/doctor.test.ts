@@ -37,12 +37,6 @@ function stampPath(env: Env): string {
   return join(home(env), "state", "agent-record", "last-sync");
 }
 
-function writeSettings(env: Env, body: string): void {
-  const path = join(home(env), ".claude", "settings.json");
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, body);
-}
-
 function check(env: Env, name: string, loaded = false) {
   return recordDoctor(env, { agentLoaded: () => loaded, now: NOW }).checks.find((c) => c.name === name);
 }
@@ -142,48 +136,8 @@ describe("agent-record doctor", () => {
     });
   });
 
-  test("fails when Claude Code keeps transcripts its default 30 days, warns under a year, passes a year", () => {
-    const env = newEnv();
-    const settings = join(home(env), ".claude", "settings.json");
-    expect(check(env, "retention")).toEqual({
-      name: "retention",
-      state: "fail",
-      detail: "cleanupPeriodDays is unset, so Claude Code deletes transcripts after 30 days",
-      fix: `set "cleanupPeriodDays": 365 or more in ${settings}`,
-    });
-    writeSettings(env, '{"model":"x"}');
-    expect(check(env, "retention")).toMatchObject({ state: "fail" });
-    writeSettings(env, '{"cleanupPeriodDays":364}');
-    expect(check(env, "retention")).toMatchObject({
-      state: "warn",
-      detail: "Claude Code keeps transcripts 364 days",
-    });
-    writeSettings(env, '{"cleanupPeriodDays":365}');
-    expect(check(env, "retention")).toEqual({
-      name: "retention",
-      state: "ok",
-      detail: "Claude Code keeps transcripts 365 days",
-      fix: null,
-    });
-  });
-
-  test("fails on Claude Code settings it cannot read, naming the file", () => {
-    const env = newEnv();
-    const settings = join(home(env), ".claude", "settings.json");
-    writeSettings(env, "{not json");
-    expect(check(env, "retention")).toEqual({
-      name: "retention",
-      state: "fail",
-      detail: `${settings} is not JSON`,
-      fix: `repair ${settings} by hand`,
-    });
-    writeSettings(env, '{"cleanupPeriodDays":"forever"}');
-    expect(check(env, "retention")).toMatchObject({ state: "fail", fix: `repair ${settings} by hand` });
-  });
-
   test("counts the failing checks", () => {
     const env = newEnv();
-    writeSettings(env, '{"cleanupPeriodDays":3650}');
     expect(recordDoctor(env, { agentLoaded: () => true, now: NOW }).failing).toBe(2);
     writeRecord(env);
     writeSyncStamp(new Date(NOW), env);
@@ -203,12 +157,11 @@ describe("the commands", () => {
     const ran = run(newEnv(), "doctor");
     expect(ran.exitCode).toBe(1);
     expect(ran.stderr).toBe("");
-    expect(JSON.parse(ran.stdout)).toMatchObject({ command: "doctor", ok: true, result: { failing: 3 } });
+    expect(JSON.parse(ran.stdout)).toMatchObject({ command: "doctor", ok: true, result: { failing: 2 } });
   });
 
   test("a finished sync stamps its time, which lets the doctor pass", () => {
     const env = newEnv();
-    writeSettings(env, '{"cleanupPeriodDays":3650}');
     const before = Date.now();
     expect(run(env, "sync").exitCode).toBe(0);
     expect(Date.parse(readFileSync(stampPath(env), "utf8").trim())).toBeGreaterThanOrEqual(before - 1000);
