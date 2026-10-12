@@ -48,7 +48,7 @@ Each command prints one JSON line.
 
 | Command | Does |
 | --- | --- |
-| `agent-record sync` | Copy every new byte of every tool's session files into the archive and read them from there, then the commits and files of the repos they name |
+| `agent-record sync` | Copy every new byte of every tool's session files into the archive and read them from there, then the commits and files of the checkouts they name that changed since the last sync |
 | `agent-record rebuild` | Drop the record and read it again from the archive |
 | `agent-record agent install` | Write a launchd agent that runs `sync` every 15 minutes |
 | `agent-record doctor` | Judge whether the record is current and readable, naming the fix for each problem; exits 1 when a check fails |
