@@ -14,5 +14,5 @@
     "types": ["bun"],
     "noEmit": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "acceptance/**/*.ts"]
 }

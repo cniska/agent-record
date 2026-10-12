@@ -12,6 +12,7 @@ Flat, so a module is found by name. A file's prefix is its module: `db-read.ts` 
 | `query`, `sql` | The named queries over the record, and raw read-only SQL |
 | `git`, `repo`, `worktree` | Run git, index a repo's files, and fold worktree paths onto their checkout |
 | `plugin` | Tests for the Claude Code plugin's hook in `plugin/`, kept here so the plugin ships no tests |
+| `spec` | Tie the IDs in `SPEC.md` to the acceptance suite's test names |
 | `cli` | Dispatch a command and print its result or error (a refusal or a fault) as one JSON line |
 | `coded-error`, `error`, `assert`, `paths`, `file` | Coded errors, refusals and faults; `unreachable` and `invariant`; where every file lives; copying a file aside before it is replaced |
 

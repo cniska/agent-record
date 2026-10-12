@@ -75,4 +75,4 @@ The plugin brings neither Bun nor the CLI, and does nothing when `agent-record` 
 
 ## Development
 
-`bun run check` runs the lint, the typecheck and the tests. [`AGENTS.md`](AGENTS.md) holds the repository's rules. The Claude Code plugin lives in `plugin/`, apart from the repository root, so the CLI's `bin/` stays off the PATH Claude Code gives a plugin.
+`bun run check` runs the lint, the typecheck and the tests. `bun run acceptance` proves the criteria in [`SPEC.md`](SPEC.md) through the CLI alone; each test in `acceptance/` is named for the criteria it proves, and a check in `bun run check` fails when a criterion has no test or a test cites none. [`AGENTS.md`](AGENTS.md) holds the repository's rules. The Claude Code plugin lives in `plugin/`, apart from the repository root, so the CLI's `bin/` stays off the PATH Claude Code gives a plugin.
