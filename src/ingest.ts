@@ -253,6 +253,15 @@ export function createIngester(db: Database) {
     resetCursors.run(sessionId);
   }
 
+  const selectFileSession = db.prepare<{ session_id: string }, [string]>(
+    "SELECT session_id FROM source_file WHERE path = ?",
+  );
+
+  function resetFileSession(path: string): void {
+    const row = selectFileSession.get(path);
+    if (row) writeTransaction(db, () => resetSession(row.session_id));
+  }
+
   function claimMovedRow(spec: FileSpec): CursorRow | null {
     const name = basename(spec.path);
     const moved = selectSessionFiles
@@ -449,7 +458,7 @@ export function createIngester(db: Database) {
     };
   }
 
-  return { ingestFile };
+  return { ingestFile, resetFileSession };
 }
 
 export type Ingester = ReturnType<typeof createIngester>;

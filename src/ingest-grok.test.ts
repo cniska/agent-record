@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { openDb } from "./db";
 import { errorCode } from "./error-code";
-import { scratchEnv } from "./fixtures.test-support";
+import { archivedPath, scratchEnv } from "./fixtures.test-support";
 import { parseGrokChunk } from "./ingest-parse-grok";
 import { listSource, SESSION_SOURCES } from "./ingest-sources";
 import { sync } from "./ingest-sync";
@@ -156,7 +156,7 @@ describe("grok sessions", () => {
     try {
       const report = sync(db, env);
       expect(report.sources.find((source) => source.tool === "grok")).toEqual({ tool: "grok", files: 3 });
-      expect(report.dropped).toEqual([{ path, lines: [8] }]);
+      expect(report.dropped).toEqual([{ path: archivedPath("grok", path, env), lines: [8] }]);
       expect(report.orphanSubagents).toEqual([ORPHAN]);
       expect(
         db

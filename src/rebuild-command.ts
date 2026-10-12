@@ -9,7 +9,7 @@ import { writeSyncStamp } from "./sync-stamp";
 export const rebuildCommand: Command = {
   name: "rebuild",
   usage: "agent-record rebuild",
-  summary: "forget every cursor and read all files from the start",
+  summary: "forget every cursor and read the archive from the start",
   run(args) {
     parseFlags(args, [], rebuildCommand.usage);
     const report = withLock(() => withDb(dbPath(), rebuild, { forRebuild: true }));

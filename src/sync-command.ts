@@ -9,7 +9,7 @@ import { writeSyncStamp } from "./sync-stamp";
 export const syncCommand: Command = {
   name: "sync",
   usage: "agent-record sync",
-  summary: "read every new byte of every tool's session files",
+  summary: "archive every new byte of every tool's session files and read them",
   run(args) {
     parseFlags(args, [], syncCommand.usage);
     const report = withLock(() => withDb(dbPath(), sync));

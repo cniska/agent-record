@@ -1,6 +1,12 @@
 import type { SourceFile } from "./ingest";
 import { CLAUDE_SESSIONS, claudeSidecars, listClaudeSessions } from "./ingest-claude-source";
-import { CODEX_SESSIONS, CODEX_TITLES, listCodexRollouts, readCodexTitles } from "./ingest-codex-source";
+import {
+  CODEX_SESSIONS,
+  CODEX_TITLES,
+  listCodexRollouts,
+  readCodexTitles,
+  threadIdOf,
+} from "./ingest-codex-source";
 import type { Failure } from "./ingest-contract";
 import { GROK_SESSIONS, grokSidecars, listGrokSessions } from "./ingest-grok-source";
 import { listPiSessions, PI_SESSIONS } from "./ingest-pi-source";
@@ -19,6 +25,7 @@ export type SessionSource = {
   readonly root: (env: Env) => string;
   readonly sessions: readonly string[];
   readonly sidecars?: (sessionPath: string) => readonly string[];
+  readonly movedKey?: (sessionPath: string) => string | undefined;
   readonly titles?: { readonly file: string; readonly read: (path: string) => ReadonlyMap<string, string> };
   readonly list: (paths: readonly string[], io: ListingIo) => SourceFile[];
 };
@@ -35,6 +42,7 @@ export const SESSION_SOURCES: Readonly<Record<Tool, SessionSource>> = {
   codex: {
     root: codexDir,
     sessions: CODEX_SESSIONS,
+    movedKey: threadIdOf,
     titles: { file: CODEX_TITLES, read: readCodexTitles },
     list: listCodexRollouts,
   },

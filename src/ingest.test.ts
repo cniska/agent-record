@@ -1,10 +1,20 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { openDb } from "./db";
 import {
+  archivedPath,
   bytesThroughLine,
   claudeTranscriptLines,
   codexRolloutLines,
@@ -15,8 +25,8 @@ import {
   writeCodexRollout,
   writePrefix,
 } from "./fixtures.test-support";
-import { sync } from "./ingest-sync";
-import { claudeProjectsDir, codexDir, dbPath, type Env } from "./paths";
+import { rebuild, sync } from "./ingest-sync";
+import { archiveDir, claudeProjectsDir, codexDir, dbPath, type Env } from "./paths";
 
 const SESSION = "11111111-2222-3333-4444-555555555555";
 const THREAD = "01a0a651-086e-7150-8650-cef0f4025a58";
@@ -417,7 +427,7 @@ describe("ingest", () => {
           .prepare<{ bytes_ingested: number }, [string]>(
             "SELECT bytes_ingested FROM source_file WHERE path = ?",
           )
-          .get(to),
+          .get(archivedPath("codex", to, env)),
       ).toEqual({ bytes_ingested: fullBytes(codexRolloutLines(THREAD, { withIds: true })) });
     } finally {
       db.close();
@@ -483,8 +493,9 @@ describe("ingest", () => {
     const root = newRoot();
     const env = scratchEnv(root);
     writeCodexRollout(env, "sessions", THREAD);
-    const statePath = join(codexDir(env), "state_5.sqlite");
-    const state = new Database(statePath);
+    const livePath = join(codexDir(env), "state_5.sqlite");
+    const statePath = archivedPath("codex", livePath, env);
+    const state = new Database(livePath);
     state.run("CREATE TABLE threads (id TEXT, name TEXT)");
     state.close();
 
@@ -561,7 +572,7 @@ describe("ingest", () => {
     const db = openDb(dbPath(env));
     try {
       const report = sync(db, env);
-      expect(report.dropped).toEqual([{ path, lines: [2] }]);
+      expect(report.dropped).toEqual([{ path: archivedPath("claude", path, env), lines: [2] }]);
       expect(report.failures).toEqual([]);
       expect(db.prepare("SELECT count(*) AS n FROM message").get()).not.toEqual({ n: 0 });
       expect(sync(db, env).dropped).toEqual([]);
@@ -587,7 +598,7 @@ describe("ingest", () => {
       expect(db.prepare("SELECT ts FROM message WHERE id = 'msg-1'").get()).toEqual({
         ts: "2026-09-16T10:02:00.000Z",
       });
-      expect(report.dropped).toEqual([{ path, lines: [4] }]);
+      expect(report.dropped).toEqual([{ path: archivedPath("claude", path, env), lines: [4] }]);
       expect(db.prepare("SELECT count(*) AS n FROM message WHERE ts = ''").get()).toEqual({ n: 0 });
     } finally {
       db.close();
@@ -649,8 +660,9 @@ describe("ingest", () => {
         .map((l) => JSON.stringify(l))
         .join("\n")}\n`,
     );
-    const meta = join(agentDir, `agent-${agentId}.meta.json`);
-    writeFileSync(meta, JSON.stringify({ agentType: 5 }));
+    const liveMeta = join(agentDir, `agent-${agentId}.meta.json`);
+    writeFileSync(liveMeta, JSON.stringify({ agentType: 5 }));
+    const meta = archivedPath("claude", liveMeta, env);
     const db = openDb(dbPath(env));
     try {
       expect(sync(db, env).failures).toEqual([
@@ -777,6 +789,174 @@ describe("ingest", () => {
       db.close();
     }
   });
+});
+
+describe("the archive", () => {
+  function claudeTranscriptPath(env: Env): string {
+    return join(claudeProjectsDir(env), "-Users-x-code-demo", `${SESSION}.jsonl`);
+  }
+
+  function writeTranscript(env: Env, prompt: string): void {
+    const lines = claudeTranscriptLines(SESSION).map((line) => JSON.stringify(line));
+    const path = claudeTranscriptPath(env);
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, `${lines.join("\n").replace("add the parser", prompt)}\n`);
+  }
+
+  function sourcePaths(db: Database): string[] {
+    return db
+      .prepare<{ path: string }, []>("SELECT path FROM source_file ORDER BY path")
+      .all()
+      .map((row) => row.path);
+  }
+
+  test("keeps a session whose transcript is gone, read from its archived copy", () => {
+    const root = newRoot();
+    const env = scratchEnv(root);
+    writeTranscript(env, "add the parser");
+    writeCodexRollout(env, "sessions", THREAD);
+    const db = run(env);
+    try {
+      const before = snapshot(db, root);
+      rmSync(claudeTranscriptPath(env));
+      const report = sync(db, env);
+      expect(report.failures).toEqual([]);
+      expect(report.filesRead).toBe(0);
+      expect(snapshot(db, root)).toEqual(before);
+      expect(before.messages.some((m) => m.session_id === SESSION)).toBe(true);
+      for (const path of sourcePaths(db)) expect(path.startsWith(`${archiveDir(env)}/`)).toBe(true);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("moves a record that points at the original files onto their copies without reading again", () => {
+    const root = newRoot();
+    const env = scratchEnv(root);
+    writeTranscript(env, "add the parser");
+    writeCodexRollout(env, "sessions", THREAD);
+    const db = run(env);
+    try {
+      const before = snapshot(db, root);
+      const archived = sourcePaths(db);
+      db.run("PRAGMA foreign_keys = ON");
+      for (const [tool, live] of [
+        ["claude", claudeProjectsDir(env)],
+        ["codex", codexDir(env)],
+      ] as const) {
+        db.run("UPDATE source_file SET path = replace(path, ?, ?)", [join(archiveDir(env), tool), live]);
+      }
+      expect(sourcePaths(db).some((path) => path.startsWith(archiveDir(env)))).toBe(false);
+      rmSync(archiveDir(env), { recursive: true });
+
+      const report = sync(db, env);
+      expect(report.failures).toEqual([]);
+      expect(report.filesRead).toBe(0);
+      expect(sourcePaths(db)).toEqual(archived);
+      expect(snapshot(db, root)).toEqual(before);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("rebuilds every session from the archive after the original files are gone", () => {
+    const root = newRoot();
+    const env = scratchEnv(root);
+    writeTranscript(env, "add the parser");
+    writeCodexRollout(env, "sessions", THREAD);
+    const db = run(env);
+    try {
+      const before = snapshot(db, root);
+      rmSync(claudeProjectsDir(env), { recursive: true });
+      rmSync(codexDir(env), { recursive: true });
+      expect(rebuild(db, env).failures).toEqual([]);
+      expect(snapshot(db, root)).toEqual(before);
+      expect(before.sessions.map((s) => s.id)).toEqual([THREAD, SESSION].sort());
+    } finally {
+      db.close();
+    }
+  });
+
+  test("reads a rewritten transcript as new even when the sync that replaced its copy stopped on a fault", () => {
+    const freshRoot = newRoot();
+    const freshEnv = scratchEnv(freshRoot);
+    writeTranscript(freshEnv, "add the lexers");
+    const freshDb = run(freshEnv);
+    const expected = snapshot(freshDb, freshRoot);
+    freshDb.close();
+
+    const root = newRoot();
+    const env = scratchEnv(root);
+    writeTranscript(env, "add the parser");
+    const db = run(env);
+    try {
+      const at = new Date(Date.now() - 60_000);
+      utimesSync(claudeTranscriptPath(env), at, at);
+      sync(db, env);
+      writeTranscript(env, "add the lexers");
+      db.run(
+        "CREATE TEMP TRIGGER refuse_message BEFORE INSERT ON message BEGIN SELECT RAISE(ABORT, 'no'); END",
+      );
+      expect(() => sync(db, env)).toThrow("no");
+      db.run("DROP TRIGGER refuse_message");
+      expect(sync(db, env).failures).toEqual([]);
+      expect(snapshot(db, root)).toEqual(expected);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("stops on a fault while resetting a session whose copy it would replace, keeping the old copy", () => {
+    const root = newRoot();
+    const env = scratchEnv(root);
+    writeTranscript(env, "add the parser");
+    const db = run(env);
+    try {
+      const at = new Date(Date.now() - 60_000);
+      utimesSync(claudeTranscriptPath(env), at, at);
+      sync(db, env);
+      const copy = archivedPath("claude", claudeTranscriptPath(env), env);
+      const before = readFileSync(copy, "utf8");
+      writeTranscript(env, "add the lexers");
+      db.run(
+        "CREATE TEMP TRIGGER refuse_reset BEFORE DELETE ON message BEGIN SELECT RAISE(ABORT, 'no'); END",
+      );
+      expect(() => sync(db, env)).toThrow("no");
+      expect(readFileSync(copy, "utf8")).toBe(before);
+    } finally {
+      db.close();
+    }
+  });
+
+  const rewrites = [
+    { name: "at the same size", prompt: "add the lexers" },
+    { name: "longer, from a different start", prompt: "add the parser and the lexer" },
+  ];
+  for (const { name, prompt } of rewrites) {
+    test(`reads a transcript rewritten ${name} as if it were new`, () => {
+      const freshRoot = newRoot();
+      const freshEnv = scratchEnv(freshRoot);
+      writeTranscript(freshEnv, prompt);
+      const freshDb = run(freshEnv);
+      const expected = snapshot(freshDb, freshRoot);
+      freshDb.close();
+
+      const root = newRoot();
+      const env = scratchEnv(root);
+      writeTranscript(env, "add the parser");
+      const db = run(env);
+      try {
+        const at = new Date(Date.now() - 60_000);
+        utimesSync(claudeTranscriptPath(env), at, at);
+        sync(db, env);
+        writeTranscript(env, prompt);
+        expect(sync(db, env).failures).toEqual([]);
+        expect(snapshot(db, root)).toEqual(expected);
+      } finally {
+        db.close();
+      }
+    });
+  }
 });
 
 describe("skill loads", () => {

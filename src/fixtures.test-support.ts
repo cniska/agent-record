@@ -1,6 +1,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
+import { archivePathOf } from "./ingest-archive";
+import type { Tool } from "./ingest-tools";
 import { claudeProjectsDir, codexDir, type Env } from "./paths";
 
 export function scratchEnv(root: string): Env {
@@ -16,6 +18,12 @@ function writeLines(path: string, lines: unknown[]): string {
   const body = `${lines.map((l) => JSON.stringify(l)).join("\n")}\n`;
   writeFileSync(path, body);
   return body;
+}
+
+export function archivedPath(tool: Tool, live: string, env: Env): string {
+  const path = archivePathOf(tool, live, env);
+  if (path === null) throw new Error(`${live} is outside ${tool}'s root`);
+  return path;
 }
 
 export function writePrefix(path: string, lines: unknown[], bytes: number): void {

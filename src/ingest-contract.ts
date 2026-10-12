@@ -1,15 +1,22 @@
+import { dirname } from "node:path";
 import { BUG, faulter, refuser } from "./coded-error";
 
 export type Failure = (path: string, error: unknown) => void;
 
 export const refuseIngest = refuser<{
   readonly source_unreadable: { readonly path: string; readonly detail: string };
+  readonly archive_unwritable: { readonly path: string; readonly detail: string };
   readonly titles_unreadable: { readonly path: string; readonly detail: string };
   readonly sidecar_unreadable: { readonly path: string; readonly detail: string };
 }>({
   source_unreadable: {
     message: ({ path, detail }) => `cannot read ${path}: ${detail}`,
-    resolve: ({ path }) => `make ${path} readable or move it aside, then run agent-record sync`,
+    resolve: ({ path }) => `make ${path} readable, then run agent-record sync`,
+  },
+  archive_unwritable: {
+    message: ({ path, detail }) => `cannot write the archive copy ${path}: ${detail}`,
+    resolve: ({ path }) =>
+      `free disk space or fix the permissions of ${dirname(path)}, then run agent-record sync; until then the record reads the copy archived before`,
   },
   titles_unreadable: {
     message: ({ path, detail }) =>

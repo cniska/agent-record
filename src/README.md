@@ -6,7 +6,7 @@ Flat, so a module is found by name. A file's prefix is its module: `db-read.ts` 
 
 | Prefix | Responsibility |
 | --- | --- |
-| `ingest`, `sync`, `rebuild`, `agent` | Read session sources and git history into the record, on the schedule the launchd agent sets |
+| `ingest`, `sync`, `rebuild`, `agent` | Copy session files into the archive, read them from there and git history into the record, on the schedule the launchd agent sets |
 | `db` | Open, lock and read the SQLite record, and its schema |
 | `doctor` | Judge the record's readability and freshness, the launchd agent, and Claude Code's transcript retention |
 | `query`, `sql` | The named queries over the record, and raw read-only SQL |

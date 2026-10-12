@@ -1,9 +1,11 @@
 import type { Database } from "bun:sqlite";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { type ErrorRecord, errorRecord, isRefusal } from "./coded-error";
 import { writeTransaction } from "./db";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
 import { createIngester, type FileSpec, type SourceFile } from "./ingest";
+import { type ArchiveReport, archivePathOf, archiveRootOf, archiveSources } from "./ingest-archive";
 import { type GitReport, ingestCommits, repoRoots } from "./ingest-git";
 import { listSource, SESSION_SOURCES, type SessionSource } from "./ingest-sources";
 import { TOOLS, type Tool } from "./ingest-tools";
@@ -11,6 +13,7 @@ import type { Env } from "./paths";
 import { indexRepoFiles, type RepoFileReport } from "./repo-files";
 
 export type SyncReport = {
+  archive: ArchiveReport;
   sources: { tool: Tool; files: number }[];
   filesRead: number;
   orphanSubagents: string[];
@@ -28,6 +31,7 @@ export function sync(db: Database, env: Env = process.env): SyncReport {
   );
 
   const report: SyncReport = {
+    archive: { files: 0, bytes: 0 },
     sources: [],
     filesRead: 0,
     orphanSubagents: [],
@@ -65,9 +69,12 @@ export function sync(db: Database, env: Env = process.env): SyncReport {
     }
   };
 
+  report.archive = archiveSources(env, fail, ingester.resetFileSession);
+  followArchive(db, env);
+
   for (const tool of TOOLS) {
     const source = SESSION_SOURCES[tool];
-    const root = source.root(env);
+    const root = archiveRootOf(tool, env);
     const files = listSource(source, root, env, fail);
     const titles = titlesOf(source, root);
     const ingest = (file: SourceFile): boolean => {
@@ -94,6 +101,19 @@ export function sync(db: Database, env: Env = process.env): SyncReport {
   report.git = ingestCommits(db, roots, fail);
   report.repoFiles = indexRepoFiles(db, roots, fail);
   return report;
+}
+
+function followArchive(db: Database, env: Env): void {
+  const pathsOf = db.prepare<{ path: string }, [string]>("SELECT path FROM source_file WHERE tool = ?");
+  const movePath = db.prepare<void, [string, string]>("UPDATE source_file SET path = ? WHERE path = ?");
+  writeTransaction(db, () => {
+    for (const tool of TOOLS) {
+      for (const { path } of pathsOf.all(tool)) {
+        const copy = archivePathOf(tool, path, env);
+        if (copy !== null && existsSync(copy)) movePath.run(copy, path);
+      }
+    }
+  });
 }
 
 function tablesWhere(db: Database, condition: string): readonly string[] {

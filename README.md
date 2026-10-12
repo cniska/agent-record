@@ -42,8 +42,8 @@ Each command prints one JSON line.
 
 | Command | Does |
 | --- | --- |
-| `agent-record sync` | Read every new byte of every tool's session files, then the commits and files of the repos they name |
-| `agent-record rebuild` | Drop the record and read it again from the session files |
+| `agent-record sync` | Copy every new byte of every tool's session files into the archive and read them from there, then the commits and files of the repos they name |
+| `agent-record rebuild` | Drop the record and read it again from the archive |
 | `agent-record agent install` | Write a launchd agent that runs `sync` every 15 minutes |
 | `agent-record doctor` | Judge whether the record is current and readable, naming the fix for each problem; exits 1 when a check fails |
 | `agent-record query list` | Name the queries |
@@ -53,6 +53,10 @@ Each command prints one JSON line.
 | `agent-record sql "<select>"` | Run one read-only statement |
 
 The record lives at `$XDG_DATA_HOME/agent-record/sessions.db` (`~/.local/share/agent-record/sessions.db` by default); `src/db-schema.ts` holds its tables.
+
+The archive beside it, `$XDG_DATA_HOME/agent-record/archive/<tool>/`, keeps a copy of every session file `sync` has seen, laid out as the tool lays it out, and the record reads only those copies. A tool deleting its old transcripts loses nothing the archive holds: `rebuild` gives back every session whose file `sync` archived, as it last saw it. A file the tool shrank or rewrote is kept as rewritten.
+
+On APFS the first copy of a file is a clone and takes no space of its own. Bytes a session gains after that are appended to the copy, so they are stored twice.
 
 ## Claude Code plugin
 
