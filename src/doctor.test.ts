@@ -112,7 +112,10 @@ describe("agent-record doctor", () => {
   test("warns on a launchd agent that is missing, stale or not loaded, and passes a loaded one", () => {
     const env = newEnv();
     const plist = agentPlistPath(env);
-    expect(check(env, "agent")).toMatchObject({ state: "warn", fix: "agent-record agent install" });
+    expect(check(env, "agent")).toMatchObject({
+      state: "warn",
+      fix: "claude plugin install cniska-record@cniska, or agent-record agent install to sync while Claude Code is not running",
+    });
     mkdirSync(dirname(plist), { recursive: true });
     writeFileSync(plist, "<plist>other checkout</plist>");
     expect(check(env, "agent", true)).toEqual({

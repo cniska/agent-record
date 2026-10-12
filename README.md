@@ -23,6 +23,12 @@ agent-record sync
 agent-record doctor
 ```
 
+Then install the Claude Code plugin, the preferred way to keep the record current and put it in front of every session:
+
+```bash
+claude plugin install cniska-record@cniska
+```
+
 ## Why
 
 An experiment in giving coding agents a memory of their own work.
@@ -60,13 +66,12 @@ On APFS the first copy of a file is a clone and takes no space of its own. Bytes
 
 ## Claude Code plugin
 
-The `cniska-record` plugin, in the `cniska` marketplace, keeps the record current without the launchd agent. It starts `agent-record sync` in the background at the start of every Claude Code session.
+The `cniska-record` plugin, in the `cniska` marketplace, is the preferred install path. Whenever a Claude Code session starts, resumes, clears or compacts, it:
 
-The plugin brings neither Bun nor the CLI, and runs only when `agent-record` is on PATH. Install the CLI first, as above.
+- starts `agent-record sync` in the background, so the record stays current;
+- adds a short note to the session, `plugin/hooks/note.md`, telling the agent to search the record before acting on a handoff or plan.
 
-```bash
-claude plugin install cniska-record@cniska
-```
+The plugin brings neither Bun nor the CLI, and does nothing when `agent-record` is not on PATH. Install the CLI first, as above. The launchd agent (`agent-record agent install`) is the alternative for keeping the record current while Claude Code is not running.
 
 ## Development
 

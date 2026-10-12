@@ -1,6 +1,6 @@
 {
   "name": "cniska-record",
-  "description": "Keeps the agent-record session record current: each new session starts an agent-record sync in the background when the CLI is installed.",
+  "description": "Keeps the agent-record session record current and points each session at it: whenever a Claude Code session starts, resumes, clears or compacts, it starts an agent-record sync in the background and adds a note to search the record before acting on a handoff or plan, when the CLI is installed.",
   "author": {
     "name": "Christoffer Niska"
   },

@@ -65,7 +65,7 @@ function agentHealth(plan: AgentPlan, loaded: () => boolean): Health {
         name,
         state: "warn",
         detail: "no launchd agent, so the record syncs only when something runs agent-record sync",
-        fix: "agent-record agent install",
+        fix: "claude plugin install cniska-record@cniska, or agent-record agent install to sync while Claude Code is not running",
       };
     case "stale":
       return {
