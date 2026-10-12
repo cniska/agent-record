@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { codexRolloutLines, scratchEnv, writeCodexRollout } from "./fixtures.test-support";
-import { listCodexRollouts } from "./ingest-codex-source";
+import { listSource, SESSION_SOURCES } from "./ingest-sources";
 
 const THREAD = "01a0a651-086e-7150-8650-cef0f4025a58";
 const roots: string[] = [];
@@ -17,14 +17,14 @@ function parseWithRawState(state: string) {
   roots.push(root);
   const env = scratchEnv(root);
   writeCodexRollout(env, "sessions", THREAD);
-  const [spec] = listCodexRollouts(env);
+  const [spec] = listSource(SESSION_SOURCES.codex, SESSION_SOURCES.codex.root(env), env, () => {});
   const lines = codexRolloutLines(THREAD, { withIds: true })
     .map((l) => JSON.stringify(l))
     .filter((l) => l.includes("response_item"));
   return spec?.parse(lines, 1, state);
 }
 
-describe("listCodexRollouts", () => {
+describe("a Codex rollout listing", () => {
   test("faults on cursor state that fails its schema, since agent-record wrote it", () => {
     expect(() => parseWithRawState(JSON.stringify({ model: 5 }))).toThrow(
       expect.objectContaining({

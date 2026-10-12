@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parsePiChunk } from "./ingest-parse-pi";
-import { listPiSessions } from "./ingest-pi-source";
+import { listSource, SESSION_SOURCES } from "./ingest-sources";
 
 const roots: string[] = [];
 
@@ -220,9 +220,10 @@ describe("listing sessions", () => {
       `${LINES[1]}\n`,
     );
 
-    expect(listPiSessions(root).map(({ kind, sessionId }) => ({ kind, sessionId }))).toEqual([
+    const list = (at: string) => listSource(SESSION_SOURCES.pi, at, {}, () => {});
+    expect(list(root).map(({ kind, sessionId }) => ({ kind, sessionId }))).toEqual([
       { kind: "transcript", sessionId: "aaaaaaaa-0000-4000-8000-000000000001" },
     ]);
-    expect(listPiSessions(join(root, "absent"))).toEqual([]);
+    expect(list(join(root, "absent"))).toEqual([]);
   });
 });

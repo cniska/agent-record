@@ -44,8 +44,8 @@ export function codexDir(env: Env = process.env): string {
   return join(resolveHomeDir(env), ".codex");
 }
 
-export function grokDir(env: Env = process.env): string {
-  return join(resolveHomeDir(env), ".grok");
+export function grokSessionsDir(env: Env = process.env): string {
+  return join(resolveHomeDir(env), ".grok", "sessions");
 }
 
 export function piSessionsDir(env: Env = process.env): string {

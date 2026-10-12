@@ -5,10 +5,10 @@ import { dirname, join } from "node:path";
 import { openDb } from "./db";
 import { errorCode } from "./error-code";
 import { scratchEnv } from "./fixtures.test-support";
-import { listGrokSessions } from "./ingest-grok-source";
 import { parseGrokChunk } from "./ingest-parse-grok";
+import { listSource, SESSION_SOURCES } from "./ingest-sources";
 import { sync } from "./ingest-sync";
-import { dbPath, type Env, grokDir } from "./paths";
+import { dbPath, type Env, grokSessionsDir } from "./paths";
 
 const PARENT = "018f3b2a-7c3e-7b2a-8f1e-6c0b9a2d4e11";
 const CHILD = "018f3b2a-7c3e-7b2a-8f1e-6c0b9a2d4e22";
@@ -41,7 +41,7 @@ function writeSession(
   summary: Record<string, unknown>,
   group = "%2FUsers%2Fx%2Fcode%2Fdemo",
 ): string {
-  const dir = join(grokDir(env), "sessions", group, id);
+  const dir = join(grokSessionsDir(env), group, id);
   mkdirSync(dir, { recursive: true });
   const path = join(dir, "updates.jsonl");
   writeFileSync(path, `${lines.map((line) => JSON.stringify(line)).join("\n")}\n`);
@@ -267,7 +267,9 @@ describe("grok sessions", () => {
     const path = writeSession(env, ORPHAN, [], { info: { id: 5 }, parent_session_id: PARENT });
     const summary = join(dirname(path), "summary.json");
     const failures: { path: string; error: unknown }[] = [];
-    const [spec] = listGrokSessions(env, (failed, error) => failures.push({ path: failed, error }));
+    const [spec] = listSource(SESSION_SOURCES.grok, SESSION_SOURCES.grok.root(env), env, (failed, error) =>
+      failures.push({ path: failed, error }),
+    );
     expect(spec?.sessionId).toBe(ORPHAN);
     expect(spec?.parentId).toBeUndefined();
     expect(failures).toEqual([
@@ -288,7 +290,9 @@ describe("grok sessions", () => {
     const summary = join(dirname(path), "summary.json");
     writeFileSync(summary, "{ cut");
     const failures: { path: string; code: unknown }[] = [];
-    listGrokSessions(env, (failed, error) => failures.push({ path: failed, code: errorCode(error) }));
+    listSource(SESSION_SOURCES.grok, SESSION_SOURCES.grok.root(env), env, (failed, error) =>
+      failures.push({ path: failed, code: errorCode(error) }),
+    );
     expect(failures).toEqual([{ path: summary, code: "sidecar_unreadable" }]);
   });
 
@@ -297,7 +301,9 @@ describe("grok sessions", () => {
     const path = writeSession(env, ORPHAN, [], {});
     rmSync(join(dirname(path), "summary.json"));
     const failures: unknown[] = [];
-    const [spec] = listGrokSessions(env, (_, error) => failures.push(error));
+    const [spec] = listSource(SESSION_SOURCES.grok, SESSION_SOURCES.grok.root(env), env, (_, error) =>
+      failures.push(error),
+    );
     expect(spec?.sessionId).toBe(ORPHAN);
     expect(failures).toEqual([]);
   });

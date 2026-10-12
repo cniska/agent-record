@@ -1,13 +1,11 @@
-import { existsSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
-import { Glob } from "bun";
 import { z } from "zod";
 import type { SourceFile } from "./ingest";
 import type { Failure } from "./ingest-contract";
 import { parseGrokChunk } from "./ingest-parse-grok";
 import { projectOf, type SessionFacts } from "./ingest-session-records";
 import { readSidecar } from "./ingest-source-read";
-import { type Env, grokDir } from "./paths";
+import type { ListingIo } from "./ingest-sources";
 
 type GrokSummary = {
   id: string;
@@ -33,8 +31,19 @@ function nonEmpty(value: string | null | undefined): string | undefined {
   return value != null && value !== "" ? value : undefined;
 }
 
-function readGrokSummary(sessionDir: string, fail: Failure): GrokSummary | undefined {
-  const file = readSidecar(join(sessionDir, "summary.json"), SummaryFile, fail);
+export const GROK_SESSIONS = ["*/*/updates.jsonl"] as const;
+
+function summaryPathOf(sessionPath: string): string {
+  return join(dirname(sessionPath), "summary.json");
+}
+
+export function grokSidecars(sessionPath: string): readonly string[] {
+  return [summaryPathOf(sessionPath)];
+}
+
+function readGrokSummary(sessionPath: string, fail: Failure): GrokSummary | undefined {
+  const sessionDir = dirname(sessionPath);
+  const file = readSidecar(summaryPathOf(sessionPath), SummaryFile, fail);
   if (!file) return undefined;
   const id = nonEmpty(file.info?.id) ?? basename(sessionDir);
   const cwd = nonEmpty(file.info?.cwd);
@@ -63,13 +72,11 @@ function summaryFacts(summary: GrokSummary | undefined): SessionFacts[] {
   ];
 }
 
-export function listGrokSessions(env: Env, fail: Failure): SourceFile[] {
-  const root = join(grokDir(env), "sessions");
-  if (!existsSync(root)) return [];
+export function listGrokSessions(paths: readonly string[], { fail }: ListingIo): SourceFile[] {
   const specs: SourceFile[] = [];
-  for (const path of new Glob("*/*/updates.jsonl").scanSync({ cwd: root, absolute: true })) {
+  for (const path of paths) {
     const sessionDir = dirname(path);
-    const summary = readGrokSummary(sessionDir, fail);
+    const summary = readGrokSummary(path, fail);
     const facts = summaryFacts(summary);
     specs.push({
       path,
@@ -84,7 +91,7 @@ export function listGrokSessions(env: Env, fail: Failure): SourceFile[] {
       },
     });
   }
-  return orderParents(specs.sort((a, b) => a.path.localeCompare(b.path)));
+  return orderParents(specs);
 }
 
 function orderParents(specs: SourceFile[]): SourceFile[] {

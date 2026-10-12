@@ -1,12 +1,10 @@
 import { constants, Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
-import { basename, join } from "node:path";
-import { Glob } from "bun";
+import { basename } from "node:path";
 import type { SourceFile } from "./ingest";
 import { faultIngest } from "./ingest-contract";
 import { CodexState, parseCodexChunk } from "./ingest-parse-codex";
 import { parseJson, readingSource } from "./ingest-source-read";
-import { codexDir, type Env } from "./paths";
 
 const ROLLOUT_NAME = /^rollout-[0-9T:-]+-([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})$/;
 
@@ -22,27 +20,26 @@ function readState(thread: string, raw: string | null): CodexState {
   return read.value;
 }
 
-export function listCodexRollouts(env: Env = process.env): SourceFile[] {
-  const root = codexDir(env);
-  const specs: SourceFile[] = [];
-  for (const dir of [join(root, "sessions"), join(root, "archived_sessions")]) {
-    if (!existsSync(dir)) continue;
-    for (const path of new Glob("**/rollout-*.jsonl").scanSync({ cwd: dir, absolute: true })) {
-      const threadId = threadIdOf(path);
-      if (!threadId) continue;
-      specs.push({
+export const CODEX_SESSIONS = [
+  "sessions/**/rollout-*.jsonl",
+  "archived_sessions/**/rollout-*.jsonl",
+] as const;
+
+export const CODEX_TITLES = "state_5.sqlite";
+
+export function listCodexRollouts(paths: readonly string[]): SourceFile[] {
+  return paths.flatMap((path): SourceFile[] => {
+    const threadId = threadIdOf(path);
+    if (!threadId) return [];
+    return [
+      {
         path,
         kind: "rollout",
         sessionId: threadId,
         parse: (lines, first, state) => parseCodexChunk(lines, first, threadId, readState(threadId, state)),
-      });
-    }
-  }
-  return specs.sort((a, b) => a.path.localeCompare(b.path));
-}
-
-export function codexTitlesPath(env: Env = process.env): string {
-  return join(codexDir(env), "state_5.sqlite");
+      },
+    ];
+  });
 }
 
 function threadRows(statePath: string): { id: string; title: string | null }[] {

@@ -1,10 +1,11 @@
 import type { Database } from "bun:sqlite";
+import { join } from "node:path";
 import { type ErrorRecord, errorRecord, isRefusal } from "./coded-error";
 import { writeTransaction } from "./db";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
 import { createIngester, type FileSpec, type SourceFile } from "./ingest";
 import { type GitReport, ingestCommits, repoRoots } from "./ingest-git";
-import { SESSION_SOURCES, type SessionSource } from "./ingest-sources";
+import { listSource, SESSION_SOURCES, type SessionSource } from "./ingest-sources";
 import { TOOLS, type Tool } from "./ingest-tools";
 import type { Env } from "./paths";
 import { indexRepoFiles, type RepoFileReport } from "./repo-files";
@@ -53,9 +54,9 @@ export function sync(db: Database, env: Env = process.env): SyncReport {
     }
   };
 
-  const titlesOf = (source: SessionSource): ReadonlyMap<string, string> | undefined => {
+  const titlesOf = (source: SessionSource, root: string): ReadonlyMap<string, string> | undefined => {
     if (!source.titles) return undefined;
-    const path = source.titles.path(env);
+    const path = join(root, source.titles.file);
     try {
       return source.titles.read(path);
     } catch (error) {
@@ -66,8 +67,9 @@ export function sync(db: Database, env: Env = process.env): SyncReport {
 
   for (const tool of TOOLS) {
     const source = SESSION_SOURCES[tool];
-    const files = source.list(env, fail);
-    const titles = titlesOf(source);
+    const root = source.root(env);
+    const files = listSource(source, root, env, fail);
+    const titles = titlesOf(source, root);
     const ingest = (file: SourceFile): boolean => {
       const reset = run({ ...file, tool });
       const title = titles?.get(file.sessionId);
