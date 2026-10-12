@@ -94,11 +94,3 @@ export function projectOf(cwd: string | undefined): string | undefined {
   const at = cwd.indexOf(WORKTREE_MARKER);
   return at === -1 ? cwd : cwd.slice(0, at);
 }
-
-export function jsonOrUndefined(value: Record<string, unknown>): string | undefined {
-  const kept: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(value)) {
-    if (v !== undefined && v !== null) kept[k] = v;
-  }
-  return Object.keys(kept).length > 0 ? JSON.stringify(kept) : undefined;
-}

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { lineOf, nonEmpty } from "./ingest-parse";
 import {
   type MessageRow,
   type ParsedChunk,
@@ -43,17 +44,11 @@ const PiLine = z.looseObject({
   title: z.string().optional(),
   message: PiMessage.optional(),
 });
-type PiLine = z.infer<typeof PiLine>;
-
-function nonEmpty(value: unknown): string | undefined {
-  return typeof value === "string" && value !== "" ? value : undefined;
-}
 
 function textOf(content: PiMessage["content"]): string | undefined {
-  const text = (content ?? [])
-    .flatMap((part) => (part.type === "text" && part.text ? [part.text] : []))
-    .join("\n");
-  return text === "" ? undefined : text;
+  return nonEmpty(
+    (content ?? []).flatMap((part) => (part.type === "text" && part.text ? [part.text] : [])).join("\n"),
+  );
 }
 
 function usageOf(message: PiMessage, ts: string, messageId: string | undefined): UsageRow[] {
@@ -90,15 +85,6 @@ function callsOf(message: PiMessage, ts: string, srcLine: number): ToolCallRow[]
   });
 }
 
-function parseLine(raw: string): PiLine | undefined {
-  try {
-    const parsed = PiLine.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 export function parsePiChunk(lines: string[], firstLineNumber: number): ParsedChunk {
   const session: SessionFacts[] = [];
   const messages: MessageRow[] = [];
@@ -109,7 +95,7 @@ export function parsePiChunk(lines: string[], firstLineNumber: number): ParsedCh
   for (const [index, raw] of lines.entries()) {
     if (raw.length === 0) continue;
     const srcLine = firstLineNumber + index;
-    const line = parseLine(raw);
+    const line = lineOf(raw, PiLine);
     if (!line) {
       dropped.push(srcLine);
       continue;

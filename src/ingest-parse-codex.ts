@@ -1,6 +1,6 @@
 import { z } from "zod";
+import { jsonOrUndefined, lineOf, nonEmpty } from "./ingest-parse";
 import {
-  jsonOrUndefined,
   type MessageRow,
   type ParsedChunk,
   projectOf,
@@ -67,7 +67,6 @@ const CodexLine = z.looseObject({
     })
     .optional(),
 });
-type CodexLine = z.infer<typeof CodexLine>;
 
 function durationMs(d: CodexDuration | undefined): number | undefined {
   if (!d) return undefined;
@@ -86,25 +85,12 @@ function epochSeconds(value: number | undefined): string | undefined {
   return value == null ? undefined : new Date(value * 1000).toISOString();
 }
 
-function nonEmpty(value: string | null | undefined): string | undefined {
-  return value != null && value !== "" ? value : undefined;
-}
-
 function visibleText(
   content: (z.infer<typeof CodexContent> | null)[] | null | undefined,
 ): string | undefined {
   if (!Array.isArray(content)) return undefined;
   const parts = content.flatMap((b) => (b?.text !== undefined ? [b.text] : []));
   return parts.length > 0 ? parts.join("\n") : undefined;
-}
-
-function parseLine(raw: string): CodexLine | undefined {
-  try {
-    const parsed = CodexLine.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 export function parseCodexChunk(
@@ -124,7 +110,7 @@ export function parseCodexChunk(
 
   for (const [index, raw] of lines.entries()) {
     if (raw.length === 0) continue;
-    const line = parseLine(raw);
+    const line = lineOf(raw, CodexLine);
     if (!line) {
       dropped.push(firstLineNumber + index);
       continue;

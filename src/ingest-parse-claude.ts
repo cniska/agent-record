@@ -1,6 +1,6 @@
 import { z } from "zod";
+import { jsonOrUndefined, lineOf, nonEmpty } from "./ingest-parse";
 import {
-  jsonOrUndefined,
   type MessageRow,
   type ParsedChunk,
   projectOf,
@@ -85,17 +85,12 @@ const ClaudeLine = z.looseObject({
     })
     .optional(),
 });
-type ClaudeLine = z.infer<typeof ClaudeLine>;
 
 function visibleText(content: string | (ContentBlock | null)[] | undefined): string | undefined {
-  if (typeof content === "string") return content.length > 0 ? content : undefined;
+  if (typeof content === "string") return nonEmpty(content);
   if (!Array.isArray(content)) return undefined;
   const parts = content.flatMap((b) => (b?.type === "text" && b.text !== undefined ? [b.text] : []));
   return parts.length > 0 ? parts.join("\n") : undefined;
-}
-
-function nonEmpty(value: string | null | undefined): string | undefined {
-  return value != null && value !== "" ? value : undefined;
 }
 
 function resultSize(content: unknown, result: ClaudeToolUseResult | undefined): number | undefined {
@@ -114,15 +109,6 @@ function feedbackText(value: unknown): string | undefined {
   return typeof value === "string" ? value : JSON.stringify(value);
 }
 
-function parseLine(raw: string): ClaudeLine | undefined {
-  try {
-    const parsed = ClaudeLine.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 export function parseClaudeChunk(lines: string[], firstLineNumber: number): ParsedChunk {
   const session: SessionFacts[] = [];
   const messages: MessageRow[] = [];
@@ -135,7 +121,7 @@ export function parseClaudeChunk(lines: string[], firstLineNumber: number): Pars
   for (const [index, raw] of lines.entries()) {
     if (raw.length === 0) continue;
     const srcLine = firstLineNumber + index;
-    const line = parseLine(raw);
+    const line = lineOf(raw, ClaudeLine);
     if (!line) {
       dropped.push(srcLine);
       continue;

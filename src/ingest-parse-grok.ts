@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { lineOf, nonEmpty } from "./ingest-parse";
 import type { MessageRow, ParsedChunk, SessionFacts, ToolCallRow } from "./ingest-session-records";
 
 const GrokContent = z.looseObject({ type: z.string().optional(), text: z.string().optional() });
@@ -31,7 +32,6 @@ const GrokLine = z.looseObject({
     })
     .optional(),
 });
-type GrokLine = z.infer<typeof GrokLine>;
 
 function iso(ms: number | undefined, seconds: number | undefined): string | undefined {
   const value = ms ?? (seconds == null ? undefined : seconds * 1000);
@@ -41,21 +41,12 @@ function iso(ms: number | undefined, seconds: number | undefined): string | unde
 
 function textOf(content: GrokContent | unknown[] | null | undefined): string | undefined {
   if (!content || Array.isArray(content)) return undefined;
-  if (content.type !== "text" || content.text === undefined || content.text === "") return undefined;
-  return content.text;
-}
-
-function stringField(raw: Record<string, unknown> | null | undefined, key: string): string | undefined {
-  const value = raw?.[key];
-  return typeof value === "string" && value !== "" ? value : undefined;
-}
-
-function nonEmpty(value: string | null | undefined): string | undefined {
-  return value != null && value !== "" ? value : undefined;
+  if (content.type !== "text") return undefined;
+  return nonEmpty(content.text);
 }
 
 function filePathOf(update: GrokUpdate): string | undefined {
-  const fromInput = stringField(update.rawInput, "file_path") ?? stringField(update.rawInput, "target_file");
+  const fromInput = nonEmpty(update.rawInput?.file_path) ?? nonEmpty(update.rawInput?.target_file);
   if (fromInput) return fromInput;
   const located = update.locations?.find((location) => nonEmpty(location.path));
   return nonEmpty(located?.path);
@@ -63,15 +54,6 @@ function filePathOf(update: GrokUpdate): string | undefined {
 
 function toolNameOf(update: GrokUpdate): string | undefined {
   return nonEmpty(update._meta?.["x.ai/tool"]?.name);
-}
-
-function parseLine(raw: string): GrokLine | undefined {
-  try {
-    const parsed = GrokLine.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 export function parseGrokChunk(lines: string[], firstLineNumber: number): ParsedChunk {
@@ -83,7 +65,7 @@ export function parseGrokChunk(lines: string[], firstLineNumber: number): Parsed
   for (const [index, raw] of lines.entries()) {
     if (raw.length === 0) continue;
     const srcLine = firstLineNumber + index;
-    const line = parseLine(raw);
+    const line = lineOf(raw, GrokLine);
     if (!line) {
       dropped.push(srcLine);
       continue;
@@ -122,7 +104,7 @@ export function parseGrokChunk(lines: string[], firstLineNumber: number): Parsed
       tsResult: finished ? ts : undefined,
       toolName: toolNameOf(update),
       filePath: filePathOf(update),
-      command: stringField(update.rawInput, "command"),
+      command: nonEmpty(update.rawInput?.command),
       isError: failed ? true : undefined,
       srcLineCall: kind === "tool_call" ? srcLine : undefined,
       srcLineResult: kind === "tool_call_update" ? srcLine : undefined,

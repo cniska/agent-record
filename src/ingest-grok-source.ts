@@ -2,6 +2,7 @@ import { basename, dirname, join } from "node:path";
 import { z } from "zod";
 import type { SourceFile } from "./ingest";
 import type { Failure } from "./ingest-contract";
+import { nonEmpty } from "./ingest-parse";
 import { parseGrokChunk } from "./ingest-parse-grok";
 import { projectOf, type SessionFacts } from "./ingest-session-records";
 import { readSidecar } from "./ingest-source-read";
@@ -25,10 +26,6 @@ const SummaryFile = z.looseObject({
   created_at: z.string().nullish(),
   agent_name: z.string().nullish(),
 });
-
-function nonEmpty(value: string | null | undefined): string | undefined {
-  return value != null && value !== "" ? value : undefined;
-}
 
 export const GROK_SESSIONS = ["*/*/updates.jsonl"] as const;
 
