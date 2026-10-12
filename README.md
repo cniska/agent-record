@@ -2,11 +2,20 @@
 
 A local record of every coding-agent session on this machine, and the queries that bring earlier work back to an agent.
 
-`agent-record sync` reads the session files of Claude Code, Codex, Grok, pi and omp, and the commits of the repos those sessions worked in, into one SQLite database. No network, no credential, no per-token cost. `agent-record query` and `agent-record sql` read it.
+- `agent-record sync` reads the session files of Claude Code, Codex, Grok, pi and omp into one SQLite database, with the commits of the repos those sessions worked in.
+- `agent-record query` and `agent-record sql` read it.
+- It needs no network and no credential, and has no per-token cost.
 
 ## Why
 
-An experiment in giving coding agents a memory of their own work. A session's context ends at compaction, at a handoff, or when one agent takes over from another, while the transcripts on disk keep everything that was said and decided. agent-record makes those transcripts something an agent can ask: what was decided before, what happened after a handoff, why the owner switched agents mid-task, and how the owner actually works, as evidence for codifying that workflow.
+An experiment in giving coding agents a memory of their own work.
+
+A session's context ends at compaction, at a handoff, or when another agent takes over. The transcripts on disk keep everything that was said and decided. agent-record makes those transcripts something an agent can ask:
+
+- What was decided before?
+- What happened after a handoff?
+- Why did the owner switch agents mid-task?
+- How does the owner actually work? The answers are evidence for codifying that workflow.
 
 The [search-sessions](https://github.com/cniska/agent-skills/tree/main/skills/search-sessions) skill in [cniska/agent-skills](https://github.com/cniska/agent-skills) asks it first.
 
@@ -40,7 +49,9 @@ agent-record sync
 
 ## Claude Code plugin
 
-The `cniska-record` plugin, in the `cniska` marketplace, starts an `agent-record sync` in the background at the start of every Claude Code session, so the record is current without the launchd agent. It runs only when `agent-record` is on PATH, so install the CLI first as above; the plugin brings neither Bun nor the CLI.
+The `cniska-record` plugin, in the `cniska` marketplace, keeps the record current without the launchd agent. It starts `agent-record sync` in the background at the start of every Claude Code session.
+
+The plugin brings neither Bun nor the CLI, and runs only when `agent-record` is on PATH. Install the CLI first, as above.
 
 ```bash
 claude plugin install cniska-record@cniska
