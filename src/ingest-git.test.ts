@@ -1,10 +1,11 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SCHEMA_SQL } from "./db-schema";
 import { errorCode } from "./error-code";
+import { repoWithWorktree } from "./git-fixtures.test-support";
 import { ingestCommits, repoRoots } from "./ingest-git";
 
 const roots: string[] = [];
@@ -14,7 +15,7 @@ afterEach(() => {
 });
 
 function dir(name: string): string {
-  const made = mkdtempSync(join(tmpdir(), `agent-record-ingest-git-${name}-`));
+  const made = realpathSync(mkdtempSync(join(tmpdir(), `agent-record-ingest-git-${name}-`)));
   roots.push(made);
   return made;
 }
@@ -48,6 +49,24 @@ describe("reading the repos the sessions ran in", () => {
     expect(db.query("SELECT repo, label FROM repo_commit ORDER BY label IS NULL").all()).toEqual([
       { repo: withOrigin, label: "acme/widgets" },
       { repo: upstreamOnly, label: null },
+    ]);
+    db.close();
+  });
+
+  test("keys the commits of every checkout by their repository, so a second sync reads only the overlap", () => {
+    const db = new Database(":memory:");
+    db.run(SCHEMA_SQL);
+    const { repo, worktree } = repoWithWorktree(dir("worktree"));
+    const fail = (path: string, error: unknown) => {
+      throw new Error(`${path}: ${String(error)}`);
+    };
+
+    expect(ingestCommits(db, [repo, worktree], fail).commits).toBe(3);
+    expect(ingestCommits(db, [repo, worktree], fail).commits).toBe(2);
+    expect(db.query("SELECT DISTINCT repo FROM repo_commit").all()).toEqual([{ repo }]);
+    expect(db.query("SELECT DISTINCT path FROM commit_file ORDER BY path").all()).toEqual([
+      { path: `${repo}/a.ts` },
+      { path: `${repo}/old.ts` },
     ]);
     db.close();
   });

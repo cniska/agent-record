@@ -76,7 +76,7 @@ describe("read path", () => {
       addFile("one", ".github/workflows/ci.yml");
       addCommit("s1", "one", ".github/workflows/ci.yml", "2026-09-10T00:00:00Z");
       addFile("one", ".claude/worktrees/wt/.github/workflows/ci.yml");
-      addCommit("s2", "one", ".claude/worktrees/wt/.github/workflows/ci.yml", "2026-09-11T00:00:00Z");
+      addCommit("s2", "one", ".github/workflows/ci.yml", "2026-09-11T00:00:00Z");
 
       for (const n of ["a", "b", "c", "d"]) {
         addFile("two", `.github/workflows/${n}.yml`);

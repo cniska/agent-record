@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { writeTransaction } from "./db";
 import { originLabel } from "./git-remote";
-import { readCommits, repoRoot } from "./ingest-git-source";
+import { type Commit, readCommits, repoRoot, repositoryOf } from "./ingest-git-source";
 import { isScratchRepo } from "./ingest-scratch";
 
 export type GitReport = { repos: number; commits: number; files: number };
@@ -44,22 +44,23 @@ export function ingestCommits(db: Database, roots: readonly string[], fail: Repo
 
   const report: GitReport = { repos: 0, commits: 0, files: 0 };
   writeTransaction(db, () => {
-    for (const repo of roots) {
-      const newest = newestOf.get(repo)?.ts;
-      const since = newest ? new Date(Date.parse(newest) - OVERLAP_DAYS * 86_400_000).toISOString() : null;
-      let read: { label: string | null; commits: ReturnType<typeof readCommits> };
+    for (const checkout of roots) {
+      let read: { repo: string; label: string | null; commits: Commit[] };
       try {
-        read = { label: originLabel(repo), commits: readCommits(repo, since) };
+        const repo = repositoryOf(checkout);
+        const newest = newestOf.get(repo)?.ts;
+        const since = newest ? new Date(Date.parse(newest) - OVERLAP_DAYS * 86_400_000).toISOString() : null;
+        read = { repo, label: originLabel(repo), commits: readCommits(checkout, since) };
       } catch (error) {
-        fail(repo, error);
+        fail(checkout, error);
         continue;
       }
       report.repos += 1;
       for (const c of read.commits) {
-        insertCommit.run(c.sha, c.repo, read.label, c.ts, c.author, c.subject, c.kind);
+        insertCommit.run(c.sha, read.repo, read.label, c.ts, c.author, c.subject, c.kind);
         report.commits += 1;
         for (const path of c.files) {
-          insertFile.run(c.sha, `${c.repo}/${path}`);
+          insertFile.run(c.sha, `${read.repo}/${path}`);
           report.files += 1;
         }
       }

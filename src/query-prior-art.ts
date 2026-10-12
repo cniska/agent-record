@@ -12,7 +12,7 @@ export const priorArt: Query = {
     const result = select(
       db,
       `WITH matched AS (
-         SELECT ${withoutWorktree("f.path")} AS path, f.path AS real_path, f.repo AS repo
+         SELECT ${withoutWorktree("f.path")} AS path, ${withoutWorktree("f.repo")} AS repo
          FROM repo_file f
          WHERE instr(lower(f.path), lower(?)) > 0
        ),
@@ -25,7 +25,7 @@ export const priorArt: Query = {
          FROM matched m
          LEFT JOIN (SELECT DISTINCT repo, label FROM repo_commit WHERE label IS NOT NULL) c
            ON c.repo = m.repo
-         LEFT JOIN commit_file cf ON cf.path = m.real_path
+         LEFT JOIN commit_file cf ON cf.path = m.path
          LEFT JOIN repo_commit rc ON rc.sha = cf.sha
          GROUP BY m.path
        ),
@@ -52,7 +52,7 @@ export const priorArt: Query = {
     return {
       denominator:
         `${total} tracked files match "${fragment}", in ${repos} of ` +
-        `${scalar(db, "SELECT count(DISTINCT repo) AS n FROM repo_file")} repos indexed` +
+        `${scalar(db, `SELECT count(DISTINCT ${withoutWorktree("repo")}) AS n FROM repo_file`)} repos indexed` +
         (result.rows.length < total ? `; the ${PER_REPO} most recently touched in each repo are ranked` : ""),
       ...result,
       note:
