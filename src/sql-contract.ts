@@ -3,6 +3,8 @@ import { refuser } from "./coded-error";
 export const refuseSql = refuser<{
   readonly sql_invalid: { readonly statement: string; readonly detail: string };
   readonly sql_writes: { readonly statement: string };
+  readonly sql_columns_repeated: { readonly statement: string; readonly column: string };
+  readonly sql_blob: { readonly statement: string; readonly column: string };
 }>({
   sql_invalid: {
     message: ({ statement, detail }) => `SQLite cannot run ${JSON.stringify(statement)}: ${detail}`,
@@ -11,5 +13,15 @@ export const refuseSql = refuser<{
   sql_writes: {
     message: ({ statement }) => `${JSON.stringify(statement)} writes, and agent-record sql only reads`,
     resolve: () => "run a read-only SELECT",
+  },
+  sql_columns_repeated: {
+    message: ({ statement, column }) =>
+      `${JSON.stringify(statement)} names the column ${column} more than once, so one of them would be lost`,
+    resolve: () => "name each column once, with AS",
+  },
+  sql_blob: {
+    message: ({ statement, column }) =>
+      `${JSON.stringify(statement)} returns a blob in ${column}, and agent-record sql prints only text, numbers and null`,
+    resolve: ({ column }) => `select hex(${column}) instead`,
   },
 });

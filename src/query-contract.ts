@@ -7,6 +7,8 @@ export type Rows = { readonly columns: readonly string[]; readonly rows: readonl
 
 export type QueryResult = Rows & { readonly denominator: string; readonly note: string | null };
 
+export type CappedResult = QueryResult & { readonly more: string | null };
+
 export type QueryContext = {
   readonly arg: string;
   readonly home: string;

@@ -10,7 +10,7 @@ export function scalar(db: Database, sql: string, params: SQLQueryBindings[] = [
   return row.n;
 }
 
-function cellOf(value: unknown): Cell {
+export function cellOf(value: unknown): Cell {
   invariant(
     value === null || typeof value === "string" || typeof value === "number",
     `a query column holds text, a number or null, not ${typeof value}`,

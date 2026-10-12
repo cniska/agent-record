@@ -1,10 +1,14 @@
-import { SQLiteError } from "bun:sqlite";
+import { type Database, SQLiteError } from "bun:sqlite";
 import { type Command, Ran } from "./cli-contract";
 import { parseArg } from "./cli-flags";
 import { readingRecord } from "./db-read";
 import { dbPath } from "./paths";
-import { capRows, rowsOf } from "./query-row-cap";
+import { cellOf } from "./query";
+import type { Cell, Rows } from "./query-contract";
+import { capResult, rowsOf, rowsToRead } from "./query-row-cap";
 import { refuseSql } from "./sql-contract";
+
+const SQL_DENOMINATOR = "the rows the statement returned, in the order SQLite returned them";
 
 function refusalOf(error: unknown, statement: string): unknown {
   if (!(error instanceof SQLiteError)) return error;
@@ -14,25 +18,39 @@ function refusalOf(error: unknown, statement: string): unknown {
   return error;
 }
 
+function sqlCellOf(statement: string, column: string, value: unknown): Cell {
+  if (value instanceof Uint8Array) throw refuseSql("sql_blob", { statement, column });
+  return cellOf(value);
+}
+
+function readRows(db: Database, statement: string, maxRows: number): Rows {
+  try {
+    const prepared = db.query<Record<string, unknown>, []>(statement);
+    const columns = prepared.columnNames;
+    const repeated = columns.find((column, at) => columns.indexOf(column) !== at);
+    if (repeated !== undefined) throw refuseSql("sql_columns_repeated", { statement, column: repeated });
+    const toRead = rowsToRead(maxRows);
+    const rows: Cell[][] = [];
+    for (const row of prepared.iterate()) {
+      rows.push(columns.map((column) => sqlCellOf(statement, column, row[column])));
+      if (rows.length === toRead) break;
+    }
+    return { columns, rows };
+  } catch (error) {
+    throw refusalOf(error, statement);
+  }
+}
+
 function answer(path: string, statement: string, maxRows: number): Ran {
   return readingRecord(path, (db) => {
-    const rows: Record<string, unknown>[] = [];
-    try {
-      for (const row of db.query<Record<string, unknown>, []>(statement).iterate()) {
-        rows.push(row);
-        if (rows.length > maxRows) break;
-      }
-    } catch (error) {
-      throw refusalOf(error, statement);
-    }
-    return new Ran(
-      {
-        denominator: rows.length > maxRows ? `more than ${maxRows} rows` : `${rows.length} rows`,
-        ...capRows(rows, maxRows),
-        note: rows.length === 0 ? "the statement ran and matched nothing" : null,
-      },
-      0,
-    );
+    const { columns, rows } = readRows(db, statement, maxRows);
+    const result = {
+      denominator: SQL_DENOMINATOR,
+      columns,
+      rows,
+      note: rows.length === 0 ? "the statement ran and matched nothing" : null,
+    };
+    return new Ran(capResult(result, maxRows), 0);
   });
 }
 

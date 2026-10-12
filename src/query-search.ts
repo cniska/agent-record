@@ -1,5 +1,6 @@
 import { SAID, scalar, select } from "./query";
 import type { Query } from "./query-contract";
+import { rowsToRead } from "./query-row-cap";
 
 const MAX_TERMS = 16;
 
@@ -47,7 +48,7 @@ export const search: Query = {
        JOIN session s ON s.id = m.session_id
        WHERE message_fts MATCH ? AND ${SAID}
        ORDER BY c.matched DESC, bm25(message_fts) ASC, m.ts DESC LIMIT ?`,
-      [...quoted, ctx.home, quoted.length, quoted.join(" OR "), ctx.maxRows + 1],
+      [...quoted, ctx.home, quoted.length, quoted.join(" OR "), rowsToRead(ctx.maxRows)],
     );
     const said = scalar(db, `SELECT count(*) AS n FROM message m WHERE m.text IS NOT NULL AND ${SAID}`);
     const all = scalar(db, "SELECT count(*) AS n FROM message");

@@ -42,6 +42,15 @@ function withActions(): Database {
 }
 
 describe("thread", () => {
+  test("reads a whole session one row past the cap, so the cap can say rows were cut", () => {
+    const whole = thread.run(withActions(), { ...ctx, arg: "s1", maxRows: 2 });
+    expect(column(whole, "text")).toEqual([
+      "Undo what an agent wrote without touching the user's own checkout.",
+      "Bash: bun test src → exit 1",
+      "Edit: /w/src/sync.ts",
+    ]);
+  });
+
   test("reads a session whose own id holds an at-sign", () => {
     const db = seeded();
     const id = "a0064e811b74a81cb@79e9c9bc-3a0b-46f6-b935-7a25be925124";

@@ -65,6 +65,74 @@ describe("agent-record sql", () => {
     }
   });
 
+  test("prints columns and rows like a query", async () => {
+    const { home } = recordWithCommit();
+    try {
+      const { value } = await asDataHome(home, () => sqlCommand.run(["SELECT sha FROM repo_commit"]));
+      expect(value).toEqual({
+        denominator: "the rows the statement returned, in the order SQLite returned them",
+        columns: ["sha"],
+        rows: [["abc123"]],
+        more: null,
+        note: null,
+      });
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("keeps the columns of a statement that matched nothing", async () => {
+    const { home } = recordWithCommit();
+    try {
+      const { value } = await asDataHome(home, () =>
+        sqlCommand.run(["SELECT sha, subject FROM repo_commit WHERE sha = 'none'"]),
+      );
+      expect(value).toEqual({
+        denominator: "the rows the statement returned, in the order SQLite returned them",
+        columns: ["sha", "subject"],
+        rows: [],
+        more: null,
+        note: "the statement ran and matched nothing",
+      });
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("refuses a result that names a column twice, naming it", async () => {
+    const { home } = recordWithCommit();
+    const statement = "SELECT sha, subject AS sha FROM repo_commit";
+    try {
+      expect(await asDataHome(home, () => refusal(() => sqlCommand.run([statement])))).toEqual(
+        expect.objectContaining({
+          kind: "refusal",
+          code: "sql_columns_repeated",
+          meta: { statement, column: "sha" },
+          resolve: "name each column once, with AS",
+        }),
+      );
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("refuses a blob, naming hex() as the way to read it", async () => {
+    const { home } = recordWithCommit();
+    const statement = "SELECT sha, randomblob(4) AS salt FROM repo_commit";
+    try {
+      expect(await asDataHome(home, () => refusal(() => sqlCommand.run([statement])))).toEqual(
+        expect.objectContaining({
+          kind: "refusal",
+          code: "sql_blob",
+          meta: { statement, column: "salt" },
+          resolve: "select hex(salt) instead",
+        }),
+      );
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   test("refuses a read while a writer holds the record, naming it busy", async () => {
     const { home, path } = recordWithCommit();
     const writer = new Database(path);
@@ -92,10 +160,7 @@ describe("agent-record sql", () => {
       const failsAtRow50 = `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 100)
         SELECT CASE WHEN i = 50 THEN abs(-9223372036854775808) ELSE i END AS i FROM n`;
       const { value: result } = await asDataHome(home, () => sqlCommand.run([failsAtRow50]));
-      expect(result).toMatchObject({
-        denominator: "more than 40 rows",
-        more: "more rows than 40; --rows <n> to widen",
-      });
+      expect(result).toMatchObject({ more: "more rows than 40; --rows <n> to widen" });
       expect(result).toHaveProperty("rows.length", 40);
     } finally {
       rmSync(home, { recursive: true, force: true });

@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { invariant } from "./assert";
 import { SAID, select } from "./query";
 import { type Query, refuseQuery } from "./query-contract";
+import { rowsToRead } from "./query-row-cap";
 
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T[\d:.]+Z?$/;
 
@@ -94,7 +95,10 @@ export const thread: Query = {
       throw refuseQuery("ambiguous_session", { prefix, matches: found.map((session) => session.id) });
     }
     const whole = (id: string) =>
-      select(db, `${TIMELINE} ${SHOWN} FROM timeline WHERE ts IS NOT NULL ${IN_ORDER}`, [id]);
+      select(db, `${TIMELINE} ${SHOWN} FROM timeline WHERE ts IS NOT NULL ${IN_ORDER} LIMIT ?2`, [
+        id,
+        rowsToRead(ctx.maxRows),
+      ]);
     const [match] = found;
     if (!match) {
       return { denominator: "0 sessions", ...whole(""), note: `no session starts with ${prefix}` };

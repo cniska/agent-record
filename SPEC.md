@@ -76,7 +76,7 @@ A coding agent's context ends at compaction, at a handoff, or when another agent
 - **FR-40** — `query thread` prints a session's messages, denials and tool calls in time order, given a prefix of the session's id; given a time as well, it prints the stretch around that time and says how many rows lie outside it.
 - **FR-41** — A session prefix that matches more than one session is refused, naming matches to choose between.
 - **FR-42** — `query prior-art "<path fragment>"` lists the tracked files whose path contains the fragment, across the indexed checkouts, worktrees folded onto their checkout, the most recently committed first and a few per repo, and says when it ranked only some.
-- **FR-43** — `sql "<statement>"` runs one statement against the record and returns its rows; a statement that would write is refused, and a statement SQLite cannot run is refused with SQLite's reason.
+- **FR-43** — `sql "<statement>"` runs one statement against the record and returns its result in a query's shape (FR-35); a statement that would write is refused, a statement SQLite cannot run is refused with SQLite's reason, a result that names a column twice is refused naming the column, and a blob is refused naming `hex()`.
 - **FR-44** — `query thread` with a prefix that matches no session answers with no rows and a note saying so, not a refusal.
 
 ### 2.8 Health
@@ -145,7 +145,7 @@ A coding agent's context ends at compaction, at a handoff, or when another agent
 - **AC-14** — `search` for words in a said message, in a skill body, and in no message, with more distinct words than it searches: the said message ranks by matched words, the skill body is absent, the unmatched and dropped words are named, and a hit's reference opens in `thread`. (FR-35, FR-37, FR-38, FR-39)
 - **AC-15** — `thread` on a whole session, around a time, with an ambiguous prefix, and with an unknown prefix: rows in order, the counts outside the stretch, the refusal naming matches, and an empty result with its note. (FR-40, FR-41, FR-44)
 - **AC-16** — `prior-art` over fixture repos with a worktree and more matching files per repo than it ranks: matches folded onto the checkout, newest first, and the denominator saying only some were ranked. (FR-42)
-- **AC-17** — `sql` with a SELECT, an INSERT and a syntax error: rows, a `sql_writes` refusal, and a `sql_invalid` refusal with SQLite's reason. (FR-43)
+- **AC-17** — `sql` with a SELECT, an INSERT, a syntax error, a column named twice and a blob: columns and rows as a query prints them, a `sql_writes` refusal, a `sql_invalid` refusal with SQLite's reason, a `sql_columns_repeated` refusal naming the column, and a `sql_blob` refusal naming `hex()`. (FR-43)
 - **AC-18** — `doctor` with no record, a busy record, a stale sync stamp, a failed sync, a sync with failed files, and each launchd agent state: each check's state and fix, and exit 1 exactly when one fails. (FR-45, FR-46, FR-47, FR-48, FR-49)
 - **AC-19** — A `sync` that succeeds, one with failed files and one that faults: each leaves an outcome `doctor` reads. (FR-50)
 - **AC-20** — `agent install` with no agent, the same agent, and a different one: written with the loading command, unchanged, and replaced with a backup. (FR-51, FR-52)
