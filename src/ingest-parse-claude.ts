@@ -209,7 +209,7 @@ export function parseClaudeChunk(lines: string[], firstLineNumber: number): Pars
           const chosen = input.skill;
           if (block.name === "Skill" && typeof chosen === "string") {
             skillLoads.push({
-              messageId: line.message.id,
+              toolCallId: block.id,
               ts,
               model,
               skillName: chosen,

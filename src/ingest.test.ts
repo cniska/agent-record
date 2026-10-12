@@ -996,15 +996,16 @@ describe("skill loads", () => {
   function skillLoads(db: Database) {
     return db
       .prepare(
-        `SELECT session_id, message_id, ts, model, skill_name, how, body_chars, skill_path
-         FROM skill_load ORDER BY session_id, ts`,
+        `SELECT session_id, message_id, tool_call_id, ts, model, skill_name, how, body_chars, skill_path
+         FROM skill_load ORDER BY session_id, ts, tool_call_id`,
       )
       .all();
   }
 
   const calledLoad = {
     session_id: SESSION,
-    message_id: "msg-skill",
+    message_id: null,
+    tool_call_id: "toolu-skill",
     ts: at(1),
     model: "claude-opus-5-5",
     skill_name: "acme:plan",
@@ -1019,6 +1020,30 @@ describe("skill loads", () => {
     const db = run(env);
     try {
       expect(skillLoads(db)).toEqual([calledLoad]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("stores each Skill call as its own load, even two of one skill in one message", () => {
+    const env = scratchEnv(newRoot());
+    const twice = {
+      ...skillCall,
+      message: {
+        ...skillCall.message,
+        content: [
+          { type: "tool_use", id: "toolu-first", name: "Skill", input: { skill: "acme:plan" } },
+          { type: "tool_use", id: "toolu-second", name: "Skill", input: { skill: "acme:plan" } },
+        ],
+      },
+    };
+    writeTranscript(env, SESSION, [twice]);
+    const db = run(env);
+    try {
+      expect(skillLoads(db)).toMatchObject([
+        { message_id: null, tool_call_id: "toolu-first", skill_name: "acme:plan", how: "model" },
+        { message_id: null, tool_call_id: "toolu-second", skill_name: "acme:plan", how: "model" },
+      ]);
     } finally {
       db.close();
     }
@@ -1057,6 +1082,7 @@ describe("skill loads", () => {
         {
           session_id: SESSION,
           message_id: "u-plugin",
+          tool_call_id: null,
           ts: at(3),
           model: null,
           skill_name: "acme:plan",
@@ -1082,6 +1108,7 @@ describe("skill loads", () => {
         {
           session_id: SESSION,
           message_id: "u-typed",
+          tool_call_id: null,
           ts: at(3),
           model: null,
           skill_name: "review",
@@ -1123,6 +1150,7 @@ describe("skill loads", () => {
         {
           session_id: SESSION,
           message_id: "u-plugin",
+          tool_call_id: null,
           ts: at(3),
           model: null,
           skill_name: "acme:plan",

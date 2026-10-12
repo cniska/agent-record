@@ -201,8 +201,8 @@ export function createIngester(db: Database) {
        skill_path  = coalesce(excluded.skill_path, skill_load.skill_path),
        model       = coalesce(excluded.model, skill_load.model)`;
   const insertSkillLoad = db.prepare(
-    `INSERT INTO skill_load (session_id, message_id, tool_call_id, ts, model, skill_name, how)
-     VALUES ($sessionId, $messageId, $toolCallId, $ts, $model, $skillName, $how)
+    `INSERT INTO skill_load (session_id, tool_call_id, ts, model, skill_name, how)
+     VALUES ($sessionId, $toolCallId, $ts, $model, $skillName, $how)
      ${skillLoadConflict}`,
   );
   const insertTypedSkillBody = db.prepare(
@@ -217,9 +217,9 @@ export function createIngester(db: Database) {
      ${skillLoadConflict}`,
   );
   const insertCalledSkillBody = db.prepare(
-    `INSERT INTO skill_load (session_id, message_id, ts, model, skill_name, how,
+    `INSERT INTO skill_load (session_id, tool_call_id, ts, model, skill_name, how,
        body_chars, body_sha256, skill_path)
-     SELECT $sessionId, message_id, ts_call, model, skill_name, 'model',
+     SELECT $sessionId, id, ts_call, model, skill_name, 'model',
        $bodyChars, $bodySha256, $skillPath
      FROM tool_call
      WHERE id = $toolUseId AND tool_name = 'Skill' AND ts_call IS NOT NULL AND skill_name IS NOT NULL
@@ -398,8 +398,7 @@ export function createIngester(db: Database) {
       }
       insertSkillLoad.run({
         $sessionId: spec.sessionId,
-        $messageId: l.messageId ?? null,
-        $toolCallId: l.toolCallId ?? null,
+        $toolCallId: l.toolCallId,
         $ts: l.ts,
         $model: l.model ?? null,
         $skillName: l.skillName,

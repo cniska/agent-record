@@ -7,12 +7,7 @@ export type How = (typeof HOWS)[number];
 type SkillBodyFields = { bodyChars: number; bodySha256: string; skillPath: string };
 
 export type SkillLoadRow =
-  | (({ messageId: string; toolCallId?: never } | { toolCallId: string; messageId?: never }) & {
-      ts: string;
-      model?: string;
-      skillName: string;
-      how: How;
-    })
+  | { toolCallId: string; ts: string; model?: string; skillName: string; how: How }
   | ({ toolUseId: string } & SkillBodyFields)
   | ({ parentUuid: string; skillName: string } & SkillBodyFields);
 
