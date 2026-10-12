@@ -1071,10 +1071,7 @@ describe("skill loads", () => {
   });
 
   test("stores a typed skill and its body as one load the user chose", () => {
-    const root = newRoot();
-    const env = scratchEnv(root);
-    mkdirSync(join(root, "skills", "review"), { recursive: true });
-    writeFileSync(join(root, "skills", "review", "SKILL.md"), "# Review");
+    const env = scratchEnv(newRoot());
     writeTranscript(env, SESSION, [
       typed("u-typed", "review"),
       typedBody("u-typed-body", "u-typed", "/Users/x/.claude/skills/review"),

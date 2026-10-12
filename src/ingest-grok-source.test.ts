@@ -218,7 +218,7 @@ describe("grok sessions", () => {
     const path = writeSession(env, ORPHAN, [], { info: { id: 5 }, parent_session_id: PARENT });
     const summary = join(dirname(path), "summary.json");
     const failures: { path: string; error: unknown }[] = [];
-    const [spec] = listSource(SESSION_SOURCES.grok, SESSION_SOURCES.grok.root(env), env, (failed, error) =>
+    const [spec] = listSource(SESSION_SOURCES.grok, SESSION_SOURCES.grok.root(env), (failed, error) =>
       failures.push({ path: failed, error }),
     );
     expect(spec?.sessionId).toBe(ORPHAN);
@@ -241,7 +241,7 @@ describe("grok sessions", () => {
     const summary = join(dirname(path), "summary.json");
     writeFileSync(summary, "{ cut");
     const failures: { path: string; code: unknown }[] = [];
-    listSource(SESSION_SOURCES.grok, SESSION_SOURCES.grok.root(env), env, (failed, error) =>
+    listSource(SESSION_SOURCES.grok, SESSION_SOURCES.grok.root(env), (failed, error) =>
       failures.push({ path: failed, code: errorCode(error) }),
     );
     expect(failures).toEqual([{ path: summary, code: "sidecar_unreadable" }]);
@@ -252,7 +252,7 @@ describe("grok sessions", () => {
     const path = writeSession(env, ORPHAN, [], {});
     rmSync(join(dirname(path), "summary.json"));
     const failures: unknown[] = [];
-    const [spec] = listSource(SESSION_SOURCES.grok, SESSION_SOURCES.grok.root(env), env, (_, error) =>
+    const [spec] = listSource(SESSION_SOURCES.grok, SESSION_SOURCES.grok.root(env), (_, error) =>
       failures.push(error),
     );
     expect(spec?.sessionId).toBe(ORPHAN);

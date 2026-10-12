@@ -40,12 +40,8 @@ export function locksDir(env: Env = process.env): string {
   return join(stateDir(env), "locks");
 }
 
-export function claudeDir(env: Env = process.env): string {
-  return join(resolveHomeDir(env), ".claude");
-}
-
 export function claudeProjectsDir(env: Env = process.env): string {
-  return join(claudeDir(env), "projects");
+  return join(resolveHomeDir(env), ".claude", "projects");
 }
 
 export function codexDir(env: Env = process.env): string {

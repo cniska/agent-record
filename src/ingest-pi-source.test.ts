@@ -29,7 +29,7 @@ describe("listing sessions", () => {
       `${SESSION_LINE}\n`,
     );
 
-    const list = (at: string) => listSource(SESSION_SOURCES.pi, at, {}, () => {});
+    const list = (at: string) => listSource(SESSION_SOURCES.pi, at, () => {});
     expect(list(root).map(({ kind, sessionId }) => ({ kind, sessionId }))).toEqual([
       { kind: "transcript", sessionId: "aaaaaaaa-0000-4000-8000-000000000001" },
     ]);

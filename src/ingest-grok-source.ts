@@ -5,7 +5,6 @@ import type { Failure } from "./ingest-contract";
 import { parseGrokChunk } from "./ingest-parse-grok";
 import { projectOf, type SessionFacts } from "./ingest-session-records";
 import { readSidecar } from "./ingest-source-read";
-import type { ListingIo } from "./ingest-sources";
 
 type GrokSummary = {
   id: string;
@@ -72,7 +71,7 @@ function summaryFacts(summary: GrokSummary | undefined): SessionFacts[] {
   ];
 }
 
-export function listGrokSessions(paths: readonly string[], { fail }: ListingIo): SourceFile[] {
+export function listGrokSessions(paths: readonly string[], fail: Failure): SourceFile[] {
   const specs: SourceFile[] = [];
   for (const path of paths) {
     const sessionDir = dirname(path);

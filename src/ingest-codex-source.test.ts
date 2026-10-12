@@ -17,7 +17,7 @@ function parseWithRawState(state: string) {
   roots.push(root);
   const env = scratchEnv(root);
   writeCodexRollout(env, "sessions", THREAD);
-  const [spec] = listSource(SESSION_SOURCES.codex, SESSION_SOURCES.codex.root(env), env, () => {});
+  const [spec] = listSource(SESSION_SOURCES.codex, SESSION_SOURCES.codex.root(env), () => {});
   const lines = codexRolloutLines(THREAD, { withIds: true })
     .map((l) => JSON.stringify(l))
     .filter((l) => l.includes("response_item"));

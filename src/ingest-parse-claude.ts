@@ -124,11 +124,7 @@ function parseLine(raw: string): ClaudeLine | undefined {
   }
 }
 
-export function parseClaudeChunk(
-  lines: string[],
-  firstLineNumber: number,
-  knownSkills: ReadonlySet<string> = new Set(),
-): ParsedChunk {
+export function parseClaudeChunk(lines: string[], firstLineNumber: number): ParsedChunk {
   const session: SessionFacts[] = [];
   const messages: MessageRow[] = [];
   const usage: UsageRow[] = [];
@@ -282,16 +278,6 @@ export function parseClaudeChunk(
         cliVersion: nonEmpty(line.version),
         entrypoint: nonEmpty(line.entrypoint),
       });
-      const named = text ? skillFromCommand(text) : undefined;
-      const typed = named && knownSkills.has(named) ? named : undefined;
-      if (typed) {
-        skillLoads.push({
-          messageId: line.uuid,
-          ts,
-          skillName: typed,
-          how: "user",
-        });
-      }
       const body = line.isMeta === true && text ? parseSkillBody(text) : undefined;
       if (body) {
         const { name, ...fields } = body;
@@ -309,7 +295,7 @@ export function parseClaudeChunk(
         originKind: nonEmpty(line.origin?.kind),
         isMeta: line.isMeta === true,
         isSkillBody: line.isMeta === true && (text?.startsWith(SKILL_BODY_PREFIX) ?? false),
-        slashCommand: named,
+        slashCommand: text ? skillFromCommand(text) : undefined,
         interruptedMessageId: nonEmpty(line.interruptedMessageId),
         denialKind: nonEmpty(line.toolDenialKind),
         userFeedback: feedbackText(line.userFeedback),

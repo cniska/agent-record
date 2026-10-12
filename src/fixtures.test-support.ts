@@ -181,9 +181,14 @@ export function claudeTranscriptLines(sessionId: string): unknown[] {
   ];
 }
 
-export function writeClaudeTranscript(env: Env, slug: string, sessionId: string): string {
+export function writeClaudeTranscript(
+  env: Env,
+  slug: string,
+  sessionId: string,
+  lines: unknown[] = claudeTranscriptLines(sessionId),
+): string {
   const path = join(claudeProjectsDir(env), slug, `${sessionId}.jsonl`);
-  writeLines(path, claudeTranscriptLines(sessionId));
+  writeLines(path, lines);
   return path;
 }
 

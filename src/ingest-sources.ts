@@ -27,10 +27,8 @@ export type SessionSource = {
   readonly sidecars?: (sessionPath: string) => readonly string[];
   readonly movedKey?: (sessionPath: string) => string | undefined;
   readonly titles?: { readonly file: string; readonly read: (path: string) => ReadonlyMap<string, string> };
-  readonly list: (paths: readonly string[], io: ListingIo) => SourceFile[];
+  readonly list: (paths: readonly string[], fail: Failure) => SourceFile[];
 };
-
-export type ListingIo = { readonly env: Env; readonly fail: Failure };
 
 export const SESSION_SOURCES: Readonly<Record<Tool, SessionSource>> = {
   claude: {
@@ -56,6 +54,6 @@ export const SESSION_SOURCES: Readonly<Record<Tool, SessionSource>> = {
   omp: { root: ompSessionsDir, sessions: PI_SESSIONS, list: listPiSessions },
 };
 
-export function listSource(source: SessionSource, root: string, env: Env, fail: Failure): SourceFile[] {
-  return source.list(scan(root, source.sessions), { env, fail });
+export function listSource(source: SessionSource, root: string, fail: Failure): SourceFile[] {
+  return source.list(scan(root, source.sessions), fail);
 }

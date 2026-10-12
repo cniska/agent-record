@@ -5,10 +5,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb, recordVersion } from "./db";
 import { SCHEMA_VERSION } from "./db-schema";
-import { scratchEnv } from "./fixtures.test-support";
+import { scratchEnv, writeClaudeTranscript } from "./fixtures.test-support";
 import { rebuild, sync } from "./ingest-sync";
 import { TOOLS } from "./ingest-tools";
-import { dbPath } from "./paths";
+import { archiveDir, dbPath } from "./paths";
 
 type Scratch = { db: Database; env: { HOME: string; XDG_DATA_HOME: string } };
 
@@ -122,11 +122,11 @@ describe("absorbing a schema change", () => {
   test("a rebuild that throws leaves the old version stamped", () => {
     const { db, env } = scratch();
     db.run(`PRAGMA user_version = ${SCHEMA_VERSION - 1}`);
-    const broken = join(env.HOME, "broken-home");
-    mkdirSync(join(broken, ".claude", "projects"), { recursive: true });
-    writeFileSync(join(broken, ".claude", "skills"), "");
+    const broken = { HOME: env.HOME, XDG_DATA_HOME: join(env.HOME, "broken-data") };
+    mkdirSync(archiveDir(broken), { recursive: true });
+    writeFileSync(join(archiveDir(broken), "claude"), "");
 
-    expect(() => rebuild(db, { HOME: broken })).toThrow(expect.objectContaining({ code: "ENOTDIR" }));
+    expect(() => rebuild(db, broken)).toThrow(expect.objectContaining({ code: "ENOTDIR" }));
     expect(recordVersion(db)).toBe(SCHEMA_VERSION - 1);
 
     rebuild(db, env);
@@ -155,6 +155,35 @@ describe("a sync", () => {
     const db = openDb(dbPath(env));
     try {
       expect(sync(db, env).sources).toEqual(TOOLS.map((tool) => ({ tool, files: 0 })));
+    } finally {
+      db.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("a rebuild with HOME at an empty directory keeps the skill loads a sync wrote", () => {
+    const root = mkdtempSync(join(tmpdir(), "agent-record-archive-only-"));
+    const env = scratchEnv(root);
+    const typed = {
+      sessionId: "11111111-2222-3333-4444-555555555555",
+      cwd: "/Users/x/code/demo",
+      type: "user",
+      uuid: "u-typed",
+      timestamp: "2026-09-20T10:03:00.000Z",
+      message: { role: "user", content: "<command-name>/review</command-name>" },
+    };
+    writeClaudeTranscript(env, "-Users-x-code-demo", typed.sessionId, [typed]);
+    mkdirSync(join(root, ".claude", "skills", "review"), { recursive: true });
+    writeFileSync(join(root, ".claude", "skills", "review", "SKILL.md"), "# Review");
+    const empty = join(root, "empty-home");
+    mkdirSync(empty);
+    const db = openDb(dbPath(env));
+    const loads = () => db.query("SELECT session_id, message_id, skill_name, how FROM skill_load").all();
+    try {
+      sync(db, env);
+      const synced = loads();
+      rebuild(db, { ...env, HOME: empty });
+      expect(loads()).toEqual(synced);
     } finally {
       db.close();
       rmSync(root, { recursive: true, force: true });
