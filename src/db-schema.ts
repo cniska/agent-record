@@ -1,15 +1,15 @@
-import { TOOLS } from "./ingest-tools";
+import { ROLES } from "./ingest-session-records";
+import { HOWS } from "./ingest-skill-load";
+import { KINDS, TOOLS } from "./ingest-tools";
 
 const sqlList = (values: readonly string[]): string => values.map((value) => `'${value}'`).join(",");
-const TOOLS_SQL = sqlList(TOOLS);
-
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS source_file (
   path            TEXT PRIMARY KEY,
-  tool            TEXT NOT NULL CHECK (tool IN (${TOOLS_SQL})),
-  kind            TEXT NOT NULL CHECK (kind IN ('transcript','subagent','rollout')),
+  tool            TEXT NOT NULL CHECK (tool IN (${sqlList(TOOLS)})),
+  kind            TEXT NOT NULL CHECK (kind IN (${sqlList(KINDS)})),
   session_id      TEXT NOT NULL,
   bytes_ingested  INTEGER NOT NULL DEFAULT 0,
   lines_ingested  INTEGER NOT NULL DEFAULT 0,
@@ -20,7 +20,7 @@ CREATE INDEX IF NOT EXISTS source_file_session ON source_file(session_id, kind);
 
 CREATE TABLE IF NOT EXISTS session (
   id              TEXT PRIMARY KEY,
-  tool            TEXT NOT NULL CHECK (tool IN (${TOOLS_SQL})),
+  tool            TEXT NOT NULL CHECK (tool IN (${sqlList(TOOLS)})),
   parent_id       TEXT REFERENCES session(id),
   agent_type      TEXT,
   cwd             TEXT,
@@ -29,18 +29,18 @@ CREATE TABLE IF NOT EXISTS session (
   git_branch      TEXT,
   cli_version     TEXT,
   entrypoint      TEXT,
-  started_at      TEXT,
-  last_seen_at    TEXT,
+  ts_first        TEXT,
+  ts_last         TEXT,
   title           TEXT
 );
-CREATE INDEX IF NOT EXISTS session_project ON session(project, started_at);
+CREATE INDEX IF NOT EXISTS session_project ON session(project, ts_first);
 CREATE INDEX IF NOT EXISTS session_parent ON session(parent_id);
 
 CREATE TABLE IF NOT EXISTS message (
   id              TEXT PRIMARY KEY,
   session_id      TEXT NOT NULL REFERENCES session(id),
   ts              TEXT NOT NULL,
-  role            TEXT NOT NULL CHECK (role IN ('user','assistant')),
+  role            TEXT NOT NULL CHECK (role IN (${sqlList(ROLES)})),
   model           TEXT,
   turn_id         TEXT,
   prompt_source   TEXT,
@@ -49,7 +49,6 @@ CREATE TABLE IF NOT EXISTS message (
   is_skill_body   INTEGER NOT NULL DEFAULT 0,
   attribution_skill TEXT,
   slash_command    TEXT,
-  interrupted_message_id TEXT,
   denial_kind     TEXT,
   user_feedback   TEXT,
   text            TEXT,
@@ -100,15 +99,14 @@ CREATE TABLE IF NOT EXISTS tool_call (
   attribution_skill TEXT,
   ts_call         TEXT,
   ts_result       TEXT,
-  tool_name       TEXT NOT NULL,
+  tool_name       TEXT,
   skill_name      TEXT,
   file_path       TEXT,
   command         TEXT,
   is_error        INTEGER,
-  interrupted     INTEGER,
+  is_interrupted  INTEGER,
   exit_code       INTEGER,
   duration_ms     INTEGER,
-  git_operation   TEXT,
   result_bytes    INTEGER,
   src_file        TEXT NOT NULL REFERENCES source_file(path) ON UPDATE CASCADE,
   src_line_call   INTEGER,
@@ -129,20 +127,23 @@ CREATE TABLE IF NOT EXISTS git_command (
 CREATE INDEX IF NOT EXISTS git_command_sub ON git_command(subcommand);
 
 CREATE TABLE IF NOT EXISTS skill_load (
-  id              INTEGER PRIMARY KEY,
   session_id      TEXT NOT NULL REFERENCES session(id),
   message_id      TEXT REFERENCES message(id),
+  tool_call_id    TEXT REFERENCES tool_call(id),
+  anchor_id       TEXT NOT NULL AS (coalesce(message_id, tool_call_id)),
   ts              TEXT NOT NULL,
   model           TEXT,
   skill_name      TEXT NOT NULL,
-  how             TEXT NOT NULL CHECK (how IN ('model','user','read')),
+  how             TEXT NOT NULL CHECK (how IN (${sqlList(HOWS)})),
   body_chars      INTEGER,
   body_sha256     TEXT,
   skill_path      TEXT,
-  UNIQUE (session_id, message_id, skill_name, how)
+  UNIQUE (session_id, anchor_id, skill_name, how),
+  CHECK ((message_id IS NULL) <> (tool_call_id IS NULL))
 );
 CREATE INDEX IF NOT EXISTS skill_load_name ON skill_load(skill_name, ts);
 CREATE INDEX IF NOT EXISTS skill_load_message ON skill_load(message_id);
+CREATE INDEX IF NOT EXISTS skill_load_tool_call ON skill_load(tool_call_id);
 
 CREATE TABLE IF NOT EXISTS repo_commit (
   sha             TEXT PRIMARY KEY,

@@ -58,7 +58,7 @@ function snapshot(db: Database, root: string) {
     sessions: db
       .prepare<Record<string, unknown>, []>(
         `SELECT id, tool, parent_id, agent_type, cwd, project, git_branch, cli_version, entrypoint,
-                started_at, last_seen_at, title FROM session ORDER BY id`,
+                ts_first, ts_last, title FROM session ORDER BY id`,
       )
       .all(),
     messages: strip(

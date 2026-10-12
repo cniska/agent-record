@@ -30,7 +30,6 @@ const ClaudeToolUseResult = z.looseObject({
   stdout: z.string().optional(),
   stderr: z.string().optional(),
   interrupted: z.boolean().optional(),
-  gitOperation: z.unknown().optional(),
 });
 type ClaudeToolUseResult = z.infer<typeof ClaudeToolUseResult>;
 
@@ -260,12 +259,10 @@ export function parseClaudeChunk(lines: string[], firstLineNumber: number): Pars
           const r = line.toolUseResult;
           toolCalls.push({
             id: block.tool_use_id,
-            toolName: "",
             tsResult: ts,
             isError: block.is_error === true,
-            interrupted: r?.interrupted === true,
+            isInterrupted: r?.interrupted === true,
             resultBytes: resultSize(block.content, r),
-            gitOperation: r?.gitOperation ? JSON.stringify(r.gitOperation) : undefined,
             srcLineResult: srcLine,
           });
         }
@@ -296,7 +293,6 @@ export function parseClaudeChunk(lines: string[], firstLineNumber: number): Pars
         isMeta: line.isMeta === true,
         isSkillBody: line.isMeta === true && (text?.startsWith(SKILL_BODY_PREFIX) ?? false),
         slashCommand: text ? skillFromCommand(text) : undefined,
-        interruptedMessageId: nonEmpty(line.interruptedMessageId),
         denialKind: nonEmpty(line.toolDenialKind),
         userFeedback: feedbackText(line.userFeedback),
         text: body ? undefined : text,
@@ -308,6 +304,7 @@ export function parseClaudeChunk(lines: string[], firstLineNumber: number): Pars
           sourceToolUseID: line.sourceToolUseID,
           parentUuid: line.parentUuid,
           session_id: line.session_id,
+          interruptedMessageId: nonEmpty(line.interruptedMessageId),
         }),
       });
     }

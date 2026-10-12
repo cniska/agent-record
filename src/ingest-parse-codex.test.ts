@@ -160,6 +160,28 @@ describe("parseCodexChunk", () => {
     expect(parsed.toolCalls).toMatchObject([{ id: "item-1", exitCode: 1 }]);
   });
 
+  test("ties a skill file read by a command to the tool call that read it", () => {
+    const read = JSON.stringify({
+      type: "event_msg",
+      timestamp: "2026-09-16T10:00:00.000Z",
+      payload: {
+        type: "item_completed",
+        item: { id: "item-7", type: "CommandExecution", command: "cat skills/plan/SKILL.md" },
+      },
+    });
+    const parsed = parseCodexChunk([read], 1, THREAD, {});
+    expect(parsed.skillLoads).toEqual([
+      {
+        toolCallId: "item-7",
+        ts: "2026-09-16T10:00:00.000Z",
+        model: undefined,
+        skillName: "plan",
+        how: "read",
+      },
+    ]);
+    expect(parsed.toolCalls).toMatchObject([{ id: "item-7" }]);
+  });
+
   test("keeps lines whose model, turn id, usage and status are null", () => {
     const at = "2026-09-16T10:00:00.000Z";
     const parsed = parseCodexChunk(

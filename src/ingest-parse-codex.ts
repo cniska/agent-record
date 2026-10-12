@@ -224,6 +224,7 @@ export function parseCodexChunk(
         const readSkill = cmd ? skillFromFileRead(cmd) : undefined;
         if (readSkill) {
           skillLoads.push({
+            toolCallId: item.id,
             ts: msSince(p.started_at_ms) ?? ts,
             model: current.model,
             skillName: readSkill,

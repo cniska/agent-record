@@ -80,7 +80,7 @@ function callsOf(message: PiMessage, ts: string, srcLine: number): ToolCallRow[]
       {
         id: part.id,
         tsCall: ts,
-        toolName: part.name ?? "",
+        toolName: nonEmpty(part.name),
         filePath: nonEmpty(part.arguments?.path),
         command: nonEmpty(part.arguments?.command),
         model: message.model,
@@ -135,7 +135,7 @@ export function parsePiChunk(lines: string[], firstLineNumber: number): ParsedCh
       toolCalls.push({
         id: message.toolCallId,
         tsResult: ts,
-        toolName: message.toolName ?? "",
+        toolName: nonEmpty(message.toolName),
         isError: message.isError,
         srcLineResult: srcLine,
       });

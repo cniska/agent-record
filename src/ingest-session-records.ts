@@ -1,5 +1,9 @@
 import type { SkillLoadRow } from "./ingest-skill-load";
 
+export const ROLES = ["user", "assistant"] as const;
+
+export type Role = (typeof ROLES)[number];
+
 export type SessionFacts = {
   ts?: string;
   cwd?: string;
@@ -13,7 +17,7 @@ export type SessionFacts = {
 export type MessageRow = {
   id: string;
   ts: string;
-  role: "user" | "assistant";
+  role: Role;
   model?: string;
   turnId?: string;
   promptSource?: string;
@@ -22,7 +26,6 @@ export type MessageRow = {
   isSkillBody: boolean;
   attributionSkill?: string;
   slashCommand?: string;
-  interruptedMessageId?: string;
   denialKind?: string;
   userFeedback?: string;
   text?: string;
@@ -60,15 +63,14 @@ export type ToolCallRow = {
   attributionSkill?: string;
   tsCall?: string;
   tsResult?: string;
-  toolName: string;
+  toolName?: string;
   skillName?: string;
   filePath?: string;
   command?: string;
   isError?: boolean;
-  interrupted?: boolean;
+  isInterrupted?: boolean;
   exitCode?: number;
   durationMs?: number;
-  gitOperation?: string;
   resultBytes?: number;
   srcLineCall?: number;
   srcLineResult?: number;

@@ -1,9 +1,18 @@
 import { createHash } from "node:crypto";
 
+export const HOWS = ["model", "user", "read"] as const;
+
+export type How = (typeof HOWS)[number];
+
 type SkillBodyFields = { bodyChars: number; bodySha256: string; skillPath: string };
 
 export type SkillLoadRow =
-  | { messageId?: string; ts: string; model?: string; skillName: string; how: "model" | "user" | "read" }
+  | (({ messageId: string; toolCallId?: never } | { toolCallId: string; messageId?: never }) & {
+      ts: string;
+      model?: string;
+      skillName: string;
+      how: How;
+    })
   | ({ toolUseId: string } & SkillBodyFields)
   | ({ parentUuid: string; skillName: string } & SkillBodyFields);
 

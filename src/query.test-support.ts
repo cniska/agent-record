@@ -12,7 +12,7 @@ export function seeded(): Database {
   const db = new Database(":memory:");
   db.run(SCHEMA_SQL);
   db.run(
-    `INSERT INTO session (id, tool, cwd, project, started_at, last_seen_at)
+    `INSERT INTO session (id, tool, cwd, project, ts_first, ts_last)
      VALUES ('s1', 'claude', '/w', '/home/code/demo', '2026-09-01T10:00:00Z', '2026-09-01T11:00:00Z')`,
   );
   db.run(

@@ -8,7 +8,7 @@ const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T[\d:.]+Z?$/;
 const TRANSCRIPT_READING_CHARS = 240;
 
 const TOOL_OUTCOME = `CASE
-  WHEN interrupted = 1 THEN ' → interrupted'
+  WHEN is_interrupted = 1 THEN ' → interrupted'
   WHEN exit_code IS NOT NULL AND exit_code <> 0 THEN ' → exit ' || exit_code
   WHEN is_error = 1 THEN ' → error'
   ELSE '' END`;
@@ -27,7 +27,7 @@ const TIMELINE = `WITH timeline AS (
   UNION ALL
   SELECT coalesce(ts_call, ts_result), 'tool', 1, src_line_call,
          'tool', coalesce(attribution_skill, ''),
-         tool_name || coalesce(': ' || coalesce(command, file_path), '') || ${TOOL_OUTCOME}
+         coalesce(tool_name, '(unnamed)') || coalesce(': ' || coalesce(command, file_path), '') || ${TOOL_OUTCOME}
   FROM tool_call WHERE session_id = ?1
 )`;
 

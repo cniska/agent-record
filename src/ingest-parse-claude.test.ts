@@ -52,11 +52,9 @@ describe("parseClaudeChunk", () => {
   });
 
   test("records the ways a user overrode the agent", () => {
-    expect(parsed.messages.find((m) => m.id === "u-4")).toMatchObject({
-      interruptedMessageId: "msg-1",
-      denialKind: "user-rejected",
-      userFeedback: "no, not like that",
-    });
+    const overridden = parsed.messages.find((m) => m.id === "u-4");
+    expect(overridden).toMatchObject({ denialKind: "user-rejected", userFeedback: "no, not like that" });
+    expect(JSON.parse(overridden?.extra ?? "{}")).toMatchObject({ interruptedMessageId: "msg-1" });
   });
 
   test("numbers src_line from the file, not the chunk", () => {

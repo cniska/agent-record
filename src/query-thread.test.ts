@@ -31,7 +31,7 @@ function withActions(): Database {
      VALUES ('m-after', 's1', '2026-09-01T10:40:00Z', 'assistant', 'Edited the sync instead.', '/f.jsonl', 6)`,
   );
   const call = db.prepare(
-    `INSERT INTO tool_call (id, session_id, ts_call, tool_name, file_path, command, is_error, exit_code, interrupted, src_file, src_line_call)
+    `INSERT INTO tool_call (id, session_id, ts_call, tool_name, file_path, command, is_error, exit_code, is_interrupted, src_file, src_line_call)
      VALUES (?, 's1', ?, ?, ?, ?, ?, ?, ?, '/f.jsonl', ?)`,
   );
   call.run("t-bash", "2026-09-01T10:32:00Z", "Bash", null, "bun test\nsrc", 1, 1, 0, 3);
@@ -46,7 +46,7 @@ describe("thread", () => {
     const db = seeded();
     const id = "a0064e811b74a81cb@79e9c9bc-3a0b-46f6-b935-7a25be925124";
     db.run(
-      `INSERT INTO session (id, tool, cwd, project, started_at, last_seen_at)
+      `INSERT INTO session (id, tool, cwd, project, ts_first, ts_last)
        VALUES (?, 'claude', '/w', '/home/code/demo', '2026-09-01T10:00:00Z', '2026-09-01T11:00:00Z')`,
       [id],
     );
@@ -81,6 +81,16 @@ describe("thread", () => {
       "session s1: 2 messages anyone said, 1 denials and 3 tool calls; 1 tool calls with no time are not shown",
     );
     expect(whole.note).toContain("A tool row names its command or file and how it ended, not its result.");
+    db.close();
+  });
+
+  test("names a tool call whose name never arrived as unnamed", () => {
+    const db = seeded();
+    db.run(
+      `INSERT INTO tool_call (id, session_id, ts_call, tool_name, command, src_file, src_line_call)
+       VALUES ('t-nameless', 's1', '2026-09-01T10:32:00Z', NULL, 'ls', '/f.jsonl', 3)`,
+    );
+    expect(column(thread.run(db, { ...ctx, arg: "s1" }), "text")).toContain("(unnamed): ls");
     db.close();
   });
 

@@ -182,6 +182,18 @@ describe("a Pi or omp session", () => {
     ]);
   });
 
+  test("records a tool call with an empty name as unnamed", () => {
+    const nameless = JSON.stringify({
+      type: "message",
+      id: "a-nameless",
+      timestamp: "2026-01-01T10:05:00.000Z",
+      message: { role: "assistant", content: [{ type: "toolCall", id: "call_9", name: "", arguments: {} }] },
+    });
+    const call = parsePiChunk([nameless], 1).toolCalls.find((t) => t.id === "call_9");
+    expect(call).toBeDefined();
+    expect(call?.toolName).toBeUndefined();
+  });
+
   test("sets aside a line that does not parse", () => {
     expect(parsePiChunk(["{not json", ...LINES.slice(1, 2)], 10).dropped).toEqual([10]);
   });

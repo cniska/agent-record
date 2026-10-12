@@ -3,7 +3,34 @@ import { expect, test } from "bun:test";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
 import { TOOLS } from "./ingest-tools";
 
-const PINNED = "3 134eb82bed0c8bdaeb77f1052d064b8856b9588fcea0a80e0e086b8e4acd999e";
+const PINNED = "4 1ffc4c05dbebd7e3997977a0b1c461a05359bae057b4d23bb658b639859852fc";
+
+function schema(): Database {
+  const db = new Database(":memory:");
+  db.run(SCHEMA_SQL);
+  return db;
+}
+
+type QualifiedColumn = { readonly name: string; readonly type: string };
+
+function qualifiedColumns(): readonly QualifiedColumn[] {
+  const db = schema();
+  try {
+    return db
+      .query<{ table: string; name: string; type: string }, []>(
+        `SELECT m.name AS "table", c.name AS name, c.type AS type
+         FROM sqlite_master m JOIN pragma_table_xinfo(m.name) c
+         WHERE m.type = 'table' AND m.name NOT LIKE 'message_fts%'
+         ORDER BY m.name, c.cid`,
+      )
+      .all()
+      .map(({ table, name, type }) => ({ name: `${table}.${name}`, type }));
+  } finally {
+    db.close();
+  }
+}
+
+const COLUMNS = qualifiedColumns();
 
 type KeyColumn = {
   readonly table: string;
@@ -22,8 +49,7 @@ function columnsByKey(rows: readonly KeyColumn[]): ReadonlyMap<string, readonly 
 }
 
 test("every foreign key leads an index, so a delete of the rows it references does not scan its table", () => {
-  const db = new Database(":memory:");
-  db.run(SCHEMA_SQL);
+  const db = schema();
   const foreignKeys = columnsByKey(
     db
       .query<KeyColumn, []>(
@@ -62,7 +88,7 @@ test("the schema's version is pinned together with the schema it stands for", ()
 });
 
 test("every tool column accepts the tool vocabulary and nothing past it", () => {
-  const db = new Database(":memory:");
+  const db = schema();
   const inserts: Record<string, (tool: string, key: string) => void> = {
     source_file: (tool, key) =>
       db.run("INSERT INTO source_file (path, tool, kind, session_id) VALUES (?, ?, 'transcript', ?)", [
@@ -73,7 +99,6 @@ test("every tool column accepts the tool vocabulary and nothing past it", () => 
     session: (tool, key) => db.run("INSERT INTO session (id, tool) VALUES (?, ?)", [key, tool]),
   };
   try {
-    db.run(SCHEMA_SQL);
     for (const [table, insert] of Object.entries(inserts)) {
       for (const tool of TOOLS) {
         expect(() => insert(tool, `${table}-${tool}`), `${table} accepts ${tool}`).not.toThrow();
@@ -82,6 +107,74 @@ test("every tool column accepts the tool vocabulary and nothing past it", () => 
         /CHECK constraint failed: tool IN/,
       );
     }
+  } finally {
+    db.close();
+  }
+});
+
+test("only the record's own clock ends in _at", () => {
+  expect(COLUMNS.filter(({ name }) => name.endsWith("_at")).map(({ name }) => name)).toEqual([
+    "source_file.ingested_at",
+  ]);
+});
+
+test("no entity is identified by a row number", () => {
+  expect(COLUMNS.filter(({ name, type }) => name.endsWith(".id") && type === "INTEGER")).toEqual([]);
+});
+
+test("every flag column says it is one", () => {
+  const names = COLUMNS.map(({ name }) => name);
+  expect(names.filter((name) => /\.is_/.test(name))).toEqual([
+    "message.is_meta",
+    "message.is_skill_body",
+    "tool_call.is_error",
+    "tool_call.is_interrupted",
+  ]);
+  expect(names).not.toContain("tool_call.interrupted");
+});
+
+test("a skill load read by a tool call is stored once", () => {
+  const db = schema();
+  try {
+    db.run("INSERT INTO session (id, tool) VALUES ('s1', 'codex')");
+    db.run(
+      "INSERT INTO source_file (path, tool, kind, session_id) VALUES ('/r.jsonl', 'codex', 'rollout', 's1')",
+    );
+    db.run(
+      "INSERT INTO tool_call (id, session_id, tool_name, src_file) VALUES ('item-1', 's1', 'CommandExecution', '/r.jsonl')",
+    );
+    const read = () =>
+      db.run(
+        "INSERT INTO skill_load (session_id, tool_call_id, ts, skill_name, how) VALUES ('s1', 'item-1', '2026-01-01T00:00:00.000Z', 'plan', 'read')",
+      );
+    read();
+    expect(read).toThrow(/UNIQUE constraint failed/);
+  } finally {
+    db.close();
+  }
+});
+
+test("a skill load hangs off exactly one message or tool call", () => {
+  const db = schema();
+  try {
+    db.run("INSERT INTO session (id, tool) VALUES ('s1', 'claude')");
+    db.run(
+      "INSERT INTO source_file (path, tool, kind, session_id) VALUES ('/f.jsonl', 'claude', 'transcript', 's1')",
+    );
+    db.run(
+      "INSERT INTO message (id, session_id, ts, role, src_file, src_line) VALUES ('m1', 's1', '2026-01-01T00:00:00.000Z', 'assistant', '/f.jsonl', 1)",
+    );
+    db.run(
+      "INSERT INTO tool_call (id, session_id, tool_name, src_file) VALUES ('t1', 's1', 'Skill', '/f.jsonl')",
+    );
+    const load = (messageId: string | null, toolCallId: string | null) =>
+      db.run(
+        "INSERT INTO skill_load (session_id, message_id, tool_call_id, ts, skill_name, how) VALUES ('s1', ?, ?, '2026-01-01T00:00:00.000Z', 'plan', 'model')",
+        [messageId, toolCallId],
+      );
+    expect(() => load("m1", "t1")).toThrow(/CHECK constraint failed/);
+    expect(() => load(null, null)).toThrow(/constraint failed/);
+    expect(() => load("m1", null)).not.toThrow();
   } finally {
     db.close();
   }

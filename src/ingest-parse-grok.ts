@@ -61,8 +61,8 @@ function filePathOf(update: GrokUpdate): string | undefined {
   return nonEmpty(located?.path);
 }
 
-function toolNameOf(update: GrokUpdate): string {
-  return update._meta?.["x.ai/tool"]?.name ?? "";
+function toolNameOf(update: GrokUpdate): string | undefined {
+  return nonEmpty(update._meta?.["x.ai/tool"]?.name);
 }
 
 function parseLine(raw: string): GrokLine | undefined {
