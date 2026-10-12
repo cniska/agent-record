@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { openDb } from "./db";
+import { refuseRecord } from "./db-contract";
 import { recordDoctor } from "./doctor";
 import { runCli, scratchEnv } from "./fixtures.test-support";
 import { agentPlistPath, installAgent } from "./ingest-launchd";
@@ -106,25 +107,18 @@ describe("agent-record doctor", () => {
 
   test("fails when the last sync threw, naming its error and fix", () => {
     const env = newEnv();
-    writeSyncStamp(
-      {
-        kind: "failed",
-        at: new Date("2026-10-11T11:00:00Z"),
-        error: {
-          kind: "refusal",
-          code: "record_locked",
-          message: "another agent-record holds the record",
-          meta: {},
-          resolve: "run again once the other agent-record ends",
-        },
-      },
-      env,
-    );
+    const held = refuseRecord("lock_held", { path: "/r/sessions.db", pid: 42 });
+    expect(() =>
+      stampingOutcome(() => {
+        throw held;
+      }, env),
+    ).toThrow(held);
     expect(check(env, "sync")).toEqual({
       name: "sync",
       state: "fail",
-      detail: "the last sync failed: another agent-record holds the record",
-      fix: "run again once the other agent-record ends",
+      detail:
+        "the last sync failed: another agent-record run holds /r/sessions.db (pid 42); run this again once it ends",
+      fix: "run this again once process 42 has ended",
     });
   });
 
