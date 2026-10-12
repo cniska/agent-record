@@ -66,4 +66,4 @@ claude plugin install cniska-record@cniska
 
 ## Development
 
-`bun run check` runs the lint, the typecheck and the tests. [`AGENTS.md`](AGENTS.md) holds the repository's rules.
+`bun run check` runs the lint, the typecheck and the tests. [`AGENTS.md`](AGENTS.md) holds the repository's rules. The Claude Code plugin lives in `plugin/`, apart from the repository root, so the CLI's `bin/` stays off the PATH Claude Code gives a plugin.
