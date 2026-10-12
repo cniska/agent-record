@@ -117,7 +117,6 @@ A coding agent's context ends at compaction, at a handoff, or when another agent
 - **NF-6** — `bun run check` runs the lint, the typecheck and the tests, and passes before every commit.
 - **NF-7** — No test waits real time.
 - **NF-8** — Each tool's parser has tests over sample lines of that tool's format, including a malformed line.
-- **NF-9** — *Retired (a working rule for changes, not a property of the deliverable).*
 
 ## 4. Out of scope
 
@@ -126,7 +125,7 @@ A coding agent's context ends at compaction, at a handoff, or when another agent
 - Semantic or embedding search; `search` matches words.
 - Judging quality: `prior-art` ranks by recency and commit count only.
 - Restoring the git history of a checkout no longer on disk (FR-60).
-- Scheduling other than macOS launchd.
+- Any platform but macOS.
 
 ## 5. Acceptance criteria
 
@@ -198,13 +197,10 @@ A coding agent's context ends at compaction, at a handoff, or when another agent
 
 ## 9. Open questions and known gaps
 
-Questions for the owner before any of this is contract:
-
-- **Linux.** `sync`, `rebuild`, `query` and `sql` hold nothing macOS-bound. Is running them on Linux in scope? If so, `doctor`'s agent check and `agent install` need a coded refusal off macOS (see the NF-5 gap below).
-- **An acceptance suite.** These criteria are not yet tied to tests by ID. Recommended: tag the existing tests with the AC IDs before the remaining structure refactors, so the suite is what proves them behavior-preserving, after the gaps below are settled so it pins no bug as contract.
+Each requirement still needs the owner's confirmation before it is contract.
 
 Known gaps, where the code does not yet meet a requirement:
 
+- **The criteria have no tests by ID.** They are to be proven by an acceptance suite that drives only the CLI, with a check tying the suite to this spec; the existing unit tests stay unit tests and cite no ID.
 - **NF-7.** Eight tests wait real time: in `src/db.test.ts`, `src/db-lock.test.ts` and `src/plugin-hook.test.ts`.
-- **NF-5.** Off macOS, `doctor` runs a `launchctl` that is not there and ends in the uncoded `command_failed` fault.
 - **FR-4.** A rewrite that keeps a file's size and modification time is not detected.
