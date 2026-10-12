@@ -3,7 +3,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDb } from "./db";
+import { openDb, recordVersion } from "./db";
 import { refuseRecord } from "./db-contract";
 import { SCHEMA_VERSION } from "./db-schema";
 
@@ -264,4 +264,27 @@ describe("a record of another version", () => {
       after.close();
     });
   }
+});
+
+describe("opening a database an older schema wrote", () => {
+  function stampedOld(): string {
+    const path = scratchPath();
+    const db = openDb(path);
+    db.run(`PRAGMA user_version = ${SCHEMA_VERSION - 1}`);
+    db.close();
+    return path;
+  }
+
+  test("opening for a rebuild leaves the old version in place", () => {
+    const db = openDb(stampedOld(), { forRebuild: true });
+
+    expect(recordVersion(db)).toBe(SCHEMA_VERSION - 1);
+    db.close();
+  });
+
+  test("opening for anything else refuses it", () => {
+    const path = stampedOld();
+
+    expect(() => openDb(path)).toThrow(expect.objectContaining({ code: "record_version" }));
+  });
 });

@@ -1,11 +1,13 @@
 import type { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb, recordVersion } from "./db";
 import { SCHEMA_VERSION } from "./db-schema";
-import { rebuild } from "./ingest-sync";
+import { scratchEnv } from "./fixtures.test-support";
+import { rebuild, sync } from "./ingest-sync";
+import { TOOLS } from "./ingest-tools";
 import { dbPath } from "./paths";
 
 type Scratch = { db: Database; env: { HOME: string; XDG_DATA_HOME: string } };
@@ -146,25 +148,16 @@ describe("rebuilding a database an older schema wrote", () => {
   });
 });
 
-describe("opening a database an older schema wrote", () => {
-  function stampedOld(): string {
-    const path = join(mkdtempSync(join(tmpdir(), "agent-record-rebuild-")), "sessions.db");
-    const db = openDb(path);
-    db.run(`PRAGMA user_version = ${SCHEMA_VERSION - 1}`);
-    db.close();
-    return path;
-  }
-
-  test("opening for a rebuild leaves the old version in place", () => {
-    const db = openDb(stampedOld(), { forRebuild: true });
-
-    expect(recordVersion(db)).toBe(SCHEMA_VERSION - 1);
-    db.close();
-  });
-
-  test("opening for anything else refuses it", () => {
-    const path = stampedOld();
-
-    expect(() => openDb(path)).toThrow(expect.objectContaining({ code: "record_version" }));
+describe("a sync", () => {
+  test("reads every source in the tool vocabulary's order", () => {
+    const root = mkdtempSync(join(tmpdir(), "agent-record-tools-"));
+    const env = scratchEnv(root);
+    const db = openDb(dbPath(env));
+    try {
+      expect(sync(db, env).sources).toEqual(TOOLS.map((tool) => ({ tool, files: 0 })));
+    } finally {
+      db.close();
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

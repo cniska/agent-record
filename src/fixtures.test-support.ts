@@ -313,3 +313,21 @@ export function withoutTimestamp(line: unknown): string {
   const { timestamp: _, ...rest } = z.record(z.string(), z.unknown()).parse(line);
   return JSON.stringify(rest);
 }
+
+export function grokUpdate(sessionId: string, update: unknown, eventId: string, ms: number): unknown {
+  return {
+    timestamp: Math.floor(ms / 1000),
+    method: "session/update",
+    params: { sessionId, update, _meta: { eventId, agentTimestampMs: ms } },
+  };
+}
+
+export function runCli(
+  env: Env,
+  args: readonly string[],
+): { exitCode: number; stdout: string; stderr: string } {
+  const ran = Bun.spawnSync([process.execPath, join(import.meta.dir, "cli.ts"), ...args], {
+    env: { ...process.env, ...env },
+  });
+  return { exitCode: ran.exitCode, stdout: ran.stdout.toString(), stderr: ran.stderr.toString() };
+}

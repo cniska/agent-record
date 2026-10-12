@@ -1,15 +1,5 @@
-import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { describe, expect, test } from "bun:test";
 import { parsePiChunk } from "./ingest-parse-pi";
-import { listSource, SESSION_SOURCES } from "./ingest-sources";
-
-const roots: string[] = [];
-
-afterEach(() => {
-  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
-});
 
 const LINES = [
   { type: "title", v: 1, title: "Greet the reader", source: "auto", updatedAt: "2026-01-01T10:30:00.000Z" },
@@ -206,24 +196,5 @@ describe("a Pi or omp session", () => {
     const parsed = parsePiChunk([wrong, ...LINES.slice(1, 2)], 10);
     expect(parsed.dropped).toEqual([10]);
     expect(parsed.usage.map((u) => u.responseId)).not.toContain("resp_9");
-  });
-});
-
-describe("listing sessions", () => {
-  test("names each session file by the id in its file name", () => {
-    const root = mkdtempSync(join(tmpdir(), "agent-record-pi-"));
-    roots.push(root);
-    const dir = join(root, "--home-dev-widgets--");
-    mkdirSync(dir, { recursive: true });
-    writeFileSync(
-      join(dir, "2026-01-01T10-00-00-000Z_aaaaaaaa-0000-4000-8000-000000000001.jsonl"),
-      `${LINES[1]}\n`,
-    );
-
-    const list = (at: string) => listSource(SESSION_SOURCES.pi, at, {}, () => {});
-    expect(list(root).map(({ kind, sessionId }) => ({ kind, sessionId }))).toEqual([
-      { kind: "transcript", sessionId: "aaaaaaaa-0000-4000-8000-000000000001" },
-    ]);
-    expect(list(join(root, "absent"))).toEqual([]);
   });
 });

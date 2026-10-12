@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { parseArg, parseFlags } from "./cli-flags";
 
-const usage = "agent-record query thread <id-prefix> [--reason <r>] [--decided <who>]";
+const usage = "agent-record review <id> [--reason <r>] [--decided <who>]";
 
 const FLAGS = ["reason", "decided"] as const;
 

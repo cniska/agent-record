@@ -1,13 +1,13 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { openDb } from "./db";
 import { recordDoctor } from "./doctor";
-import { scratchEnv } from "./fixtures.test-support";
+import { runCli, scratchEnv } from "./fixtures.test-support";
 import { agentPlistPath, installAgent } from "./ingest-launchd";
-import { dbPath, type Env } from "./paths";
+import { dbPath, type Env, syncStampPath } from "./paths";
 import { writeSyncStamp } from "./sync-stamp";
 
 const NOW = Date.parse("2026-10-11T12:00:00Z");
@@ -23,18 +23,8 @@ function newEnv(): Env {
   return scratchEnv(root);
 }
 
-function home(env: Env): string {
-  const dir = env.HOME;
-  if (dir === undefined) throw new Error("scratchEnv sets HOME");
-  return dir;
-}
-
 function writeRecord(env: Env): void {
   openDb(dbPath(env)).close();
-}
-
-function stampPath(env: Env): string {
-  return join(home(env), "state", "agent-record", "last-sync");
 }
 
 function check(env: Env, name: string, loaded = false) {
@@ -81,12 +71,12 @@ describe("agent-record doctor", () => {
       detail: "no sync has ever finished",
       fix: "agent-record sync",
     });
-    mkdirSync(dirname(stampPath(env)), { recursive: true });
-    writeFileSync(stampPath(env), "yesterday\n");
+    mkdirSync(dirname(syncStampPath(env)), { recursive: true });
+    writeFileSync(syncStampPath(env), "yesterday\n");
     expect(check(env, "sync")).toEqual({
       name: "sync",
       state: "fail",
-      detail: `${stampPath(env)} holds no sync time`,
+      detail: `${syncStampPath(env)} holds no sync time`,
       fix: "agent-record sync",
     });
   });
@@ -148,34 +138,11 @@ describe("agent-record doctor", () => {
   });
 });
 
-describe("the commands", () => {
-  function run(env: Env, command: string) {
-    const ran = Bun.spawnSync([process.execPath, join(import.meta.dir, "cli.ts"), command], {
-      env: { ...process.env, ...env },
-    });
-    return { exitCode: ran.exitCode, stdout: ran.stdout.toString(), stderr: ran.stderr.toString() };
-  }
-
-  test("doctor exits 1 when a check fails, still printing the report on stdout", () => {
-    const ran = run(newEnv(), "doctor");
+describe("agent-record doctor through the CLI", () => {
+  test("exits 1 when a check fails, still printing the report on stdout", () => {
+    const ran = runCli(newEnv(), ["doctor"]);
     expect(ran.exitCode).toBe(1);
     expect(ran.stderr).toBe("");
     expect(JSON.parse(ran.stdout)).toMatchObject({ command: "doctor", ok: true, result: { failing: 2 } });
-  });
-
-  test("a finished sync stamps its time, which lets the doctor pass", () => {
-    const env = newEnv();
-    const before = Date.now();
-    expect(run(env, "sync").exitCode).toBe(0);
-    expect(Date.parse(readFileSync(stampPath(env), "utf8").trim())).toBeGreaterThanOrEqual(before - 1000);
-    const ran = run(env, "doctor");
-    expect(JSON.parse(ran.stdout)).toMatchObject({ command: "doctor", ok: true, result: { failing: 0 } });
-    expect(ran.exitCode).toBe(0);
-  });
-
-  test("a finished rebuild stamps its time too", () => {
-    const env = newEnv();
-    expect(run(env, "rebuild").exitCode).toBe(0);
-    expect(existsSync(stampPath(env))).toBe(true);
   });
 });

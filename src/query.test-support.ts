@@ -1,6 +1,12 @@
 import { Database } from "bun:sqlite";
+import { openDb } from "./db";
 import { SCHEMA_SQL } from "./db-schema";
+import { scratchEnv, writeClaudeTranscript, writeCodexRollout } from "./fixtures.test-support";
+import { sync } from "./ingest-sync";
+import { dbPath } from "./paths";
 import type { QueryContext } from "./query-contract";
+
+export const SYNCED_SESSION = "11111111-2222-3333-4444-555555555555";
 
 export function seeded(): Database {
   const db = new Database(":memory:");
@@ -26,3 +32,14 @@ export function seeded(): Database {
 }
 
 export const ctx: QueryContext = { arg: "", home: "/home", maxRows: 40 };
+
+export function syncedRecord(root: string): string {
+  const env = scratchEnv(root);
+  writeClaudeTranscript(env, "-Users-x-code-demo", SYNCED_SESSION);
+  writeCodexRollout(env, "sessions", "01a0a651-086e-7150-8650-cef0f4025a58");
+  const path = dbPath(env);
+  const db = openDb(path);
+  sync(db, env);
+  db.close();
+  return path;
+}

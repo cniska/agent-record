@@ -1,6 +1,9 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
-import { SCHEMA_SQL } from "./db-schema";
+import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
+import { TOOLS } from "./ingest-tools";
+
+const PINNED = "3 134eb82bed0c8bdaeb77f1052d064b8856b9588fcea0a80e0e086b8e4acd999e";
 
 type KeyColumn = {
   readonly table: string;
@@ -51,4 +54,35 @@ test("every foreign key leads an index, so a delete of the rows it references do
       .filter(([id, columns]) => !led(id, columns))
       .map(([id, columns]) => `${tableOf(id)}(${columns})`),
   ).toEqual([]);
+});
+
+test("the schema's version is pinned together with the schema it stands for", () => {
+  const digest = new Bun.CryptoHasher("sha256").update(SCHEMA_SQL).digest("hex");
+  expect(`${SCHEMA_VERSION} ${digest}`).toBe(PINNED);
+});
+
+test("every tool column accepts the tool vocabulary and nothing past it", () => {
+  const db = new Database(":memory:");
+  const inserts: Record<string, (tool: string, key: string) => void> = {
+    source_file: (tool, key) =>
+      db.run("INSERT INTO source_file (path, tool, kind, session_id) VALUES (?, ?, 'transcript', ?)", [
+        key,
+        tool,
+        key,
+      ]),
+    session: (tool, key) => db.run("INSERT INTO session (id, tool) VALUES (?, ?)", [key, tool]),
+  };
+  try {
+    db.run(SCHEMA_SQL);
+    for (const [table, insert] of Object.entries(inserts)) {
+      for (const tool of TOOLS) {
+        expect(() => insert(tool, `${table}-${tool}`), `${table} accepts ${tool}`).not.toThrow();
+      }
+      expect(() => insert("cursor", `${table}-cursor`), `${table} refuses cursor`).toThrow(
+        /CHECK constraint failed: tool IN/,
+      );
+    }
+  } finally {
+    db.close();
+  }
 });

@@ -1,7 +1,12 @@
-import type { Database } from "bun:sqlite";
+import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { invariant } from "./assert";
-import { ctx, seeded } from "./query.test-support";
+import { openReadOnly } from "./db-read";
+import { SCHEMA_SQL } from "./db-schema";
+import { ctx, SYNCED_SESSION, seeded, syncedRecord } from "./query.test-support";
 import type { QueryResult } from "./query-contract";
 import { findQuery } from "./query-registry";
 
@@ -130,5 +135,44 @@ describe("thread", () => {
       }),
     );
     db.close();
+  });
+
+  test("matches an id prefix holding SQL wildcard characters as written", () => {
+    const db = new Database(":memory:");
+    try {
+      db.run(SCHEMA_SQL);
+      db.run("INSERT INTO session (id, tool) VALUES ('ab-1', 'claude'), ('aXb-2', 'claude')");
+      const run = (arg: string) => thread.run(db, { ...ctx, arg });
+
+      expect(run("a_").note).toBe("no session starts with a_");
+      expect(run("a%")).toMatchObject({ columns: ["when", "role", "skill", "text"], rows: [] });
+      expect(run("AB").denominator).toStartWith("session ab-1:");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("reads what was said, and centers on a timestamp when given one", () => {
+    const root = mkdtempSync(join(tmpdir(), "agent-record-q-"));
+    const db = openReadOnly(syncedRecord(root));
+    try {
+      const whole = thread.run(db, { ...ctx, arg: SYNCED_SESSION.slice(0, 8) });
+      expect(whole.rows.length).toBeGreaterThan(0);
+      const texts = whole.rows.map((r) => String(r[3]));
+      expect(texts.every((t) => t.length > 0)).toBe(true);
+
+      const centered = thread.run(db, {
+        ...ctx,
+        arg: `${SYNCED_SESSION.slice(0, 8)}@2026-09-16T10:04`,
+      });
+      expect(centered.denominator).toContain("centered on");
+
+      const missing = thread.run(db, { ...ctx, arg: "zzzzzzzz" });
+      expect(missing.rows).toEqual([]);
+      expect(missing.note).toContain("no session starts with");
+    } finally {
+      db.close();
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

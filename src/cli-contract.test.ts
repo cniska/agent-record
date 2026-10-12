@@ -3,7 +3,7 @@ import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { allCommands, findCommand } from "./cli-commands";
-import { scratchEnv } from "./fixtures.test-support";
+import { runCli, scratchEnv } from "./fixtures.test-support";
 import { QUERIES } from "./query-registry";
 
 const COMMANDS = await allCommands();
@@ -13,10 +13,8 @@ const SRC = import.meta.dir;
 function refused(args: readonly string[]): { exitCode: number; error: unknown } {
   const root = mkdtempSync(join(tmpdir(), "agent-record-refused-"));
   try {
-    const run = Bun.spawnSync([process.execPath, join(SRC, "cli.ts"), ...args], {
-      env: { ...process.env, ...scratchEnv(root) },
-    });
-    return { exitCode: run.exitCode, error: JSON.parse(run.stderr.toString()).error };
+    const run = runCli(scratchEnv(root), args);
+    return { exitCode: run.exitCode, error: JSON.parse(run.stderr).error };
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

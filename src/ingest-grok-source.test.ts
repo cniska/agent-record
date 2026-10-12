@@ -4,8 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { openDb } from "./db";
 import { errorCode } from "./error-code";
-import { archivedPath, scratchEnv } from "./fixtures.test-support";
-import { parseGrokChunk } from "./ingest-parse-grok";
+import { archivedPath, grokUpdate, scratchEnv } from "./fixtures.test-support";
 import { listSource, SESSION_SOURCES } from "./ingest-sources";
 import { sync } from "./ingest-sync";
 import { dbPath, type Env, grokSessionsDir } from "./paths";
@@ -27,11 +26,7 @@ afterEach(() => {
 });
 
 function event(update: unknown, eventId: string, ms = AT): unknown {
-  return {
-    timestamp: Math.floor(ms / 1000),
-    method: "session/update",
-    params: { sessionId: PARENT, update, _meta: { eventId, agentTimestampMs: ms } },
-  };
+  return grokUpdate(PARENT, update, eventId, ms);
 }
 
 function writeSession(
@@ -216,50 +211,6 @@ describe("grok sessions", () => {
     } finally {
       db.close();
     }
-  });
-
-  test("does not read another home when GROK_HOME points elsewhere", () => {
-    const env = scratchEnv(newRoot());
-    const db = openDb(dbPath(env));
-    try {
-      const report = sync(db, env);
-      expect(report.sources.find((source) => source.tool === "grok")).toEqual({ tool: "grok", files: 0 });
-      expect(db.prepare("SELECT count(*) AS n FROM session WHERE tool = 'grok'").get()).toEqual({ n: 0 });
-    } finally {
-      db.close();
-    }
-  });
-
-  test("drops an update line whose read field has the wrong type", () => {
-    const bad = event({ sessionUpdate: "tool_call", toolCallId: 7 }, "tool-bad");
-    const good = event({ sessionUpdate: "tool_call", toolCallId: "call-9" }, "tool-good");
-    const parsed = parseGrokChunk([JSON.stringify(bad), JSON.stringify(good)], 1);
-    expect(parsed.dropped).toEqual([1]);
-    expect(parsed.toolCalls.map((call) => call.id)).toEqual(["call-9"]);
-  });
-
-  test("keeps an update line whose content is a list of tool output blocks", () => {
-    const content = [{ type: "content", content: { type: "text", text: "output" } }];
-    const line = event({ sessionUpdate: "tool_call_update", toolCallId: "call-7", content }, "tool-list");
-    const parsed = parseGrokChunk([JSON.stringify(line)], 1);
-    expect(parsed.dropped).toEqual([]);
-    expect(parsed.toolCalls.map((call) => call.id)).toEqual(["call-7"]);
-  });
-
-  test("keeps an update line whose optional fields are null", () => {
-    const line = event(
-      {
-        sessionUpdate: "tool_call_update",
-        toolCallId: "call-8",
-        rawInput: null,
-        status: null,
-        content: null,
-      },
-      "tool-null",
-    );
-    const parsed = parseGrokChunk([JSON.stringify(line)], 1);
-    expect(parsed.dropped).toEqual([]);
-    expect(parsed.toolCalls.map((call) => call.id)).toEqual(["call-8"]);
   });
 
   test("names a summary.json that fails its schema as unreadable and lists the session without it", () => {
