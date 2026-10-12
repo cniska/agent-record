@@ -6,6 +6,23 @@ A local record of every coding-agent session on this machine, and the queries th
 - `agent-record query` and `agent-record sql` read it.
 - It needs no network and no credential, and has no per-token cost.
 
+## Install
+
+agent-record runs on [Bun](https://bun.sh), which [mise](https://mise.jdx.dev) installs for it. With mise installed:
+
+```bash
+git clone https://github.com/cniska/agent-record.git
+cd agent-record
+mise trust && mise install
+```
+
+`mise install` installs Bun and the dependencies, and puts `agent-record` in `~/.bun/bin` with `bun link`. Add that directory to your `PATH` if it is not there yet. Then build the record and check it:
+
+```bash
+agent-record sync
+agent-record doctor
+```
+
 ## Why
 
 An experiment in giving coding agents a memory of their own work.
@@ -37,16 +54,6 @@ Each command prints one JSON line.
 
 The record lives at `$XDG_DATA_HOME/agent-record/sessions.db` (`~/.local/share/agent-record/sessions.db` by default); `src/db-schema.ts` holds its tables.
 
-## Setup
-
-Install [mise](https://mise.jdx.dev), then:
-
-```bash
-mise install && bun install
-ln -s "$PWD/bin/agent-record" ~/.local/bin/agent-record
-agent-record sync
-```
-
 ## Claude Code plugin
 
 The `cniska-record` plugin, in the `cniska` marketplace, keeps the record current without the launchd agent. It starts `agent-record sync` in the background at the start of every Claude Code session.
@@ -57,4 +64,6 @@ The plugin brings neither Bun nor the CLI, and runs only when `agent-record` is 
 claude plugin install cniska-record@cniska
 ```
 
-`bun run check` is the repository check.
+## Development
+
+`bun run check` runs the lint, the typecheck and the tests. [`AGENTS.md`](AGENTS.md) holds the repository's rules.

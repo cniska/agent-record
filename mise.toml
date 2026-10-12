@@ -1,2 +1,5 @@
 [tools]
 bun = "1.4.2"
+
+[hooks]
+postinstall = "{ bun install --frozen-lockfile && bun link --silent; } >&2"
