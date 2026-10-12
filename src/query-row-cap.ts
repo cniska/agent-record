@@ -1,11 +1,11 @@
-import { UsageError } from "./cli-contract";
+import { refuseQuery } from "./query-contract";
 
 export const DEFAULT_MAX_ROWS = 40;
 
 export function rowsOf(spec: string | undefined): number {
   if (spec === undefined) return DEFAULT_MAX_ROWS;
   const n = Number(spec);
-  if (!Number.isInteger(n) || n < 1) throw new UsageError(`--rows ${spec} is not a count`);
+  if (!Number.isInteger(n) || n < 1) throw refuseQuery("not_a_count", { value: spec });
   return n;
 }
 

@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { invariant } from "./assert";
-import { UsageError } from "./cli-contract";
-import { type Query, requiredArg, SAID, select } from "./query";
+import { SAID, select } from "./query";
+import { type Query, refuseQuery } from "./query-contract";
 
 const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T[\d:.]+Z?$/;
 
@@ -82,13 +82,17 @@ function unshown(earlier: number, later: number): string {
 export const thread: Query = {
   name: "thread",
   summary: "read one session's exchange and the tool calls in it, or the stretch around a timestamp",
-  usage: "agent-record query thread <id-prefix>[@<ts>]",
+  usage: "agent-record query thread <id-prefix>[@<ts>] [--rows <n>]",
   run: (db, ctx) => {
-    const { id: prefix, at } = parsePassageRef(requiredArg(ctx, thread.usage));
+    const { id: prefix, at } = parsePassageRef(ctx.arg);
     const found = db
-      .query<{ id: string }, [string]>("SELECT id FROM session WHERE instr(lower(id), lower(?)) = 1 LIMIT 2")
+      .query<{ id: string }, [string]>(
+        "SELECT id FROM session WHERE instr(lower(id), lower(?)) = 1 ORDER BY id LIMIT 2",
+      )
       .all(prefix);
-    if (found.length > 1) throw new UsageError(`${prefix} matches more than one session`);
+    if (found.length > 1) {
+      throw refuseQuery("ambiguous_session", { prefix, matches: found.map((session) => session.id) });
+    }
     const whole = (id: string) =>
       select(db, `${TIMELINE} ${SHOWN} FROM timeline WHERE ts IS NOT NULL ${IN_ORDER}`, [id]);
     const [match] = found;

@@ -1,5 +1,5 @@
 import { type Command, Ran } from "./cli-contract";
-import { parseArgs } from "./cli-flags";
+import { parseFlags } from "./cli-flags";
 import { withDb } from "./db";
 import { withLock } from "./db-lock";
 import { sync } from "./ingest-sync";
@@ -8,10 +8,10 @@ import { writeSyncStamp } from "./sync-stamp";
 
 export const syncCommand: Command = {
   name: "sync",
-  usage: "usage: agent-record sync",
+  usage: "agent-record sync",
   summary: "read every new byte of every tool's session files",
   run(args) {
-    parseArgs(args, { positionals: [0, 0], flags: [] }, "agent-record sync");
+    parseFlags(args, [], syncCommand.usage);
     const report = withLock(() => withDb(dbPath(), sync));
     writeSyncStamp(new Date());
     return new Ran(report, 0);

@@ -1,4 +1,5 @@
-import { type Query, requiredArg, SAID, scalar, select } from "./query";
+import { SAID, scalar, select } from "./query";
+import type { Query } from "./query-contract";
 
 const MAX_TERMS = 16;
 
@@ -15,9 +16,9 @@ function termsOf(words: string): { readonly terms: readonly Term[]; readonly dro
 export const search: Query = {
   name: "search",
   summary: "find a message by the words in it, across every session",
-  usage: 'agent-record query search "<words>"',
+  usage: 'agent-record query search "<words>" [--rows <n>]',
   run: (db, ctx) => {
-    const words = requiredArg(ctx, search.usage);
+    const words = ctx.arg;
     const { terms, dropped } = termsOf(words);
     const quoted = terms.map((term) => term.quoted);
     const saidNothing = (term: Term) =>

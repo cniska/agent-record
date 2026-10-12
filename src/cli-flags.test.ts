@@ -1,43 +1,104 @@
 import { describe, expect, test } from "bun:test";
-import { type ArgSpec, parseArgs } from "./cli-flags";
+import { parseArg, parseFlags } from "./cli-flags";
 
-const fail = "agent-record query";
+const usage = "agent-record query thread <id-prefix> [--reason <r>] [--decided <who>]";
+
+const FLAGS = ["reason", "decided"] as const;
+
+function refusal(parse: () => unknown): unknown {
+  try {
+    parse();
+  } catch (error) {
+    return error;
+  }
+  return null;
+}
 
 describe("a command's arguments", () => {
-  const spec: ArgSpec<"reason" | "decided"> = { positionals: [1, 1], flags: ["reason", "decided"] };
-
-  test("reads each flag's value and the positionals around them", () => {
-    expect(parseArgs(["k7", "--reason", "fine", "--decided", "owner"], spec, fail)).toEqual({
-      positionals: ["k7"],
+  test("reads each flag's value and the argument around them", () => {
+    expect(parseArg(["k7", "--reason", "fine", "--decided", "owner"], FLAGS, usage)).toEqual({
+      arg: "k7",
       flags: { reason: "fine", decided: "owner" },
+    });
+    expect(parseFlags(["--reason", "fine"], FLAGS, usage)).toEqual({ reason: "fine" });
+  });
+
+  test("finds the argument by position, so one equal to a flag's value survives", () => {
+    expect(parseArg(["5", "--rows", "5"], ["rows"], usage)).toEqual({ arg: "5", flags: { rows: "5" } });
+    expect(parseArg(["--rows", "5", "5"], ["rows"], usage).arg).toBe("5");
+  });
+
+  test("trims the argument, so a pasted id's stray whitespace still matches", () => {
+    expect(parseArg([" k7\n", "--reason", " fine "], FLAGS, usage)).toEqual({
+      arg: "k7",
+      flags: { reason: " fine " },
     });
   });
 
-  test("finds a positional by position, so one equal to a flag's value survives", () => {
-    const rows: ArgSpec<"rows"> = { positionals: [0, 1], flags: ["rows"] };
-    expect(parseArgs(["5", "--rows", "5"], rows, fail).positionals).toEqual(["5"]);
-    expect(parseArgs(["--rows", "5"], rows, fail).positionals).toEqual([]);
+  test("refuses a flag the command does not take, naming it and resolving with the usage", () => {
+    expect(refusal(() => parseArg(["k7", "--by", "someone"], FLAGS, usage))).toMatchObject({
+      code: "unknown_flag",
+      message: "--by is not a flag this command takes",
+      meta: { usage, flag: "--by" },
+      resolve: usage,
+      kind: "refusal",
+    });
   });
 
-  test("refuses a flag the command does not take, one given twice, or one with no value", () => {
-    expect(() => parseArgs(["k7", "--by", "someone"], spec, fail)).toThrow("does not take --by");
-    expect(() => parseArgs(["k7", "--reason", "a", "--reason", "b"], spec, fail)).toThrow("once");
-    expect(() => parseArgs(["k7", "--reason"], spec, fail)).toThrow("needs a value");
-    expect(() => parseArgs(["k7", "--reason", "--decided", "owner"], spec, fail)).toThrow("needs a value");
+  test("refuses a flag given twice", () => {
+    expect(refusal(() => parseArg(["k7", "--reason", "a", "--reason", "b"], FLAGS, usage))).toMatchObject({
+      code: "flag_repeated",
+      message: "--reason is given twice",
+      meta: { usage, flag: "--reason" },
+      resolve: usage,
+    });
   });
 
-  test("refuses with a usage error that names the command", () => {
-    expect(() => parseArgs([], spec, fail)).toThrow(
-      expect.objectContaining({
-        code: "usage",
-        message: "agent-record query takes 1 argument(s), and got 0: ",
-      }),
-    );
+  test("refuses a flag with no value, or another flag where its value goes", () => {
+    for (const args of [
+      ["k7", "--reason"],
+      ["k7", "--reason", "--decided", "owner"],
+    ]) {
+      expect(refusal(() => parseArg(args, FLAGS, usage))).toMatchObject({
+        code: "flag_without_value",
+        message: "--reason needs a value",
+        meta: { usage, flag: "--reason" },
+        resolve: usage,
+      });
+    }
   });
 
-  test("refuses more or fewer positionals than the command takes", () => {
-    expect(() => parseArgs([], spec, fail)).toThrow("takes 1 argument(s), and got 0");
-    expect(() => parseArgs(["k7", "plan"], spec, fail)).toThrow("got 2: k7 plan");
-    expect(() => parseArgs(["a", "b"], { positionals: [0, 1], flags: [] }, fail)).toThrow("takes 0 to 1");
+  test("refuses a missing argument, or more than the one it takes, naming what it got", () => {
+    expect(refusal(() => parseArg([], FLAGS, usage))).toMatchObject({
+      code: "argument_count",
+      message: "takes 1 argument and got 0",
+      meta: { usage, takes: 1, got: [] },
+      resolve: usage,
+    });
+    expect(refusal(() => parseArg(["k7", "plan"], FLAGS, usage))).toMatchObject({
+      code: "argument_count",
+      message: "takes 1 argument and got 2: k7 plan",
+      meta: { usage, takes: 1, got: ["k7", "plan"] },
+    });
+  });
+
+  test("refuses an argument where a command takes none", () => {
+    expect(refusal(() => parseFlags(["extra"], FLAGS, usage))).toMatchObject({
+      code: "argument_count",
+      message: "takes no arguments and got 1: extra",
+      meta: { usage, takes: 0, got: ["extra"] },
+      resolve: usage,
+    });
+  });
+
+  test("refuses a blank argument, so a command never runs on nothing", () => {
+    for (const args of [[""], ["   "]]) {
+      expect(refusal(() => parseArg(args, FLAGS, usage))).toMatchObject({
+        code: "blank_argument",
+        message: "the argument is blank",
+        meta: { usage },
+        resolve: usage,
+      });
+    }
   });
 });

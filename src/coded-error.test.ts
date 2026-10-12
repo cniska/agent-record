@@ -8,8 +8,6 @@ const SRC = import.meta.dir;
 
 const BUILDS_THE_BASE = "coded-error.ts";
 
-const FILLS_ITS_RESOLVE_WHEN_PRINTED = "cli-contract.ts";
-
 const BUILT_IN = new Set(
   ["Aggregate", "Eval", "Range", "Reference", "Syntax", "Type", "URI", ""].map((kind) => `${kind}Error`),
 );
@@ -35,7 +33,7 @@ export function errorBreaches(file: string, text: string): readonly string[] {
   if (built.has("CodedError") && file !== BUILDS_THE_BASE) {
     breaches.push(`${file} builds a refusal outside a refusal table`);
   }
-  if (extended.has("CodedError") && file !== FILLS_ITS_RESOLVE_WHEN_PRINTED) {
+  if (extended.has("CodedError") && file !== BUILDS_THE_BASE) {
     breaches.push(`${file} declares its own refusal class`);
   }
   return breaches;
@@ -83,10 +81,9 @@ describe("the error check", () => {
     ]);
   });
 
-  test("lets the base and the one class whose resolve the printer fills through", () => {
+  test("lets the base through", () => {
     expect(
       errorBreaches("coded-error.ts", "class CodedError extends Error { x = new CodedError(a) }"),
     ).toEqual([]);
-    expect(errorBreaches("cli-contract.ts", "class UsageError extends CodedError {}")).toEqual([]);
   });
 });

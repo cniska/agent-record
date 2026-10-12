@@ -1,8 +1,8 @@
 import type { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { invariant } from "./assert";
-import type { QueryContext, QueryResult } from "./query";
 import { ctx, seeded } from "./query.test-support";
+import type { QueryContext, QueryResult } from "./query-contract";
 import { findQuery } from "./query-registry";
 
 const found = findQuery("search");
@@ -92,17 +92,6 @@ describe("search", () => {
     const result = ask(db, { arg: `checkout ${words}` });
     expect(result.denominator).toContain("Only the first 16 words were searched");
     expect(result.denominator).toContain("25 more were dropped");
-    db.close();
-  });
-
-  test("refuses no words, or only whitespace, as a usage error", () => {
-    const db = seeded();
-    const usage = expect.objectContaining({
-      code: "usage",
-      message: 'usage: agent-record query search "<words>"',
-    });
-    expect(() => ask(db, {})).toThrow(usage);
-    expect(() => ask(db, { arg: "   " })).toThrow(usage);
     db.close();
   });
 

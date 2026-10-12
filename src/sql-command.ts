@@ -1,22 +1,15 @@
-import { type Command, Ran, UsageError } from "./cli-contract";
-import { parseArgs } from "./cli-flags";
+import { type Command, Ran } from "./cli-contract";
+import { parseArg } from "./cli-flags";
 import { openReadOnly } from "./db-read";
 import { dbPath } from "./paths";
 import { capRows, rowsOf } from "./query-row-cap";
 
 export const sqlCommand: Command = {
   name: "sql",
-  usage: 'usage: agent-record sql "<select>" [--rows <n>]',
+  usage: 'agent-record sql "<select>" [--rows <n>]',
   summary: "run one read-only statement against the database",
   run(args) {
-    const { positionals, flags } = parseArgs(
-      args,
-      { positionals: [0, 1], flags: ["rows"] },
-      "agent-record sql",
-    );
-    const [statement] = positionals;
-    if (!statement)
-      throw new UsageError('sql needs one statement, as in: agent-record sql "SELECT count(*) FROM session"');
+    const { arg: statement, flags } = parseArg(args, ["rows"], sqlCommand.usage);
     const maxRows = rowsOf(flags.rows);
     const db = openReadOnly(dbPath());
     try {

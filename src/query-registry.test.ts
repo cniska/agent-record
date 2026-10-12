@@ -9,10 +9,10 @@ import { SCHEMA_SQL } from "./db-schema";
 import { scratchEnv, writeClaudeTranscript, writeCodexRollout } from "./fixtures.test-support";
 import { sync } from "./ingest-sync";
 import { dbPath, type Env } from "./paths";
-import type { QueryContext } from "./query";
+import type { QueryContext } from "./query-contract";
 import { findQuery } from "./query-registry";
 
-const ctx: QueryContext = { arg: null, home: "/h", maxRows: 40 };
+const ctx: QueryContext = { arg: "", home: "/h", maxRows: 40 };
 
 const SESSION = "11111111-2222-3333-4444-555555555555";
 const THREAD = "01a0a651-086e-7150-8650-cef0f4025a58";
@@ -49,7 +49,7 @@ describe("an argument holding SQL wildcard characters", () => {
 
       expect(run("thread", "a_")?.note).toBe("no session starts with a_");
       expect(run("thread", "a%")).toMatchObject({ columns: ["when", "role", "skill", "text"], rows: [] });
-      expect(run("thread", " AB")?.denominator).toStartWith("session ab-1:");
+      expect(run("thread", "AB")?.denominator).toStartWith("session ab-1:");
       expect(run("prior-art", "A_B")?.rows.map((row) => row[0])).toEqual(["r/a_b.ts"]);
     } finally {
       db.close();
@@ -95,21 +95,6 @@ describe("read path", () => {
     }
   });
 
-  test("prior-art refuses a missing path as a usage error rather than answering over everything", () => {
-    const db = new Database(":memory:");
-    try {
-      db.run(SCHEMA_SQL);
-      expect(() => findQuery("prior-art")?.run(db, ctx)).toThrow(
-        expect.objectContaining({
-          code: "usage",
-          message: 'usage: agent-record query prior-art "<path fragment>"',
-        }),
-      );
-    } finally {
-      db.close();
-    }
-  });
-
   test("search finds a message by its words and keeps the index level with the table", () => {
     const env = seeded();
     const db = openReadOnly(dbPath(env));
@@ -144,16 +129,6 @@ describe("read path", () => {
       const missing = findQuery("thread")?.run(db, { ...ctx, arg: "zzzzzzzz" });
       expect(missing?.rows).toEqual([]);
       expect(missing?.note).toContain("no session starts with");
-
-      expect(() => findQuery("thread")?.run(db, ctx)).toThrow(
-        expect.objectContaining({
-          code: "usage",
-          message: "usage: agent-record query thread <id-prefix>[@<ts>]",
-        }),
-      );
-      expect(() => findQuery("thread")?.run(db, { ...ctx, arg: "" })).toThrow(
-        expect.objectContaining({ code: "usage" }),
-      );
     } finally {
       db.close();
     }

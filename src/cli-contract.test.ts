@@ -4,10 +4,23 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { allCommands, findCommand } from "./cli-commands";
 import { scratchEnv } from "./fixtures.test-support";
+import { QUERIES } from "./query-registry";
 
 const COMMANDS = await allCommands();
 
 const SRC = import.meta.dir;
+
+function refused(args: readonly string[]): { exitCode: number; error: unknown } {
+  const root = mkdtempSync(join(tmpdir(), "agent-record-refused-"));
+  try {
+    const run = Bun.spawnSync([process.execPath, join(SRC, "cli.ts"), ...args], {
+      env: { ...process.env, ...scratchEnv(root) },
+    });
+    return { exitCode: run.exitCode, error: JSON.parse(run.stderr.toString()).error };
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+}
 
 function sources(): string[] {
   return readdirSync(SRC, { recursive: true })
@@ -71,52 +84,92 @@ describe("the command contract", () => {
     }
   });
 
-  test("a command that takes no arguments refuses one", () => {
-    const root = mkdtempSync(join(tmpdir(), "agent-record-no-args-"));
-    try {
-      for (const args of [
-        ["sync", "extra"],
-        ["rebuild", "extra"],
-        ["agent", "install", "extra"],
-        ["doctor", "extra"],
-      ]) {
-        const name = args.join(" ");
-        const run = Bun.spawnSync([process.execPath, join(SRC, "cli.ts"), ...args], {
-          env: { ...process.env, ...scratchEnv(root) },
-        });
-        expect({ name, exitCode: run.exitCode, stderr: run.stderr.toString() }).toMatchObject({
-          name,
-          exitCode: 1,
-          stderr: expect.stringContaining('"code":"usage"'),
-        });
-      }
-    } finally {
-      rmSync(root, { recursive: true, force: true });
+  test("a command that takes no arguments refuses one, resolving with its usage", () => {
+    for (const name of ["sync", "rebuild", "doctor"]) {
+      const usage = `agent-record ${name}`;
+      expect(refused([name, "extra"])).toEqual({
+        exitCode: 1,
+        error: {
+          code: "argument_count",
+          message: "takes no arguments and got 1: extra",
+          meta: { usage, takes: 0, got: ["extra"] },
+          resolve: usage,
+        },
+      });
     }
+    expect(refused(["agent", "install", "extra"])).toMatchObject({
+      exitCode: 1,
+      error: {
+        code: "argument_count",
+        message: "takes 1 argument and got 2: install extra",
+        resolve: "agent-record agent install",
+      },
+    });
   });
 
   test("a command refuses a verb named like a property every object inherits", () => {
-    const root = mkdtempSync(join(tmpdir(), "agent-record-inherited-verb-"));
-    try {
-      for (const name of ["query", "agent"]) {
-        const run = Bun.spawnSync([process.execPath, join(SRC, "cli.ts"), name, "constructor"], {
-          env: { ...process.env, ...scratchEnv(root) },
-        });
-        expect({ name, exitCode: run.exitCode, stderr: run.stderr.toString() }).toMatchObject({
-          name,
-          exitCode: 1,
-          stderr: expect.stringContaining('"code":"usage"'),
-        });
-      }
-    } finally {
-      rmSync(root, { recursive: true, force: true });
-    }
+    expect(refused(["query", "constructor"])).toMatchObject({
+      exitCode: 1,
+      error: { code: "unknown_query", meta: { name: "constructor" }, resolve: "agent-record query list" },
+    });
+    expect(refused(["agent", "constructor"])).toMatchObject({
+      exitCode: 1,
+      error: {
+        code: "unknown_verb",
+        meta: { usage: "agent-record agent install", verb: "constructor" },
+        resolve: "agent-record agent install",
+      },
+    });
+  });
+
+  test("an unknown command is refused, resolved by the listing", () => {
+    expect(refused(["nonesuch"])).toEqual({
+      exitCode: 1,
+      error: {
+        code: "unknown_command",
+        message: "nonesuch is not an agent-record command",
+        meta: { name: "nonesuch" },
+        resolve: "agent-record",
+      },
+    });
+  });
+
+  test("a named query or sql refuses a missing or blank argument rather than answering over everything", () => {
+    const usage = 'agent-record query prior-art "<path fragment>" [--rows <n>]';
+    expect(refused(["query", "prior-art"])).toMatchObject({
+      exitCode: 1,
+      error: { code: "argument_count", resolve: usage },
+    });
+    expect(refused(["query", "search", "  "])).toMatchObject({
+      exitCode: 1,
+      error: { code: "blank_argument", message: "the argument is blank" },
+    });
+    expect(refused(["sql"])).toMatchObject({
+      exitCode: 1,
+      error: { code: "argument_count", resolve: 'agent-record sql "<select>" [--rows <n>]' },
+    });
+  });
+
+  test("--rows refuses what is not a count", () => {
+    expect(refused(["query", "search", "words", "--rows", "0"])).toEqual({
+      exitCode: 1,
+      error: {
+        code: "not_a_count",
+        message: "--rows 0 is not a count of at least 1",
+        meta: { value: "0" },
+        resolve: "--rows <n>, a whole number of at least 1",
+      },
+    });
   });
 
   test("every command states its usage and what it is for", () => {
     for (const command of COMMANDS) {
-      expect(command.usage).toStartWith(`usage: agent-record ${command.name}`);
+      expect(command.usage).toStartWith(`agent-record ${command.name}`);
       expect(command.summary.length).toBeGreaterThan(0);
     }
+  });
+
+  test("every named query's usage names --rows, the flag its parse takes", () => {
+    for (const query of QUERIES) expect(query.usage).toEndWith(" [--rows <n>]");
   });
 });

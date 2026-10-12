@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
-import { UsageError } from "./cli-contract";
 import { writeError } from "./cli-output";
 import { CodedError } from "./coded-error";
 
@@ -9,7 +8,7 @@ afterEach(() => {
   for (const spy of spies.splice(0)) spy.mockRestore();
 });
 
-function printed(error: unknown, usage = "usage: agent-record query <name>"): unknown {
+function printed(error: unknown): unknown {
   const lines: string[] = [];
   spies.push(
     spyOn(process.stderr, "write").mockImplementation((chunk: string | Uint8Array) => {
@@ -17,7 +16,7 @@ function printed(error: unknown, usage = "usage: agent-record query <name>"): un
       return true;
     }),
   );
-  writeError("query", error, usage);
+  writeError("query", error);
   return JSON.parse(lines.join(""));
 }
 
@@ -27,7 +26,7 @@ describe("an error on stderr", () => {
       "no_session",
       "no session k7m2qx4d is on record",
       { session: "k7m2qx4d" },
-      "agent-record query <name> [arg] [--rows <n>]",
+      "agent-record query <name> <arg> [--rows <n>]",
       "refusal",
     );
     expect(printed(refused)).toEqual({
@@ -37,14 +36,8 @@ describe("an error on stderr", () => {
         code: "no_session",
         message: "no session k7m2qx4d is on record",
         meta: { session: "k7m2qx4d" },
-        resolve: "agent-record query <name> [arg] [--rows <n>]",
+        resolve: "agent-record query <name> <arg> [--rows <n>]",
       },
-    });
-  });
-
-  test("resolves a usage error with the command's usage", () => {
-    expect(printed(new UsageError("query takes a name"))).toMatchObject({
-      error: { code: "usage", resolve: "agent-record query <name>" },
     });
   });
 

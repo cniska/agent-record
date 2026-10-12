@@ -1,8 +1,8 @@
 import type { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { invariant } from "./assert";
-import type { QueryResult } from "./query";
 import { ctx, seeded } from "./query.test-support";
+import type { QueryResult } from "./query-contract";
 import { findQuery } from "./query-registry";
 
 const found = findQuery("thread");
@@ -113,6 +113,21 @@ describe("thread", () => {
     const wide = thread.run(db, { ...ctx, arg: "s1@2026-09-01T10:34:00Z", maxRows: 60 });
     expect(wide.denominator).toEndWith(
       "centered on 2026-09-01T10:34:00Z; 1 tool calls with no time are not shown",
+    );
+    db.close();
+  });
+
+  test("refuses a prefix two sessions share, naming them rather than picking one", () => {
+    const db = seeded();
+    db.run("INSERT INTO session (id, tool) VALUES ('s2', 'claude')");
+    expect(() => thread.run(db, { ...ctx, arg: "s" })).toThrow(
+      expect.objectContaining({
+        code: "ambiguous_session",
+        message: "s matches more than one session, among them s1 and s2",
+        meta: { prefix: "s", matches: ["s1", "s2"] },
+        resolve: "agent-record query thread <a longer prefix of one of: s1, s2>",
+        kind: "refusal",
+      }),
     );
     db.close();
   });

@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { SCHEMA_SQL } from "./db-schema";
-import type { QueryContext } from "./query";
+import type { QueryContext } from "./query-contract";
 
 export function seeded(): Database {
   const db = new Database(":memory:");
@@ -25,4 +25,4 @@ export function seeded(): Database {
   return db;
 }
 
-export const ctx: QueryContext = { arg: null, home: "/home", maxRows: 40 };
+export const ctx: QueryContext = { arg: "", home: "/home", maxRows: 40 };

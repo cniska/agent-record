@@ -1,4 +1,4 @@
-import type { Query } from "./query";
+import type { Query } from "./query-contract";
 import { priorArt } from "./query-prior-art";
 import { search } from "./query-search";
 import { thread } from "./query-thread";

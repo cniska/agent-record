@@ -1,4 +1,5 @@
-import { type Query, requiredArg, scalar, select } from "./query";
+import { scalar, select } from "./query";
+import type { Query } from "./query-contract";
 import { withoutWorktree } from "./worktree";
 
 const PER_REPO = 3;
@@ -6,9 +7,9 @@ const PER_REPO = 3;
 export const priorArt: Query = {
   name: "prior-art",
   summary: "where a path like this one already exists across the repos on disk, newest first",
-  usage: 'agent-record query prior-art "<path fragment>"',
+  usage: 'agent-record query prior-art "<path fragment>" [--rows <n>]',
   run: (db, ctx) => {
-    const fragment = requiredArg(ctx, priorArt.usage);
+    const fragment = ctx.arg;
     const result = select(
       db,
       `WITH matched AS (

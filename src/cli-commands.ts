@@ -9,8 +9,6 @@ const LOADERS: Record<string, () => Promise<Command>> = {
   doctor: () => import("./doctor-command").then((m) => m.doctorCommand),
 };
 
-export const COMMAND_NAMES: readonly string[] = Object.keys(LOADERS);
-
 export function findCommand(name: string | undefined): Promise<Command> | undefined {
   return name !== undefined && Object.hasOwn(LOADERS, name) ? LOADERS[name]?.() : undefined;
 }
