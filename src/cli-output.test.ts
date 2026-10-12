@@ -22,13 +22,11 @@ function printed(error: unknown): unknown {
 
 describe("an error on stderr", () => {
   test("carries a refusal's code, facts and the command that resolves it beside its message", () => {
-    const refused = new CodedError(
-      "no_session",
-      "no session k7m2qx4d is on record",
-      { session: "k7m2qx4d" },
-      "agent-record query <name> <arg> [--rows <n>]",
-      "refusal",
-    );
+    const refused = new CodedError("no_session", "no session k7m2qx4d is on record", {
+      meta: { session: "k7m2qx4d" },
+      resolve: "agent-record query <name> <arg> [--rows <n>]",
+      kind: "refusal",
+    });
     expect(printed(refused)).toEqual({
       command: "query",
       ok: false,
@@ -60,13 +58,11 @@ describe("an error on stderr", () => {
   });
 
   test("names a coded fault as a fault", () => {
-    const fault = new CodedError(
-      "invariant_failed",
-      "invariant failed: x",
-      { condition: "x" },
-      "bug",
-      "fault",
-    );
+    const fault = new CodedError("invariant_failed", "invariant failed: x", {
+      meta: { condition: "x" },
+      resolve: "bug",
+      kind: "fault",
+    });
     expect(printed(fault)).toMatchObject({ error: { kind: "fault", code: "invariant_failed" } });
   });
 });

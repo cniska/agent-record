@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Glob } from "bun";
+import { codedOf } from "./coded-error";
 import { nodesOf } from "./syntax.test-support";
 
 const SRC = import.meta.dir;
@@ -85,5 +86,14 @@ describe("the error check", () => {
     expect(
       errorBreaches("coded-error.ts", "class CodedError extends Error { x = new CodedError(a) }"),
     ).toEqual([]);
+  });
+});
+
+describe("an error with no code", () => {
+  test("becomes the command's fault, keeping the error it came from as its cause", () => {
+    const thrown = new RangeError("disk vanished");
+    const fault = codedOf(thrown);
+    expect(fault).toMatchObject({ kind: "fault", code: "command_failed", meta: { detail: "disk vanished" } });
+    expect(fault.cause).toBe(thrown);
   });
 });

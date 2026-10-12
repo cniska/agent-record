@@ -1,3 +1,4 @@
+import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -10,7 +11,6 @@ import {
   stampSchemaVersion,
 } from "./db-read.test-support";
 import { SCHEMA_VERSION } from "./db-schema";
-import { errorCode } from "./error-code";
 import { dbPath } from "./paths";
 import { sqlCommand } from "./sql-command";
 
@@ -27,23 +27,60 @@ const WRITES = [
 ];
 
 describe("agent-record sql", () => {
-  test("fails on every write and leaves the database as it was", async () => {
+  test("refuses every write as one, and leaves the database as it was", async () => {
     const { home, path } = recordWithCommit();
     try {
       const before = fingerprint(path);
       for (const statement of WRITES) {
-        const refused = await asDataHome(home, async () => {
-          try {
-            await sqlCommand.run([statement]);
-            return null;
-          } catch (error) {
-            return errorCode(error);
-          }
+        const refused = await asDataHome(home, () => refusal(() => sqlCommand.run([statement])));
+        expect({ statement, refused }).toEqual({
+          statement,
+          refused: expect.objectContaining({
+            kind: "refusal",
+            code: "sql_writes",
+            meta: { statement },
+            resolve: "run a read-only SELECT",
+          }),
         });
-        expect({ statement, refused }).toEqual({ statement, refused: "SQLITE_READONLY" });
         expect(fingerprint(path)).toBe(before);
       }
     } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("refuses a statement SQLite cannot run, naming SQLite's complaint", async () => {
+    const { home } = recordWithCommit();
+    try {
+      expect(await asDataHome(home, () => refusal(() => sqlCommand.run(["SELEC 1"])))).toEqual(
+        expect.objectContaining({
+          kind: "refusal",
+          code: "sql_invalid",
+          meta: { statement: "SELEC 1", detail: 'near "SELEC": syntax error' },
+          resolve: "fix the statement and run it again",
+        }),
+      );
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("refuses a read while a writer holds the record, naming it busy", async () => {
+    const { home, path } = recordWithCommit();
+    const writer = new Database(path);
+    try {
+      writer.run("PRAGMA locking_mode = EXCLUSIVE");
+      writer.run("DELETE FROM repo_commit");
+      expect(await asDataHome(home, () => refusal(() => sqlCommand.run(["SELECT 1"])))).toEqual(
+        expect.objectContaining({
+          kind: "refusal",
+          code: "record_busy",
+          meta: { path },
+          resolve: "run this again once the other agent-record run ends",
+        }),
+      );
+    } finally {
+      writer.close();
       rmSync(home, { recursive: true, force: true });
     }
   });

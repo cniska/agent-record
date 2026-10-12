@@ -1,17 +1,22 @@
-import { Database } from "bun:sqlite";
+import { Database, SQLiteError } from "bun:sqlite";
 import { existsSync } from "node:fs";
 import { refuseOtherVersion } from "./db";
 import { refuseRecord } from "./db-contract";
 
-export function openReadOnly(path: string): Database {
+export function readingRecord<T>(path: string, use: (db: Database) => T): T {
   if (!existsSync(path)) throw refuseRecord("no_database", { path });
-  const db = new Database(path, { readwrite: true, create: false });
   try {
-    db.run("PRAGMA query_only = ON");
-    refuseOtherVersion(db);
+    const db = new Database(path, { readwrite: true, create: false });
+    try {
+      db.run("PRAGMA query_only = ON");
+      refuseOtherVersion(db);
+      return use(db);
+    } finally {
+      db.close();
+    }
   } catch (error) {
-    db.close();
+    if (error instanceof SQLiteError && error.code?.startsWith("SQLITE_BUSY"))
+      throw refuseRecord("record_busy", { path }, error);
     throw error;
   }
-  return db;
 }

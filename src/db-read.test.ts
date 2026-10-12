@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openReadOnly } from "./db-read";
+import { readingRecord } from "./db-read";
 import { SCHEMA_VERSION } from "./db-schema";
 
 function writtenDatabase(): string {
@@ -23,29 +23,19 @@ describe("opening the database to read", () => {
     rmSync(`${path}-wal`, { force: true });
     rmSync(`${path}-shm`, { force: true });
 
-    const db = openReadOnly(path);
-    try {
-      expect(db.query("SELECT body FROM note").all()).toEqual([{ body: "kept" }]);
-    } finally {
-      db.close();
-    }
+    expect(readingRecord(path, (db) => db.query("SELECT body FROM note").all())).toEqual([{ body: "kept" }]);
   });
 
   test("refuses a write", () => {
-    const db = openReadOnly(writtenDatabase());
-    try {
-      expect(() => db.run("INSERT INTO note VALUES ('changed')")).toThrow(
-        expect.objectContaining({ code: "SQLITE_READONLY" }),
-      );
-    } finally {
-      db.close();
-    }
+    expect(() =>
+      readingRecord(writtenDatabase(), (db) => db.run("INSERT INTO note VALUES ('changed')")),
+    ).toThrow(expect.objectContaining({ code: "SQLITE_READONLY" }));
   });
 
   test("names a missing database without creating one", () => {
     const path = join(mkdtempSync(join(tmpdir(), "agent-record-db-read-")), "sessions.db");
 
-    expect(() => openReadOnly(path)).toThrow(expect.objectContaining({ code: "no_database" }));
+    expect(() => readingRecord(path, () => null)).toThrow(expect.objectContaining({ code: "no_database" }));
     expect(existsSync(path)).toBe(false);
   });
 });

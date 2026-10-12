@@ -1,6 +1,6 @@
 import { unreachable } from "./assert";
 import { type CodedError, isRefusal } from "./coded-error";
-import { openReadOnly } from "./db-read";
+import { readingRecord } from "./db-read";
 import { SCHEMA_VERSION } from "./db-schema";
 import { type AgentPlan, bootoutCommand, bootstrapCommand, planAgent } from "./ingest-launchd";
 import { dbPath, type Env } from "./paths";
@@ -23,7 +23,7 @@ export type DoctorProbes = { readonly agentLoaded: () => boolean; readonly now: 
 
 function recordRefusal(env: Env): CodedError | null {
   try {
-    openReadOnly(dbPath(env)).close();
+    readingRecord(dbPath(env), () => null);
     return null;
   } catch (error) {
     if (!isRefusal(error)) throw error;

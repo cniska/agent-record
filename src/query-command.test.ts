@@ -66,4 +66,19 @@ describe("agent-record query", () => {
       }
     });
   }
+
+  test("refuses a query while a writer holds the record, naming it busy", async () => {
+    const { home, path } = recordWithCommit();
+    const writer = new Database(path);
+    try {
+      writer.run("PRAGMA locking_mode = EXCLUSIVE");
+      writer.run("DELETE FROM repo_commit");
+      expect(await asDataHome(home, () => refusal(() => queryCommand.run(["search", "stay"])))).toEqual(
+        expect.objectContaining({ kind: "refusal", code: "record_busy", meta: { path } }),
+      );
+    } finally {
+      writer.close();
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
 });

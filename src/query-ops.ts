@@ -1,4 +1,4 @@
-import { openReadOnly } from "./db-read";
+import { readingRecord } from "./db-read";
 import { dbPath, resolveHomeDir } from "./paths";
 import type { Query } from "./query-contract";
 import { QUERIES } from "./query-registry";
@@ -9,11 +9,8 @@ export function listQueries() {
 }
 
 export function runQuery(query: Query, arg: string, maxRows: number) {
-  const db = openReadOnly(dbPath());
-  try {
+  return readingRecord(dbPath(), (db) => {
     const result = query.run(db, { arg, home: resolveHomeDir(), maxRows });
     return { ...result, ...capRows(result.rows, maxRows) };
-  } finally {
-    db.close();
-  }
+  });
 }

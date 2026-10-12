@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { invariant } from "./assert";
-import { openReadOnly } from "./db-read";
+import { readingRecord } from "./db-read";
 import { ctx, seeded, syncedRecord } from "./query.test-support";
 import type { QueryContext, QueryResult } from "./query-contract";
 import { findQuery } from "./query-registry";
@@ -192,17 +192,17 @@ describe("search", () => {
 
   test("finds a message by its words and keeps the index level with the table", () => {
     const root = mkdtempSync(join(tmpdir(), "agent-record-q-"));
-    const db = openReadOnly(syncedRecord(root));
     try {
-      const hit = search.run(db, { ...ctx, arg: "parser" });
-      expect(hit.rows.length).toBeGreaterThan(0);
-      expect(String(hit.rows[0]?.[hit.columns.indexOf("text")])).toContain("parser");
+      readingRecord(syncedRecord(root), (db) => {
+        const hit = search.run(db, { ...ctx, arg: "parser" });
+        expect(hit.rows.length).toBeGreaterThan(0);
+        expect(String(hit.rows[0]?.[hit.columns.indexOf("text")])).toContain("parser");
 
-      const miss = search.run(db, { ...ctx, arg: "nothingmatchesthis" });
-      expect(miss.rows).toEqual([]);
-      expect(miss.note).toContain("nothing matches");
+        const miss = search.run(db, { ...ctx, arg: "nothingmatchesthis" });
+        expect(miss.rows).toEqual([]);
+        expect(miss.note).toContain("nothing matches");
+      });
     } finally {
-      db.close();
       rmSync(root, { recursive: true, force: true });
     }
   });

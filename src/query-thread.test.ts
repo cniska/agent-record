@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { invariant } from "./assert";
-import { openReadOnly } from "./db-read";
+import { readingRecord } from "./db-read";
 import { SCHEMA_SQL } from "./db-schema";
 import { ctx, SYNCED_SESSION, seeded, syncedRecord } from "./query.test-support";
 import type { QueryResult } from "./query-contract";
@@ -154,24 +154,24 @@ describe("thread", () => {
 
   test("reads what was said, and centers on a timestamp when given one", () => {
     const root = mkdtempSync(join(tmpdir(), "agent-record-q-"));
-    const db = openReadOnly(syncedRecord(root));
     try {
-      const whole = thread.run(db, { ...ctx, arg: SYNCED_SESSION.slice(0, 8) });
-      expect(whole.rows.length).toBeGreaterThan(0);
-      const texts = whole.rows.map((r) => String(r[3]));
-      expect(texts.every((t) => t.length > 0)).toBe(true);
+      readingRecord(syncedRecord(root), (db) => {
+        const whole = thread.run(db, { ...ctx, arg: SYNCED_SESSION.slice(0, 8) });
+        expect(whole.rows.length).toBeGreaterThan(0);
+        const texts = whole.rows.map((r) => String(r[3]));
+        expect(texts.every((t) => t.length > 0)).toBe(true);
 
-      const centered = thread.run(db, {
-        ...ctx,
-        arg: `${SYNCED_SESSION.slice(0, 8)}@2026-09-16T10:04`,
+        const centered = thread.run(db, {
+          ...ctx,
+          arg: `${SYNCED_SESSION.slice(0, 8)}@2026-09-16T10:04`,
+        });
+        expect(centered.denominator).toContain("centered on");
+
+        const missing = thread.run(db, { ...ctx, arg: "zzzzzzzz" });
+        expect(missing.rows).toEqual([]);
+        expect(missing.note).toContain("no session starts with");
       });
-      expect(centered.denominator).toContain("centered on");
-
-      const missing = thread.run(db, { ...ctx, arg: "zzzzzzzz" });
-      expect(missing.rows).toEqual([]);
-      expect(missing.note).toContain("no session starts with");
     } finally {
-      db.close();
       rmSync(root, { recursive: true, force: true });
     }
   });
