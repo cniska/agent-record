@@ -5,6 +5,7 @@ export const refuseRecord = refuser<{
   readonly no_database: { readonly path: string };
   readonly lock_held: { readonly path: string; readonly pid: number };
   readonly record_busy: { readonly path: string };
+  readonly lock_unreadable: { readonly path: string; readonly detail: string };
 }>({
   record_version: {
     message: ({ found, expected }) =>
@@ -26,5 +27,9 @@ export const refuseRecord = refuser<{
   record_busy: {
     message: ({ path }) => `another agent-record run is writing ${path} and holds it`,
     resolve: () => "run this again once the other agent-record run ends",
+  },
+  lock_unreadable: {
+    message: ({ path, detail }) => `cannot read which process holds ${path}: ${detail}`,
+    resolve: ({ path }) => `remove ${path} if no agent-record is running`,
   },
 });

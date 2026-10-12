@@ -110,10 +110,24 @@ describe("the write lock", () => {
     expect(withLock(() => "ran", env)).toBe("ran");
   });
 
-  test("a pid file that cannot be read is not a holder", () => {
+  test("a pid file that cannot be read is refused, not taken over", () => {
     const { env, lock } = newRoot();
     mkdirSync(join(lock, "pid"), { recursive: true });
-    expect(withLock(() => "ran", env)).toBe("ran");
+    let ran = false;
+    expect(() =>
+      withLock(() => {
+        ran = true;
+      }, env),
+    ).toThrow(
+      expect.objectContaining({
+        kind: "refusal",
+        code: "lock_unreadable",
+        meta: expect.objectContaining({ path: lock }),
+        resolve: `remove ${lock} if no agent-record is running`,
+      }),
+    );
+    expect(ran).toBe(false);
+    expect(readdirSync(lock)).toEqual(["pid"]);
   });
 
   test("a refused run leaves nothing of its own behind", () => {

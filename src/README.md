@@ -13,7 +13,7 @@ Flat, so a module is found by name. A file's prefix is its module: `db-read.ts` 
 | `git`, `repo`, `worktree` | Run git, index a repo's files, and fold worktree paths onto their checkout |
 | `plugin` | Tests for the Claude Code plugin's hook in `plugin/`, kept here so the plugin ships no tests |
 | `cli` | Dispatch a command and print its result or error (a refusal or a fault) as one JSON line |
-| `coded-error`, `error`, `assert`, `paths`, `pid`, `file` | Coded errors, refusals and faults; `unreachable` and `invariant`; where every file lives; whether a process is alive; copying a file aside before it is replaced |
+| `coded-error`, `error`, `assert`, `paths`, `file` | Coded errors, refusals and faults; `unreachable` and `invariant`; where every file lives; copying a file aside before it is replaced |
 
 ## Where to start
 

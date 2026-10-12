@@ -1,26 +1,51 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { refuseRecord } from "./db-contract";
+import { errorCode } from "./error-code";
 import { type Env, locksDir } from "./paths";
-import { pidIsAlive } from "./pid";
 
-function holderIsAlive(holder: number): boolean {
-  return Number.isInteger(holder) && holder > 0 && pidIsAlive(holder);
+const PID = /^[1-9]\d*$/;
+const OCCUPIED: ReadonlySet<unknown> = new Set(["EEXIST", "ENOTEMPTY"]);
+
+function holderIsAlive(holder: number | null): holder is number {
+  if (holder === null) return false;
+  try {
+    process.kill(holder, 0);
+    return true;
+  } catch (error) {
+    return errorCode(error) === "EPERM";
+  }
 }
 
-function holderOf(pidFile: string): number {
+function holderOf(dir: string, lock: string): number | null {
+  let text: string;
   try {
-    return Number(readFileSync(pidFile, "utf8").trim());
-  } catch {
-    return Number.NaN;
+    text = readFileSync(join(dir, "pid"), "utf8").trim();
+  } catch (error) {
+    const code = errorCode(error);
+    if (code === "ENOENT") return null;
+    if (code === undefined || !(error instanceof Error)) throw error;
+    throw refuseRecord("lock_unreadable", { path: lock, detail: error.message }, error);
   }
+  return PID.test(text) ? Number(text) : null;
 }
 
 function tryInstall(staging: string, path: string): boolean {
   try {
     renameSync(staging, path);
     return true;
-  } catch {
+  } catch (error) {
+    if (!OCCUPIED.has(errorCode(error))) throw error;
+    return false;
+  }
+}
+
+function renamedAway(from: string, to: string): boolean {
+  try {
+    renameSync(from, to);
+    return true;
+  } catch (error) {
+    if (errorCode(error) !== "ENOENT") throw error;
     return false;
   }
 }
@@ -28,12 +53,14 @@ function tryInstall(staging: string, path: string): boolean {
 function clearAbandoned(path: string): number | null {
   const aside = `${path}.stale.${process.pid}`;
   rmSync(aside, { recursive: true, force: true });
+  if (!renamedAway(path, aside)) return null;
+  let holder: number | null;
   try {
-    renameSync(path, aside);
-  } catch {
-    return null;
+    holder = holderOf(aside, path);
+  } catch (error) {
+    renameSync(aside, path);
+    throw error;
   }
-  const holder = holderOf(join(aside, "pid"));
   if (holderIsAlive(holder)) {
     renameSync(aside, path);
     return holder;
@@ -42,23 +69,22 @@ function clearAbandoned(path: string): number | null {
   return null;
 }
 
-type Claim = { readonly kind: "claimed" } | { readonly kind: "held"; readonly holder: number };
-
-function claim(path: string): Claim {
+function claim(path: string): void {
   mkdirSync(dirname(path), { recursive: true });
-  const pidFile = join(path, "pid");
   const staging = `${path}.${process.pid}`;
   rmSync(staging, { recursive: true, force: true });
   try {
     mkdirSync(staging, { recursive: true });
     writeFileSync(join(staging, "pid"), String(process.pid));
-    if (tryInstall(staging, path)) return { kind: "claimed" };
-    const holder = holderOf(pidFile);
-    if (holderIsAlive(holder)) return { kind: "held", holder };
+    if (tryInstall(staging, path)) return;
+    const holder = holderOf(path, path);
+    if (holderIsAlive(holder)) throw refuseRecord("lock_held", { path, pid: holder });
     const living = clearAbandoned(path);
-    if (living !== null) return { kind: "held", holder: living };
-    if (tryInstall(staging, path)) return { kind: "claimed" };
-    return { kind: "held", holder: holderOf(pidFile) };
+    if (living !== null) throw refuseRecord("lock_held", { path, pid: living });
+    if (tryInstall(staging, path)) return;
+    const winner = holderOf(path, path);
+    if (winner === null) throw refuseRecord("record_busy", { path });
+    throw refuseRecord("lock_held", { path, pid: winner });
   } finally {
     rmSync(staging, { recursive: true, force: true });
   }
@@ -66,40 +92,21 @@ function claim(path: string): Claim {
 
 function release(path: string): void {
   const dropped = `${path}.released.${process.pid}`;
-  try {
-    renameSync(path, dropped);
-  } catch {
-    return;
-  }
-  rmSync(dropped, { recursive: true, force: true });
-}
-
-function claimPathLock(path: string): () => void {
-  const claimed = claim(path);
-  if (claimed.kind === "held") throw refuseRecord("lock_held", { path, pid: claimed.holder });
-  return releaser(path);
-}
-
-function releaser(path: string): () => void {
-  let held = true;
-  return () => {
-    if (!held) return;
-    held = false;
-    release(path);
-  };
+  if (renamedAway(path, dropped)) rmSync(dropped, { recursive: true, force: true });
 }
 
 function withPathLock<T>(path: string, fn: () => T): T {
-  const released = claimPathLock(path);
+  claim(path);
+  const done = () => release(path);
   let result: T;
   try {
     result = fn();
   } catch (error) {
-    released();
+    done();
     throw error;
   }
-  if (result instanceof Promise) result.then(released, released);
-  else released();
+  if (result instanceof Promise) result.then(done, done);
+  else done();
   return result;
 }
 
