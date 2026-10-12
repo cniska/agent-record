@@ -4,12 +4,27 @@ import { refuseGit } from "./git-contract";
 
 export type GitRun = { readonly status: number; readonly out: string; readonly err: string };
 
-export function git(repo: string, args: readonly string[]): GitRun {
-  const run = spawnSync("git", ["-C", repo, ...args], {
-    stdio: ["ignore", "pipe", "pipe"],
-    maxBuffer: Number.POSITIVE_INFINITY,
+function unavailable(args: readonly string[], error: unknown) {
+  return refuseGit("git_unavailable", {
+    command: `git ${args.join(" ")}`,
+    detail: error instanceof Error ? error.message : String(error),
   });
-  if (run.error) throw run.error;
+}
+
+function spawned(repo: string, args: readonly string[]) {
+  try {
+    return spawnSync("git", ["-C", repo, ...args], {
+      stdio: ["ignore", "pipe", "pipe"],
+      maxBuffer: Number.POSITIVE_INFINITY,
+    });
+  } catch (error) {
+    throw unavailable(args, error);
+  }
+}
+
+export function git(repo: string, args: readonly string[]): GitRun {
+  const run = spawned(repo, args);
+  if (run.error) throw unavailable(args, run.error);
   const status = run.status ?? 128 + (run.signal === null ? 0 : constants.signals[run.signal]);
   return { status, out: run.stdout.toString(), err: run.stderr.toString().trim() };
 }

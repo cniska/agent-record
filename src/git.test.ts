@@ -35,6 +35,23 @@ describe("running git", () => {
     );
   });
 
+  test("refuses when git cannot be started, naming the command and the cause", () => {
+    const repo = emptyRepo();
+    const path = process.env.PATH;
+    process.env.PATH = repo;
+    try {
+      expect(() => git(repo, ["status"])).toThrow(
+        expect.objectContaining({
+          code: "git_unavailable",
+          kind: "refusal",
+          meta: { command: "git status", detail: 'Executable not found in $PATH: "git"' },
+        }),
+      );
+    } finally {
+      process.env.PATH = path;
+    }
+  });
+
   test("refuses NUL-separated output whose last record is cut off", () => {
     expect(nulFields("a\0b\0", "git ls-files -z")).toEqual(["a", "b"]);
     expect(() => nulFields("a\0b", "git ls-files -z")).toThrow(
