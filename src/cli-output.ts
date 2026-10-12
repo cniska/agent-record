@@ -1,14 +1,23 @@
-import type { Command } from "./cli-contract";
-import { BUG, CodedError, type RefusalRecord, recordOf } from "./coded-error";
+import { type Command, faultCommand } from "./cli-contract";
+import { CodedError, type ErrorKind } from "./coded-error";
 
-function errorRecord(error: unknown): RefusalRecord {
-  if (error instanceof CodedError) return recordOf(error);
-  return {
-    code: "command_failed",
-    message: error instanceof Error ? error.message : String(error),
-    meta: {},
-    resolve: BUG,
-  };
+type ErrorRecord = {
+  readonly kind: ErrorKind;
+  readonly code: string;
+  readonly message: string;
+  readonly meta: Record<string, unknown>;
+  readonly resolve: string;
+};
+
+function codedOf(error: unknown): CodedError {
+  if (error instanceof CodedError) return error;
+  const detail = error instanceof Error ? error.message : String(error);
+  return faultCommand("command_failed", { detail });
+}
+
+function errorRecord(error: unknown): ErrorRecord {
+  const { kind, code, message, meta, resolve } = codedOf(error);
+  return { kind, code, message, meta: { ...meta }, resolve };
 }
 
 export function writeResult(command: string, value: unknown): void {

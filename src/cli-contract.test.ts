@@ -90,6 +90,7 @@ describe("the command contract", () => {
       expect(refused([name, "extra"])).toEqual({
         exitCode: 1,
         error: {
+          kind: "refusal",
           code: "argument_count",
           message: "takes no arguments and got 1: extra",
           meta: { usage, takes: 0, got: ["extra"] },
@@ -126,6 +127,7 @@ describe("the command contract", () => {
     expect(refused(["nonesuch"])).toEqual({
       exitCode: 1,
       error: {
+        kind: "refusal",
         code: "unknown_command",
         message: "nonesuch is not an agent-record command",
         meta: { name: "nonesuch" },
@@ -154,6 +156,7 @@ describe("the command contract", () => {
     expect(refused(["query", "search", "words", "--rows", "0"])).toEqual({
       exitCode: 1,
       error: {
+        kind: "refusal",
         code: "not_a_count",
         message: "--rows 0 is not a count of at least 1",
         meta: { value: "0" },

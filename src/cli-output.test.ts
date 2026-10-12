@@ -33,6 +33,7 @@ describe("an error on stderr", () => {
       command: "query",
       ok: false,
       error: {
+        kind: "refusal",
         code: "no_session",
         message: "no session k7m2qx4d is on record",
         meta: { session: "k7m2qx4d" },
@@ -41,15 +42,31 @@ describe("an error on stderr", () => {
     });
   });
 
-  test("names an error that is not a refusal as an unexpected failure, handed to the owner as a bug", () => {
-    expect(printed(new Error("disk full"))).toMatchObject({
-      error: {
-        code: "command_failed",
-        message: "disk full",
-        meta: {},
-        resolve:
-          "stop and hand this error to the owner as a bug in agent-record; no command you run resolves it",
-      },
-    });
+  test("names an error with no code as a fault from the command, handed to the owner as a bug", () => {
+    for (const thrown of [new Error("disk full"), "disk full"]) {
+      expect(printed(thrown)).toEqual({
+        command: "query",
+        ok: false,
+        error: {
+          kind: "fault",
+          code: "command_failed",
+          message: "the command failed unexpectedly: disk full",
+          meta: { detail: "disk full" },
+          resolve:
+            "stop and hand this error to the owner as a bug in agent-record; no command you run resolves it",
+        },
+      });
+    }
+  });
+
+  test("names a coded fault as a fault", () => {
+    const fault = new CodedError(
+      "invariant_failed",
+      "invariant failed: x",
+      { condition: "x" },
+      "bug",
+      "fault",
+    );
+    expect(printed(fault)).toMatchObject({ error: { kind: "fault", code: "invariant_failed" } });
   });
 });

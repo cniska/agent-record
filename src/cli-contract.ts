@@ -1,4 +1,4 @@
-import { refuser } from "./coded-error";
+import { BUG, faulter, refuser } from "./coded-error";
 
 export type Command = {
   name: string;
@@ -13,6 +13,13 @@ export class Ran {
     readonly exitCode: 0 | 1,
   ) {}
 }
+
+export const faultCommand = faulter<{ readonly command_failed: { readonly detail: string } }>({
+  command_failed: {
+    message: ({ detail }) => `the command failed unexpectedly: ${detail}`,
+    resolve: () => BUG,
+  },
+});
 
 const TAKES = { 0: "no arguments", 1: "1 argument" } as const;
 
