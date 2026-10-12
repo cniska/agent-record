@@ -43,4 +43,45 @@ describe("reading git out of a shell command", () => {
     expect(gitSubcommands("cd api && git status --porcelain")).toEqual(["status"]);
     expect(gitSubcommands("mise run verify 2>&1 | tail -2 && /usr/bin/git add -A")).toEqual(["add"]);
   });
+
+  test("reads a separator inside quotes as text, not as a new command", () => {
+    expect(gitSubcommands('echo "x; git push"')).toEqual([]);
+    expect(gitSubcommands("echo 'a | git push'")).toEqual([]);
+    expect(gitSubcommands('git commit -m "x && git push --force"')).toEqual(["commit"]);
+  });
+
+  test("reads a quoted word with spaces as one word", () => {
+    expect(gitSubcommands('"/opt/my tools/git" status')).toEqual(["status"]);
+    expect(gitSubcommands('git -C "/tmp/my repo" status')).toEqual(["status"]);
+    expect(gitSubcommands("git -c 'user.name=A B' commit -m x")).toEqual(["commit"]);
+  });
+
+  test("reads a heredoc body as text and finds the commands after it", () => {
+    expect(gitSubcommands("cat > notes.md <<'EOF'\nrun git push; it's fine\nEOF\ngit status")).toEqual([
+      "status",
+    ]);
+    expect(gitSubcommands('python3 - <<PY\nprint("git log")\nPY\n/usr/bin/git add -A')).toEqual(["add"]);
+    expect(gitSubcommands("cat <<-EOF\n\tgit push\n\tEOF\ngit diff")).toEqual(["diff"]);
+    expect(gitSubcommands("cat<<EOF\ngit push\nEOF")).toEqual([]);
+    expect(gitSubcommands('git commit -F - <<EOF && git push\nfix: a "b\nEOF')).toEqual(["commit", "push"]);
+  });
+
+  test("reads a here-string as a word, not a heredoc", () => {
+    expect(gitSubcommands('cat <<< "git push"\ngit status')).toEqual(["status"]);
+  });
+
+  test("reads a comment as text to the end of its line", () => {
+    expect(gitSubcommands("# what's staged\ngit diff --cached")).toEqual(["diff"]);
+    expect(gitSubcommands("git status # it's quick")).toEqual(["status"]);
+    expect(gitSubcommands("git log a#b")).toEqual(["log"]);
+  });
+
+  test("joins a line continued with a backslash", () => {
+    expect(gitSubcommands("git -C /repo \\\n  status")).toEqual(["status"]);
+    expect(gitSubcommands('git -C "/my \\\nrepo" status')).toEqual(["status"]);
+  });
+
+  test("reads a command cut off inside a quote up to where it ends", () => {
+    expect(gitSubcommands('git commit -m "cut off; git push')).toEqual(["commit"]);
+  });
 });
