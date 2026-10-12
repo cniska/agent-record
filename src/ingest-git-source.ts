@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs";
-import { dirname } from "node:path";
-import { hasCommit, ran, ranRaw } from "./git";
+import { ran, ranRaw } from "./git";
 import { checkoutRoot } from "./git-checkout";
 import { refuseGit } from "./git-contract";
 
@@ -27,14 +26,10 @@ export function repoRoot(dir: string): string | null {
   return ran(dir, ["rev-parse", "--show-toplevel"]);
 }
 
-export function repositoryOf(checkout: string): string {
-  return dirname(ran(checkout, ["rev-parse", "--path-format=absolute", "--git-common-dir"]));
-}
-
-export function readCommits(checkout: string, since: string | null): Commit[] {
-  if (!hasCommit(checkout, "HEAD")) return [];
+export function readCommits(checkout: string, head: string, since: string | null): Commit[] {
   const args = [
     "log",
+    head,
     "--pretty=format:%x00%H%x00%aI%x00%an%x00%s",
     "--name-only",
     "--no-merges",

@@ -29,7 +29,7 @@ export function git(repo: string, args: readonly string[]): GitRun {
   return { status, out: run.stdout.toString(), err: run.stderr.toString().trim() };
 }
 
-function refused(repo: string, args: readonly string[], run: GitRun) {
+export function refused(repo: string, args: readonly string[], run: GitRun) {
   return refuseGit("git_failed", {
     repo,
     command: `git ${args.join(" ")}`,
@@ -65,8 +65,4 @@ export function nulFields(output: string, command: string): string[] {
 
 export function configValue(repo: string, key: string): string | null {
   return answered(repo, ["config", "--get", key]);
-}
-
-export function hasCommit(repo: string, at: string): boolean {
-  return answered(repo, ["rev-parse", "--verify", "-q", `${at}^{commit}`]) !== null;
 }

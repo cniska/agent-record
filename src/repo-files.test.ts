@@ -1,15 +1,16 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SCHEMA_SQL } from "./db-schema";
 import { errorCode } from "./error-code";
+import { probeCheckout } from "./git-probe";
 import { indexRepoFiles, trackedFiles } from "./repo-files";
 
 function repoWith(files: string[]): string {
-  const dir = mkdtempSync(join(tmpdir(), "agent-record-files-"));
+  const dir = realpathSync(mkdtempSync(join(tmpdir(), "agent-record-files-")));
   execFileSync("git", ["init", "-q", "-b", "main", dir]);
   execFileSync("git", ["-C", dir, "config", "user.email", "t@example.com"]);
   execFileSync("git", ["-C", dir, "config", "user.name", "T"]);
@@ -33,6 +34,8 @@ function freshDb(): Database {
 const failures: { path: string; code: unknown }[] = [];
 const fail = (path: string, error: unknown) => failures.push({ path, code: errorCode(error) });
 
+const index = (db: Database, repo: string) => indexRepoFiles(db, [probeCheckout(repo)], fail);
+
 const pathsIn = (db: Database, repo: string): string[] =>
   db
     .prepare<{ path: string }, []>("SELECT path FROM repo_file ORDER BY path")
@@ -48,8 +51,9 @@ describe("indexing what a repo tracks", () => {
       expect(trackedFiles(repo).some((p) => p.endsWith("dist/cli.js"))).toBe(false);
 
       const db = freshDb();
-      expect(indexRepoFiles(db, [repo], fail)).toEqual({ repos: 1, files: 3 });
+      expect(index(db, repo)).toEqual({ repos: 1, files: 3, unchanged: 0 });
       expect(pathsIn(db, repo)).toEqual([".github/workflows/ci.yml", ".gitignore", "src/cli.ts"]);
+      expect(index(db, repo)).toEqual({ repos: 0, files: 0, unchanged: 1 });
       db.close();
     } finally {
       rmSync(repo, { recursive: true, force: true });
@@ -60,17 +64,17 @@ describe("indexing what a repo tracks", () => {
     const repo = repoWith(["keep.ts", "gone.ts"]);
     try {
       const db = freshDb();
-      indexRepoFiles(db, [repo], fail);
+      index(db, repo);
       expect(pathsIn(db, repo)).toContain("gone.ts");
 
       execFileSync("git", ["-C", repo, "rm", "-q", "gone.ts"]);
       execFileSync("git", ["-C", repo, "commit", "--no-verify", "-q", "-m", "chore: drop it"]);
-      indexRepoFiles(db, [repo], fail);
+      index(db, repo);
       expect(pathsIn(db, repo)).not.toContain("gone.ts");
       expect(pathsIn(db, repo)).toContain("keep.ts");
 
       execFileSync("git", ["-C", repo, "rm", "-q", "-r", "."]);
-      indexRepoFiles(db, [repo], fail);
+      index(db, repo);
       expect(pathsIn(db, repo)).toEqual([]);
       db.close();
     } finally {
@@ -81,12 +85,17 @@ describe("indexing what a repo tracks", () => {
   test("reports a repo git cannot read and still indexes the others", () => {
     const repo = repoWith(["a.ts"]);
     const gone = repoWith(["b.ts"]);
+    const probedBeforeGone = probeCheckout(gone);
     rmSync(gone, { recursive: true, force: true });
     expect(existsSync(gone)).toBe(false);
     failures.length = 0;
     try {
       const db = freshDb();
-      expect(indexRepoFiles(db, [gone, repo], fail)).toEqual({ repos: 1, files: 2 });
+      expect(indexRepoFiles(db, [probedBeforeGone, probeCheckout(repo)], fail)).toEqual({
+        repos: 1,
+        files: 2,
+        unchanged: 0,
+      });
       expect(failures).toEqual([{ path: gone, code: "git_failed" }]);
       db.close();
     } finally {

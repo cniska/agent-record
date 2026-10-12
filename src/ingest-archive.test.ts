@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { errorCode } from "./error-code";
 import { archivedPath as archived, scratchEnv } from "./fixtures.test-support";
-import { archivePathOf, archiveSources } from "./ingest-archive";
+import { archiveSources } from "./ingest-archive";
 import { readCodexTitles } from "./ingest-codex-source";
 import { archiveDir, claudeProjectsDir, codexDir, type Env, grokSessionsDir } from "./paths";
 
@@ -63,20 +63,6 @@ function archive(env: Env) {
   );
   return { report, replaced, failures };
 }
-
-describe("archivePathOf", () => {
-  test("maps a file under a tool's root into that tool's archive", () => {
-    const env = scratchEnv("/home/owner");
-    expect(archivePathOf("codex", "/home/owner/.codex/sessions/a.jsonl", env)).toBe(
-      "/home/owner/data/agent-record/archive/codex/sessions/a.jsonl",
-    );
-  });
-
-  test("refuses a sibling directory that only shares the root's prefix", () => {
-    const env = scratchEnv("/home/owner");
-    expect(archivePathOf("codex", "/home/owner/.codex-old/sessions/a.jsonl", env)).toBeNull();
-  });
-});
 
 describe("archiving session files", () => {
   test("copies a new file byte for byte, a partial last line included", () => {

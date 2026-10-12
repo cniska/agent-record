@@ -3,7 +3,7 @@ import { TOOLS } from "./ingest-tools";
 const sqlList = (values: readonly string[]): string => values.map((value) => `'${value}'`).join(",");
 const TOOLS_SQL = sqlList(TOOLS);
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS source_file (
@@ -163,11 +163,17 @@ CREATE TABLE IF NOT EXISTS commit_file (
 CREATE INDEX IF NOT EXISTS commit_file_path ON commit_file(path);
 
 CREATE TABLE IF NOT EXISTS repo_file (
-  repo            TEXT NOT NULL,
+  checkout        TEXT NOT NULL,
   path            TEXT NOT NULL,
-  PRIMARY KEY (repo, path)
+  PRIMARY KEY (checkout, path)
 );
 CREATE INDEX IF NOT EXISTS repo_file_path ON repo_file(path);
+
+CREATE TABLE IF NOT EXISTS checkout (
+  path            TEXT PRIMARY KEY,
+  head            TEXT,
+  index_stat      TEXT
+);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS message_fts USING fts5(
   text,

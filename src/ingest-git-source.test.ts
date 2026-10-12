@@ -40,7 +40,9 @@ describe("reading a log record", () => {
   test("keeps a subject that holds control characters whole", () => {
     const repo = repoWith(["feat: one\x1etail\x1fend"]);
     try {
-      expect(readCommits(repo, null).map((commit) => commit.subject)).toEqual(["feat: one\x1etail\x1fend"]);
+      expect(readCommits(repo, "HEAD", null).map((commit) => commit.subject)).toEqual([
+        "feat: one\x1etail\x1fend",
+      ]);
     } finally {
       rmSync(repo, { recursive: true, force: true });
     }
@@ -90,7 +92,7 @@ describe("reading a repo", () => {
     try {
       const root = repoRoot(dir);
       invariant(root !== null, "the fixture is a repo");
-      const commits = readCommits(root, null);
+      const commits = readCommits(root, "HEAD", null);
       expect(commits.length).toBe(2);
       const fix = commits.find((c) => c.subject === "fix: two");
       expect(fix?.kind).toBe("fix");
@@ -111,16 +113,12 @@ describe("reading a repo", () => {
     }
   });
 
-  test("a repo with no commits yet has none to read, and a checkout git cannot read is refused", () => {
-    const empty = mkdtempSync(join(tmpdir(), "agent-record-empty-"));
+  test("a checkout git cannot read is refused", () => {
     const broken = mkdtempSync(join(tmpdir(), "agent-record-broken-"));
     try {
-      git(["init", "-q", empty], empty);
-      expect(readCommits(empty, null)).toEqual([]);
       writeFileSync(join(broken, ".git"), "gitdir: /nonexistent/agent-record-test\n");
       expect(() => repoRoot(broken)).toThrow(expect.objectContaining({ code: "git_failed" }));
     } finally {
-      rmSync(empty, { recursive: true, force: true });
       rmSync(broken, { recursive: true, force: true });
     }
   });

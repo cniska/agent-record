@@ -1,7 +1,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import { z } from "zod";
-import { archivePathOf } from "./ingest-archive";
+import { archiveRootOf } from "./ingest-archive";
+import { SESSION_SOURCES } from "./ingest-sources";
 import type { Tool } from "./ingest-tools";
 import { claudeProjectsDir, codexDir, type Env } from "./paths";
 
@@ -21,9 +22,9 @@ function writeLines(path: string, lines: unknown[]): string {
 }
 
 export function archivedPath(tool: Tool, live: string, env: Env): string {
-  const path = archivePathOf(tool, live, env);
-  if (path === null) throw new Error(`${live} is outside ${tool}'s root`);
-  return path;
+  const root = SESSION_SOURCES[tool].root(env);
+  if (!live.startsWith(root + sep)) throw new Error(`${live} is outside ${tool}'s root`);
+  return join(archiveRootOf(tool, env), relative(root, live));
 }
 
 export function writePrefix(path: string, lines: unknown[], bytes: number): void {

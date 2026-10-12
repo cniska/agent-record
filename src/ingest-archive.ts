@@ -48,10 +48,6 @@ function rebaseScanned(fromRoot: string, toRoot: string, path: string): string {
   return rebased;
 }
 
-export function archivePathOf(tool: Tool, livePath: string, env: Env): string | null {
-  return rebase(SESSION_SOURCES[tool].root(env), archiveRootOf(tool, env), livePath);
-}
-
 function sameStamp(a: Stats, b: Stats): boolean {
   return a.size === b.size && Math.trunc(a.mtimeMs) === Math.trunc(b.mtimeMs);
 }

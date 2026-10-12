@@ -1,11 +1,12 @@
 import type { Database } from "bun:sqlite";
 import { writeTransaction } from "./db";
+import { type Checkout, probeCheckout } from "./git-probe";
 import { originLabel } from "./git-remote";
 import type { Failure } from "./ingest-contract";
-import { type Commit, readCommits, repoRoot, repositoryOf } from "./ingest-git-source";
+import { type Commit, readCommits, repoRoot } from "./ingest-git-source";
 import { isScratchRepo } from "./ingest-scratch";
 
-export type GitReport = { repos: number; commits: number; files: number };
+export type GitReport = { repos: number; commits: number; files: number; unchanged: number };
 
 const OVERLAP_DAYS = 7;
 
@@ -25,7 +26,19 @@ export function repoRoots(db: Database, fail: Failure): readonly string[] {
   return [...roots];
 }
 
-export function ingestCommits(db: Database, roots: readonly string[], fail: Failure): GitReport {
+export function probeCheckouts(roots: readonly string[], fail: Failure): readonly Checkout[] {
+  const checkouts: Checkout[] = [];
+  for (const root of roots) {
+    try {
+      checkouts.push(probeCheckout(root));
+    } catch (error) {
+      fail(root, error);
+    }
+  }
+  return checkouts;
+}
+
+export function ingestCommits(db: Database, checkouts: readonly Checkout[], fail: Failure): GitReport {
   const insertCommit = db.prepare(
     `INSERT INTO repo_commit (sha, repo, label, ts, author, subject, kind)
      VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -40,29 +53,44 @@ export function ingestCommits(db: Database, roots: readonly string[], fail: Fail
   const newestOf = db.query<{ ts: string | null }, [string]>(
     "SELECT max(ts) AS ts FROM repo_commit WHERE repo = ?",
   );
+  const headUnchanged = db.query<{ one: number }, [string, string | null]>(
+    "SELECT 1 AS one FROM checkout WHERE path = ? AND head IS ?",
+  );
+  const saveHead = db.prepare<void, [string, string | null]>(
+    "INSERT INTO checkout (path, head) VALUES (?, ?) ON CONFLICT(path) DO UPDATE SET head = excluded.head",
+  );
 
-  const report: GitReport = { repos: 0, commits: 0, files: 0 };
+  const report: GitReport = { repos: 0, commits: 0, files: 0, unchanged: 0 };
+  const readHead = (path: string, repo: string, head: string): boolean => {
+    let read: { label: string | null; commits: Commit[] };
+    try {
+      const newest = newestOf.get(repo)?.ts;
+      const since = newest ? new Date(Date.parse(newest) - OVERLAP_DAYS * 86_400_000).toISOString() : null;
+      read = { label: originLabel(repo), commits: readCommits(path, head, since) };
+    } catch (error) {
+      fail(path, error);
+      return false;
+    }
+    report.repos += 1;
+    for (const c of read.commits) {
+      insertCommit.run(c.sha, repo, read.label, c.ts, c.author, c.subject, c.kind);
+      report.commits += 1;
+      for (const file of c.files) {
+        insertFile.run(c.sha, `${repo}/${file}`);
+        report.files += 1;
+      }
+    }
+    return true;
+  };
+
   writeTransaction(db, () => {
-    for (const checkout of roots) {
-      let read: { repo: string; label: string | null; commits: Commit[] };
-      try {
-        const repo = repositoryOf(checkout);
-        const newest = newestOf.get(repo)?.ts;
-        const since = newest ? new Date(Date.parse(newest) - OVERLAP_DAYS * 86_400_000).toISOString() : null;
-        read = { repo, label: originLabel(repo), commits: readCommits(checkout, since) };
-      } catch (error) {
-        fail(checkout, error);
+    for (const { path, repo, head } of checkouts) {
+      if (headUnchanged.get(path, head)) {
+        report.unchanged += 1;
         continue;
       }
-      report.repos += 1;
-      for (const c of read.commits) {
-        insertCommit.run(c.sha, read.repo, read.label, c.ts, c.author, c.subject, c.kind);
-        report.commits += 1;
-        for (const path of c.files) {
-          insertFile.run(c.sha, `${read.repo}/${path}`);
-          report.files += 1;
-        }
-      }
+      if (head !== null && !readHead(path, repo, head)) continue;
+      saveHead.run(path, head);
     }
   });
   return report;

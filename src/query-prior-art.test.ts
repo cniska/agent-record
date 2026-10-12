@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { SCHEMA_SQL } from "./db-schema";
 import { repoWithWorktree } from "./git-fixtures.test-support";
+import { probeCheckout } from "./git-probe";
 import { ingestCommits } from "./ingest-git";
 import { ctx } from "./query.test-support";
 import { priorArt } from "./query-prior-art";
@@ -26,14 +27,14 @@ test("dates a file found only through a worktree by the commits of its repositor
     const fail = (path: string, error: unknown) => {
       throw new Error(`${path}: ${String(error)}`);
     };
-    ingestCommits(db, [worktree, repo], fail);
-    indexRepoFiles(db, [worktree], fail);
+    ingestCommits(db, [worktree, repo].map(probeCheckout), fail);
+    indexRepoFiles(db, [probeCheckout(worktree)], fail);
 
     const result = priorArt.run(db, { ...ctx, arg: "a.ts", home: dirname(repo) });
     expect(result.columns).toEqual(["file", "repo", "commits", "days_since", "authors"]);
     expect(result.rows).toEqual([["repo/a.ts", "repo", 1, 0, 1]]);
 
-    indexRepoFiles(db, [repo], fail);
+    indexRepoFiles(db, [probeCheckout(repo)], fail);
     expect(priorArt.run(db, { ...ctx, arg: "a.ts", home: dirname(repo) }).denominator).toContain(
       "in 1 of 1 repos indexed",
     );

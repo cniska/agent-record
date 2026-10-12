@@ -44,7 +44,7 @@ describe("an argument holding SQL wildcard characters", () => {
     try {
       db.run(SCHEMA_SQL);
       db.run("INSERT INTO session (id, tool) VALUES ('ab-1', 'claude'), ('aXb-2', 'claude')");
-      db.run("INSERT INTO repo_file (repo, path) VALUES ('/h/r', '/h/r/a_b.ts'), ('/h/r', '/h/r/aXb.ts')");
+      db.run("INSERT INTO repo_file (checkout, path) VALUES ('/h/r','/h/r/a_b.ts'), ('/h/r', '/h/r/aXb.ts')");
       const run = (name: string, arg: string) => findQuery(name)?.run(db, { ...ctx, arg });
 
       expect(run("thread", "a_")?.note).toBe("no session starts with a_");
@@ -64,7 +64,7 @@ describe("read path", () => {
       db.run(SCHEMA_SQL);
       const repo = (n: string) => `/h/code/${n}`;
       const addFile = (r: string, p: string) =>
-        db.run("INSERT INTO repo_file (repo, path) VALUES (?, ?)", [repo(r), `${repo(r)}/${p}`]);
+        db.run("INSERT INTO repo_file (checkout, path) VALUES (?, ?)", [repo(r), `${repo(r)}/${p}`]);
       const addCommit = (sha: string, r: string, p: string, ts: string) => {
         db.run(
           "INSERT OR IGNORE INTO repo_commit (sha, repo, label, ts, author, subject) VALUES (?, ?, ?, ?, 'a', 's')",

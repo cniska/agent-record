@@ -1,12 +1,11 @@
 import type { Database } from "bun:sqlite";
-import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { type ErrorRecord, errorRecord, isRefusal } from "./coded-error";
 import { writeTransaction } from "./db";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
 import { createIngester, type FileSpec, type SourceFile } from "./ingest";
-import { type ArchiveReport, archivePathOf, archiveRootOf, archiveSources } from "./ingest-archive";
-import { type GitReport, ingestCommits, repoRoots } from "./ingest-git";
+import { type ArchiveReport, archiveRootOf, archiveSources } from "./ingest-archive";
+import { type GitReport, ingestCommits, probeCheckouts, repoRoots } from "./ingest-git";
 import { listSource, SESSION_SOURCES, type SessionSource } from "./ingest-sources";
 import { TOOLS, type Tool } from "./ingest-tools";
 import type { Env } from "./paths";
@@ -37,8 +36,8 @@ export function sync(db: Database, env: Env = process.env): SyncReport {
     orphanSubagents: [],
     failures: [],
     dropped: [],
-    git: { repos: 0, commits: 0, files: 0 },
-    repoFiles: { repos: 0, files: 0 },
+    git: { repos: 0, commits: 0, files: 0, unchanged: 0 },
+    repoFiles: { repos: 0, files: 0, unchanged: 0 },
   };
 
   const fail = (path: string, error: unknown): void => {
@@ -70,7 +69,6 @@ export function sync(db: Database, env: Env = process.env): SyncReport {
   };
 
   report.archive = archiveSources(env, fail, ingester.resetFileSession);
-  followArchive(db, env);
 
   for (const tool of TOOLS) {
     const source = SESSION_SOURCES[tool];
@@ -97,23 +95,10 @@ export function sync(db: Database, env: Env = process.env): SyncReport {
     report.sources.push({ tool, files: files.length });
   }
 
-  const roots = repoRoots(db, fail);
-  report.git = ingestCommits(db, roots, fail);
-  report.repoFiles = indexRepoFiles(db, roots, fail);
+  const checkouts = probeCheckouts(repoRoots(db, fail), fail);
+  report.git = ingestCommits(db, checkouts, fail);
+  report.repoFiles = indexRepoFiles(db, checkouts, fail);
   return report;
-}
-
-function followArchive(db: Database, env: Env): void {
-  const pathsOf = db.prepare<{ path: string }, [string]>("SELECT path FROM source_file WHERE tool = ?");
-  const movePath = db.prepare<void, [string, string]>("UPDATE source_file SET path = ? WHERE path = ?");
-  writeTransaction(db, () => {
-    for (const tool of TOOLS) {
-      for (const { path } of pathsOf.all(tool)) {
-        const copy = archivePathOf(tool, path, env);
-        if (copy !== null && existsSync(copy)) movePath.run(copy, path);
-      }
-    }
-  });
 }
 
 function tablesWhere(db: Database, condition: string): readonly string[] {

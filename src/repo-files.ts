@@ -2,32 +2,44 @@ import type { Database } from "bun:sqlite";
 import { join } from "node:path";
 import { writeTransaction } from "./db";
 import { nulFields, ranRaw } from "./git";
+import type { Checkout } from "./git-probe";
 import type { Failure } from "./ingest-contract";
 
-export type RepoFileReport = { repos: number; files: number };
+export type RepoFileReport = { repos: number; files: number; unchanged: number };
 
 export function trackedFiles(repo: string): string[] {
   return nulFields(ranRaw(repo, ["ls-files", "-z"]), "git ls-files -z").map((path) => join(repo, path));
 }
 
-export function indexRepoFiles(db: Database, roots: readonly string[], fail: Failure): RepoFileReport {
-  const clear = db.prepare("DELETE FROM repo_file WHERE repo = ?");
-  const insert = db.prepare("INSERT INTO repo_file (repo, path) VALUES (?, ?) ON CONFLICT DO NOTHING");
+export function indexRepoFiles(db: Database, checkouts: readonly Checkout[], fail: Failure): RepoFileReport {
+  const indexUnchanged = db.query<{ one: number }, [string, string | null]>(
+    "SELECT 1 AS one FROM checkout WHERE path = ? AND index_stat IS ?",
+  );
+  const clear = db.prepare("DELETE FROM repo_file WHERE checkout = ?");
+  const insert = db.prepare("INSERT INTO repo_file (checkout, path) VALUES (?, ?) ON CONFLICT DO NOTHING");
+  const saveIndex = db.prepare<void, [string, string | null]>(
+    "INSERT INTO checkout (path, index_stat) VALUES (?, ?) ON CONFLICT(path) DO UPDATE SET index_stat = excluded.index_stat",
+  );
 
-  const report: RepoFileReport = { repos: 0, files: 0 };
+  const report: RepoFileReport = { repos: 0, files: 0, unchanged: 0 };
   writeTransaction(db, () => {
-    for (const repo of roots) {
-      let paths: string[];
-      try {
-        paths = trackedFiles(repo);
-      } catch (error) {
-        fail(repo, error);
+    for (const { path, indexStat } of checkouts) {
+      if (indexUnchanged.get(path, indexStat)) {
+        report.unchanged += 1;
         continue;
       }
-      clear.run(repo);
-      for (const path of paths) insert.run(repo, path);
+      let tracked: string[];
+      try {
+        tracked = trackedFiles(path);
+      } catch (error) {
+        fail(path, error);
+        continue;
+      }
+      clear.run(path);
+      for (const file of tracked) insert.run(path, file);
+      saveIndex.run(path, indexStat);
       report.repos += 1;
-      report.files += paths.length;
+      report.files += tracked.length;
     }
   });
   return report;

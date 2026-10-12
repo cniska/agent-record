@@ -830,35 +830,6 @@ describe("the archive", () => {
     }
   });
 
-  test("moves a record that points at the original files onto their copies without reading again", () => {
-    const root = newRoot();
-    const env = scratchEnv(root);
-    writeTranscript(env, "add the parser");
-    writeCodexRollout(env, "sessions", THREAD);
-    const db = run(env);
-    try {
-      const before = snapshot(db, root);
-      const archived = sourcePaths(db);
-      db.run("PRAGMA foreign_keys = ON");
-      for (const [tool, live] of [
-        ["claude", claudeProjectsDir(env)],
-        ["codex", codexDir(env)],
-      ] as const) {
-        db.run("UPDATE source_file SET path = replace(path, ?, ?)", [join(archiveDir(env), tool), live]);
-      }
-      expect(sourcePaths(db).some((path) => path.startsWith(archiveDir(env)))).toBe(false);
-      rmSync(archiveDir(env), { recursive: true });
-
-      const report = sync(db, env);
-      expect(report.failures).toEqual([]);
-      expect(report.filesRead).toBe(0);
-      expect(sourcePaths(db)).toEqual(archived);
-      expect(snapshot(db, root)).toEqual(before);
-    } finally {
-      db.close();
-    }
-  });
-
   test("rebuilds every session from the archive after the original files are gone", () => {
     const root = newRoot();
     const env = scratchEnv(root);
@@ -872,6 +843,18 @@ describe("the archive", () => {
       expect(rebuild(db, env).failures).toEqual([]);
       expect(snapshot(db, root)).toEqual(before);
       expect(before.sessions.map((s) => s.id)).toEqual([THREAD, SESSION].sort());
+    } finally {
+      db.close();
+    }
+  });
+
+  test("forgets where it read every checkout on a rebuild, so the next sync reads each again", () => {
+    const env = scratchEnv(newRoot());
+    const db = run(env);
+    try {
+      db.run("INSERT INTO checkout (path, head, index_stat) VALUES ('/code/gone', 'abc', '1:1')");
+      expect(rebuild(db, env).failures).toEqual([]);
+      expect(db.query("SELECT path FROM checkout").all()).toEqual([]);
     } finally {
       db.close();
     }
