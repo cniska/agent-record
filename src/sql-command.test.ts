@@ -76,7 +76,8 @@ describe("agent-record sql", () => {
           kind: "refusal",
           code: "record_busy",
           meta: { path },
-          resolve: "run this again once the other agent-record run ends",
+          message: `another process holds ${path}, or SQLite is recovering it after a crash`,
+          resolve: "run this again; if it keeps failing, close whatever holds the file",
         }),
       );
     } finally {

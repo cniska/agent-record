@@ -83,7 +83,7 @@ function claim(path: string): void {
     if (living !== null) throw refuseRecord("lock_held", { path, pid: living });
     if (tryInstall(staging, path)) return;
     const winner = holderOf(path, path);
-    if (winner === null) throw refuseRecord("record_busy", { path });
+    if (winner === null) throw refuseRecord("lock_contended", { path });
     throw refuseRecord("lock_held", { path, pid: winner });
   } finally {
     rmSync(staging, { recursive: true, force: true });

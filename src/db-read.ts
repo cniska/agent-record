@@ -1,6 +1,6 @@
 import { Database, SQLiteError } from "bun:sqlite";
 import { existsSync } from "node:fs";
-import { refuseOtherVersion } from "./db";
+import { isFresh, refuseOtherVersion } from "./db";
 import { refuseRecord } from "./db-contract";
 
 export function readingRecord<T>(path: string, use: (db: Database) => T): T {
@@ -9,6 +9,7 @@ export function readingRecord<T>(path: string, use: (db: Database) => T): T {
     const db = new Database(path, { readwrite: true, create: false });
     try {
       db.run("PRAGMA query_only = ON");
+      if (isFresh(db)) throw refuseRecord("no_database", { path });
       refuseOtherVersion(db);
       return use(db);
     } finally {

@@ -5,6 +5,7 @@ export const refuseRecord = refuser<{
   readonly no_database: { readonly path: string };
   readonly lock_held: { readonly path: string; readonly pid: number };
   readonly record_busy: { readonly path: string };
+  readonly lock_contended: { readonly path: string };
   readonly lock_unreadable: { readonly path: string; readonly detail: string };
 }>({
   record_version: {
@@ -25,7 +26,11 @@ export const refuseRecord = refuser<{
     resolve: ({ pid }) => `run this again once process ${pid} has ended`,
   },
   record_busy: {
-    message: ({ path }) => `another agent-record run is writing ${path} and holds it`,
+    message: ({ path }) => `another process holds ${path}, or SQLite is recovering it after a crash`,
+    resolve: () => "run this again; if it keeps failing, close whatever holds the file",
+  },
+  lock_contended: {
+    message: ({ path }) => `another agent-record run is taking ${path}`,
     resolve: () => "run this again once the other agent-record run ends",
   },
   lock_unreadable: {

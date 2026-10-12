@@ -32,6 +32,13 @@ describe("opening the database to read", () => {
     ).toThrow(expect.objectContaining({ code: "SQLITE_READONLY" }));
   });
 
+  test("names a record the first sync has created but not yet filled as missing, not as another version", () => {
+    const path = join(mkdtempSync(join(tmpdir(), "agent-record-db-read-")), "sessions.db");
+    new Database(path, { create: true }).close();
+
+    expect(() => readingRecord(path, () => null)).toThrow(expect.objectContaining({ code: "no_database" }));
+  });
+
   test("names a missing database without creating one", () => {
     const path = join(mkdtempSync(join(tmpdir(), "agent-record-db-read-")), "sessions.db");
 

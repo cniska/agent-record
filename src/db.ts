@@ -11,7 +11,7 @@ export function recordVersion(db: Database): number {
   return row.user_version;
 }
 
-function isFresh(db: Database): boolean {
+export function isFresh(db: Database): boolean {
   return (
     recordVersion(db) === 0 &&
     db.query<{ n: number }, []>("SELECT count(*) AS n FROM sqlite_master").get()?.n === 0
