@@ -150,7 +150,7 @@ A coding agent's context ends at compaction, at a handoff, or when another agent
 - **AC-25** — A Codex token record with more cached input than input: skipped and reported as a dropped line. (FR-60)
 - **AC-26** — Sync with the network unavailable: it succeeds. (NF-1)
 - **AC-27** — Sync fixtures, then sync again with nothing changed: the second report reads no file, archives no bytes, and counts every checkout unchanged. (NF-2)
-- **AC-28** — Interrupt a sync mid-file: the next sync reads that file from where the last whole write left it, with no duplicate rows. (NF-4)
+- **AC-28** — A sync whose record write fails after it archived a file leaves the record as the sync before left it; the next sync records the file once, from where the last committed write left it. (NF-4)
 - **AC-29** — Each failure in NF-5 produces a refusal with a code and fix, never `command_failed`. (NF-5)
 - **AC-30** — On APFS, sync a large session file: the archive holds a copy, and the volume's free space drops by far less than the file's size. (NF-3)
 - **AC-31** — Sync with a fixture repo, delete the repo, sync, then `rebuild`: the sync keeps its commits, the rebuild has none. (FR-23)

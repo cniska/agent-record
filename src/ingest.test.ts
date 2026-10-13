@@ -890,6 +890,37 @@ describe("the archive", () => {
     }
   });
 
+  test("leaves the record unchanged when its write fails after archiving a file, and records the file once next time", () => {
+    const freshRoot = newRoot();
+    const freshEnv = scratchEnv(freshRoot);
+    writeTranscript(freshEnv, "add the parser");
+    const freshDb = run(freshEnv);
+    const expected = snapshot(freshDb, freshRoot);
+    freshDb.close();
+
+    const root = newRoot();
+    const env = scratchEnv(root);
+    const lines = claudeTranscriptLines(SESSION);
+    writePrefix(claudeTranscriptPath(env), lines, bytesThroughLine(lines, 2));
+    const db = run(env);
+    try {
+      const before = snapshot(db, root);
+      writePrefix(claudeTranscriptPath(env), lines, fullBytes(lines));
+      db.run(
+        "CREATE TEMP TRIGGER refuse_cursor BEFORE UPDATE ON source_file BEGIN SELECT RAISE(ABORT, 'interrupted'); END",
+      );
+      expect(() => sync(db, env)).toThrow("interrupted");
+      expect(snapshot(db, root)).toEqual(before);
+
+      db.run("DROP TRIGGER refuse_cursor");
+      expect(sync(db, env).failures).toEqual([]);
+      expect(snapshot(db, root)).toEqual(expected);
+      expect(sync(db, env).filesRead).toBe(0);
+    } finally {
+      db.close();
+    }
+  });
+
   test("stops on a fault while resetting a session whose copy it would replace, keeping the old copy", () => {
     const root = newRoot();
     const env = scratchEnv(root);

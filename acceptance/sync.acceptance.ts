@@ -422,7 +422,7 @@ test("AC-22 a second sync is refused naming the lock holder, and a lock from an 
   expect(existsSync(lock)).toBe(false);
 });
 test.todo("AC-26 a sync succeeds with the network unavailable", () => {});
-test.todo("AC-28 a sync after an interrupted one resumes the file from its last whole write without duplicates", () => {});
+test.todo("AC-28 a sync whose record write fails after archiving leaves the record unchanged, and the next records the file once", () => {});
 test("AC-30 a fresh archive copy of a large file takes far less free space than its size", () => {
   const home = scratchHome();
   const live = livePath(home, LARGE);
