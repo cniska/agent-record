@@ -1,6 +1,15 @@
 import { Database } from "bun:sqlite";
 import { expect } from "bun:test";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { z } from "zod";
@@ -25,7 +34,13 @@ const TOOL_ROOTS: Readonly<Record<Tool, readonly string[]>> = {
 
 export type Fixture = `${Tool}/${string}`;
 
-export type Home = { readonly root: string; readonly record: string; readonly archive: string };
+export type Home = {
+  readonly root: string;
+  readonly record: string;
+  readonly archive: string;
+  readonly state: string;
+  readonly bin: string;
+};
 
 type Ran = { readonly exitCode: number; readonly stdout: string; readonly stderr: string };
 
@@ -49,7 +64,13 @@ export function scratchDirOutsideTemp(): string {
 export function scratchHome(): Home {
   const root = scratchTempDir();
   const data = join(root, "data", "agent-record");
-  return { root, record: join(data, "sessions.db"), archive: join(data, "archive") };
+  return {
+    root,
+    record: join(data, "sessions.db"),
+    archive: join(data, "archive"),
+    state: join(root, "state", "agent-record"),
+    bin: join(root, "bin"),
+  };
 }
 
 export function removeScratch(): void {
@@ -115,13 +136,21 @@ export function scratchRepo(repo: string, origin: string, commits: readonly Comm
   mkdirSync(repo, { recursive: true });
   git(repo, ["init", "--quiet", "--initial-branch=main"]);
   git(repo, ["remote", "add", "origin", origin]);
-  for (const { subject, file, at } of commits) {
-    mkdirSync(dirname(join(repo, file)), { recursive: true });
-    writeFileSync(join(repo, file), `${subject}\n`);
-    git(repo, ["add", file]);
-    git(repo, ["commit", "--quiet", "-m", subject], at);
-  }
+  for (const commit of commits) commitIn(repo, commit);
   return repo;
+}
+
+export function scratchWorktree(repo: string, worktree: string, commit: Commit): string {
+  git(repo, ["worktree", "add", "--quiet", "-b", "side", worktree]);
+  commitIn(worktree, commit);
+  return worktree;
+}
+
+function commitIn(checkout: string, { subject, file, at }: Commit): void {
+  mkdirSync(dirname(join(checkout, file)), { recursive: true });
+  writeFileSync(join(checkout, file), `${subject}\n`);
+  git(checkout, ["add", file]);
+  git(checkout, ["commit", "--quiet", "-m", subject], at);
 }
 
 export function sync(home: Home): SyncResult {
@@ -132,6 +161,14 @@ export function rebuild(home: Home): SyncResult {
   return succeeded(runCli(home, ["rebuild"]), "rebuild", SYNC_RESULT);
 }
 
+export function withLaunchctl(home: Home, agentLoaded: boolean): Home {
+  const launchctl = join(home.bin, "launchctl");
+  mkdirSync(home.bin, { recursive: true });
+  writeFileSync(launchctl, `#!/bin/sh\nexit ${agentLoaded ? 0 : 1}\n`);
+  chmodSync(launchctl, 0o755);
+  return home;
+}
+
 export function syncedHome(home: Home = scratchHome()): Home {
   sync(home);
   return home;
@@ -140,7 +177,7 @@ export function syncedHome(home: Home = scratchHome()): Home {
 export function runCli(home: Home, args: readonly string[]): Ran {
   const ran = Bun.spawnSync([process.execPath, CLI, ...args], {
     env: {
-      PATH: process.env.PATH,
+      PATH: `${home.bin}:${process.env.PATH}`,
       BUN_RUNTIME_TRANSPILER_CACHE_PATH: BUN_CACHE_OUTSIDE_HOMES,
       HOME: home.root,
       XDG_DATA_HOME: join(home.root, "data"),
@@ -197,6 +234,14 @@ export const DOCTOR_RESULT = z.strictObject({
   failing: z.number(),
 });
 
+type DoctorReport = z.infer<typeof DOCTOR_RESULT>;
+
+export function doctor(home: Home): { readonly exitCode: number; readonly report: DoctorReport } {
+  const ran = runCli(home, ["doctor"]);
+  expect(ran.stderr).toBe("");
+  return { exitCode: ran.exitCode, report: okLine(ran, "doctor", DOCTOR_RESULT) };
+}
+
 export const USAGE_ENTRY = z.strictObject({ name: z.string(), usage: z.string(), summary: z.string() });
 
 const ONE_LINE = /^[^\n]+\n$/;
@@ -234,6 +279,22 @@ export function schemaVersion(home: Home): number {
   using db = new Database(home.record, { readonly: true });
   return z.strictObject({ user_version: z.number() }).parse(db.query("PRAGMA user_version").get())
     .user_version;
+}
+
+export function withSyncFinishedAt(home: Home, at: string): Home {
+  mkdirSync(home.state, { recursive: true });
+  writeFileSync(
+    join(home.state, "last-sync"),
+    `${JSON.stringify({ kind: "finished", at, failures: null })}\n`,
+  );
+  return home;
+}
+
+export function lockHeldBy(home: Home, pid: number): string {
+  const lock = join(home.state, "locks", "record");
+  mkdirSync(lock, { recursive: true });
+  writeFileSync(join(lock, "pid"), String(pid));
+  return lock;
 }
 
 export function setSchemaVersion(home: Home, version: number): void {

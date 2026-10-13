@@ -1,0 +1,1 @@
+{"sessionId":"worktree-session","cwd":"{{cwd}}","version":"2.1.260","entrypoint":"cli","isSidechain":false,"userType":"external","type":"user","uuid":"worktree-session-u1","timestamp":"2026-09-16T11:01:00.000Z","promptSource":"typed","message":{"role":"user","content":"add the lexer"}}

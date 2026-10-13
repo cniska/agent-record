@@ -2,24 +2,29 @@ import { afterEach, expect, test } from "bun:test";
 import {
   appendFileSync,
   chmodSync,
+  existsSync,
   mkdirSync,
   readFileSync,
   renameSync,
   rmSync,
+  statfsSync,
   statSync,
   utimesSync,
   writeFileSync,
 } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   archivedPath,
   type Fixture,
   filesUnder,
   type Home,
   livePath,
+  lockHeldBy,
   rebuild,
+  refused,
   removeScratch,
   rowsOf,
+  runCli,
   scratchDirOutsideTemp,
   scratchHome,
   scratchRepo,
@@ -27,23 +32,33 @@ import {
   sync,
   withFixtures,
 } from "./cli";
+import {
+  CLAUDE,
+  CODEX,
+  CODEX_OVERCACHED,
+  CODEX_ROLLOUT,
+  CODEX_THREAD,
+  GROK,
+  GROK_UPDATES,
+  LONG,
+  OMP,
+  ORPHAN,
+  PI,
+  REPO_SESSION,
+  TEMP_REPO_SESSION,
+} from "./fixture-names";
 
 afterEach(removeScratch);
 
-const CLAUDE: Fixture = "claude/-Users-x-code-demo/claude-session.jsonl";
-const LONG: Fixture = "claude/-Users-x-code-demo/long-session.jsonl";
-const ORPHAN: Fixture = "claude/-Users-x-code-demo/gone-parent/subagents/agent-orphan.jsonl";
-const CODEX_THREAD = "0199a000-0000-7000-8000-000000000001";
-const CODEX_ROLLOUT = `rollout-2026-09-16T10-00-00-${CODEX_THREAD}.jsonl`;
-const CODEX: Fixture = `codex/sessions/2026/09/16/${CODEX_ROLLOUT}`;
-const CODEX_OVERCACHED: Fixture =
-  "codex/sessions/2026/09/16/rollout-2026-09-16T11-00-00-0199a000-0000-7000-8000-000000000002.jsonl";
-const GROK: Fixture = "grok/-Users-x-code-demo/grok-session";
-const GROK_UPDATES: Fixture = "grok/-Users-x-code-demo/grok-session/updates.jsonl";
-const PI: Fixture = "pi/--Users-x-code-demo--/2026-09-16T10-00-00-000Z_pi-session.jsonl";
-const OMP: Fixture = "omp/--Users-x-code-demo--/2026-09-16T10-00-00-000Z_omp-session.jsonl";
-const REPO_SESSION: Fixture = "claude/-repo/repo-session.jsonl";
-const TEMP_REPO_SESSION: Fixture = "claude/-temp-repo/temp-repo-session.jsonl";
+const LARGE: Fixture = "claude/-Users-x-code-demo/large-session.jsonl";
+const LARGE_LINE_BYTES = 1 << 20;
+const LARGE_LINES = 64;
+const CLONE_SHARE_BOUND = 4;
+
+const freeBytes = (dir: string): number => {
+  const { bavail, bsize } = statfsSync(dir);
+  return bavail * bsize;
+};
 
 const EVERY_TOOL: readonly Fixture[] = [CLAUDE, CODEX, GROK, PI, OMP];
 const EVERY_TOOL_TRANSCRIPT: readonly Fixture[] = [CLAUDE, CODEX, GROK_UPDATES, PI, OMP];
@@ -328,7 +343,38 @@ test("AC-31 a sync keeps a deleted repo's commits and a rebuild has none", () =>
   expect(rowsOf(home, subjects)).toEqual([]);
 });
 
-test.todo("AC-22 a second sync is refused naming the lock holder, and a lock from an ended process is taken", () => {});
+test("AC-22 a second sync is refused naming the lock holder, and a lock from an ended process is taken", () => {
+  const home = withFixtures(scratchHome(), [CLAUDE]);
+  const lock = lockHeldBy(home, process.pid);
+  const error = refused(runCli(home, ["sync"]), "sync");
+  expect({ code: error.code, meta: error.meta, resolve: error.resolve }).toEqual({
+    code: "lock_held",
+    meta: { path: lock, pid: process.pid },
+    resolve: `run this again once process ${process.pid} has ended`,
+  });
+  expect(existsSync(home.record)).toBe(false);
+
+  const ended = Bun.spawnSync(["true"]).pid;
+  lockHeldBy(home, ended);
+  sync(home);
+  expect(rowsOf(home, "select id from session")).toEqual([["claude-session"]]);
+  expect(existsSync(lock)).toBe(false);
+});
 test.todo("AC-26 a sync succeeds with the network unavailable", () => {});
 test.todo("AC-28 a sync after an interrupted one resumes the file from its last whole write without duplicates", () => {});
-test.todo("AC-30 a fresh archive copy on APFS adds no allocated blocks", () => {});
+test("AC-30 a fresh archive copy of a large file takes far less free space than its size", () => {
+  const home = scratchHome();
+  const live = livePath(home, LARGE);
+  mkdirSync(dirname(live), { recursive: true });
+  const filler = "x".repeat(LARGE_LINE_BYTES);
+  const line = `${JSON.stringify({ type: "file-history-snapshot", messageId: "large", snapshot: filler })}\n`;
+  writeFileSync(live, line.repeat(LARGE_LINES));
+  const size = statSync(live).size;
+
+  const freeBefore = freeBytes(home.root);
+  sync(home);
+  const taken = freeBefore - freeBytes(home.root);
+
+  expect(readFileSync(archivedPath(home, LARGE)).equals(readFileSync(live))).toBe(true);
+  expect(taken).toBeLessThan(size / CLONE_SHARE_BOUND);
+});

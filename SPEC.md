@@ -141,7 +141,7 @@ A coding agent's context ends at compaction, at a handoff, or when another agent
 - **AC-16** — `prior-art` over fixture repos with a worktree and more matching files per repo than it ranks: matches folded onto the checkout, newest first, and the denominator saying only some were ranked. (FR-42)
 - **AC-17** — `sql` with a SELECT, an INSERT, a syntax error, a column named twice and a blob: columns and rows as a query prints them, a `sql_writes` refusal, a `sql_invalid` refusal with SQLite's reason, a `sql_columns_repeated` refusal naming the column, and a `sql_blob` refusal naming `hex()`. (FR-43)
 - **AC-18** — `doctor` with no record, a busy record, a stale sync stamp, a failed sync, a sync with failed files, and each launchd agent state: each check's state and fix, and exit 1 exactly when one fails. (FR-45, FR-46, FR-47, FR-48, FR-49)
-- **AC-19** — A `sync` that succeeds, one with failed files and one that faults: each leaves an outcome `doctor` reads. (FR-50)
+- **AC-19** — A `sync` that succeeds, one with failed files and one that fails: each leaves an outcome `doctor` reads. (FR-50)
 - **AC-20** — `agent install` with no agent, the same agent, and a different one: written with the loading command, unchanged, and replaced with a backup. (FR-51, FR-52)
 - **AC-21** — Run the plugin hook with and without `agent-record` on PATH: it starts `sync` and prints the note, or does nothing. (FR-53, FR-54)
 - **AC-22** — Start a second `sync` while one holds the lock: it is refused naming the holder. Leave a lock from an ended process: the next `sync` takes it. (FR-55, FR-56)
@@ -152,7 +152,7 @@ A coding agent's context ends at compaction, at a handoff, or when another agent
 - **AC-27** — Sync fixtures, then sync again with nothing changed: the second report reads no file, archives no bytes, and counts every checkout unchanged. (NF-2)
 - **AC-28** — Interrupt a sync mid-file: the next sync reads that file from where the last whole write left it, with no duplicate rows. (NF-4)
 - **AC-29** — Each failure in NF-5 produces a refusal with a code and fix, never `command_failed`. (NF-5)
-- **AC-30** — On APFS, a fresh archive copy adds no allocated blocks. (NF-3)
+- **AC-30** — On APFS, sync a large session file: the archive holds a copy, and the volume's free space drops by far less than the file's size. (NF-3)
 - **AC-31** — Sync with a fixture repo, delete the repo, sync, then `rebuild`: the sync keeps its commits, the rebuild has none. (FR-23)
 
 ## 6. Deliverables
@@ -160,7 +160,7 @@ A coding agent's context ends at compaction, at a handoff, or when another agent
 - **D-1** — The `agent-record` CLI, run by Bun from a checkout and linked onto PATH by `mise install`.
 - **D-2** — The `cniska-record` Claude Code plugin in `plugin/`.
 - **D-3** — `README.md` (install, commands, where the record lives), `AGENTS.md` (repository rules), `src/README.md` (module map), and this spec.
-- **D-4** — The test suite, run by `bun run check`, and the acceptance suite in `acceptance/`, run by `bun run acceptance`.
+- **D-4** — The test suite, run by `bun run check`, and the acceptance suite in `acceptance/`, run by `bun run acceptance`. The acceptance suite drives only the CLI; its only reaches past it, each in `acceptance/cli.ts`, plant state no command makes without waiting real time (the record's schema version, the last-sync stamp, a held lock) or stand in for the OS (a `launchctl` on PATH).
 
 ## 7. Constraints (fixed)
 
