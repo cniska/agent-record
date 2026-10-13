@@ -16,6 +16,13 @@ Flat, so a module is found by name. A file's prefix is its module: `db-read.ts` 
 | `cli` | Dispatch a command and print its result or error (a refusal or a fault) as one JSON line |
 | `coded-error`, `error`, `assert`, `paths`, `file` | Coded errors, refusals and faults; `unreachable` and `invariant`; where every file lives; copying a file aside before it is replaced |
 
+## Terms
+
+- **checkout**: a git worktree's directory on disk (`checkout.path`, `repo_file.checkout`).
+- **repo**: what every worktree of one git common directory shares, named by that directory's parent, which is the main checkout when the git directory is its `.git` (`repo_commit.repo`).
+- **project**: a session's `cwd`, cut at the Claude worktree segment when it lies inside one (`session.project`).
+- **label**: a repo's `owner/name`, read from `remote.origin.url` (`repo_commit.label`).
+
 ## Where to start
 
 - `cli-commands.ts` lists the commands, each loaded only when it runs; `cli-contract.ts` is what one is.

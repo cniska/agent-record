@@ -1,8 +1,11 @@
-import { scalar, select } from "./query";
+import { invariant } from "./assert";
+import { select } from "./query";
 import type { Query } from "./query-contract";
 import { withoutWorktree } from "./worktree";
 
-const PER_REPO = 3;
+const PER_WHERE = 3;
+
+const MATCHES = "instr(lower(path), lower(?)) > 0";
 
 export const priorArt: Query = {
   name: "prior-art",
@@ -13,56 +16,64 @@ export const priorArt: Query = {
     const result = select(
       db,
       `WITH matched AS (
-         SELECT ${withoutWorktree("f.path")} AS path, ${withoutWorktree("f.checkout")} AS repo
-         FROM repo_file f
-         WHERE instr(lower(f.path), lower(?)) > 0
+         SELECT ${withoutWorktree("path")} AS path, ${withoutWorktree("checkout")} AS checkout
+         FROM repo_file
+         WHERE ${MATCHES}
        ),
        dated AS (
          SELECT m.path AS path,
-                coalesce(min(c.label), replace(min(m.repo), ? || '/', '')) AS repo,
+                coalesce(min(c.label), replace(min(m.checkout), ? || '/', '')) AS "where",
                 count(DISTINCT cf.sha) AS commits,
                 cast(julianday('now') - julianday(max(rc.ts)) AS INTEGER) AS days_since,
                 count(DISTINCT rc.author) AS authors
          FROM matched m
          LEFT JOIN (SELECT DISTINCT repo, label FROM repo_commit WHERE label IS NOT NULL) c
-           ON c.repo = m.repo
+           ON c.repo = m.checkout
          LEFT JOIN commit_file cf ON cf.path = m.path
          LEFT JOIN repo_commit rc ON rc.sha = cf.sha
          GROUP BY m.path
        ),
        ranked AS (
          SELECT *, row_number() OVER (
-           PARTITION BY repo ORDER BY days_since IS NULL, days_since ASC, commits DESC
-         ) AS rank_in_repo
+           PARTITION BY "where" ORDER BY days_since IS NULL, days_since ASC, commits DESC
+         ) AS rank_in_where
          FROM dated
        )
-       SELECT replace(path, ? || '/', '') AS file, repo, commits, days_since, authors
+       SELECT replace(path, ? || '/', '') AS file, "where", commits, days_since, authors
        FROM ranked
-       WHERE rank_in_repo <= ${PER_REPO}
+       WHERE rank_in_where <= ${PER_WHERE}
        ORDER BY days_since IS NULL, days_since ASC, commits DESC`,
       [fragment, ctx.home, ctx.home],
     );
 
-    const repoAt = result.columns.indexOf("repo");
-    const repos = new Set(result.rows.map((row) => row[repoAt])).size;
-    const total = scalar(
-      db,
-      `SELECT count(DISTINCT ${withoutWorktree("path")}) AS n FROM repo_file WHERE instr(lower(path), lower(?)) > 0`,
-      [fragment],
-    );
+    const counts = db
+      .query<{ total: number; checkouts: number; indexed: number }, [string]>(
+        `WITH folded AS (
+           SELECT ${withoutWorktree("path")} AS path, ${withoutWorktree("checkout")} AS checkout, ${MATCHES} AS hit
+           FROM repo_file
+         )
+         SELECT count(DISTINCT path) FILTER (WHERE hit) AS total,
+                count(DISTINCT checkout) FILTER (WHERE hit) AS checkouts,
+                count(DISTINCT checkout) AS indexed
+         FROM folded`,
+      )
+      .get(fragment);
+    invariant(counts !== null, "a count returns one row");
+    const { total, checkouts, indexed } = counts;
     return {
       denominator:
-        `${total} tracked files match "${fragment}", in ${repos} of ` +
-        `${scalar(db, `SELECT count(DISTINCT ${withoutWorktree("checkout")}) AS n FROM repo_file`)} repos indexed` +
-        (result.rows.length < total ? `; the ${PER_REPO} most recently touched in each repo are ranked` : ""),
+        `${total} tracked files match "${fragment}", in ${checkouts} of ${indexed} checkouts indexed` +
+        (result.rows.length < total
+          ? `; the ${PER_WHERE} most recently touched under each where are ranked`
+          : ""),
       ...result,
       note:
         total === 0
           ? "nothing on disk matches; `agent-record sync` indexes the repos the corpus names, and only those"
           : "Recency and commit count, not quality: this cannot tell a file that was got right from one that was " +
             "abandoned, and a file copied between repos looks as settled as one that was worked out. A repo the " +
-            "owner only cloned ranks beside their own, so read the repo column before the file. `days_since` is " +
-            "empty for a file no commit in the corpus has touched.",
+            "owner only cloned ranks beside their own, so read the where column, the repo's owner/name or else " +
+            "the checkout's path, before the file. `days_since` is empty for a file no commit in the corpus has touched.",
     };
   },
 };

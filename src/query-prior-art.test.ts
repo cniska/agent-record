@@ -31,12 +31,12 @@ test("dates a file found only through a worktree by the commits of its repositor
     indexRepoFiles(db, [probeCheckout(worktree)], fail);
 
     const result = priorArt.run(db, { ...ctx, arg: "a.ts", home: dirname(repo) });
-    expect(result.columns).toEqual(["file", "repo", "commits", "days_since", "authors"]);
+    expect(result.columns).toEqual(["file", "where", "commits", "days_since", "authors"]);
     expect(result.rows).toEqual([["repo/a.ts", "repo", 1, 0, 1]]);
 
     indexRepoFiles(db, [probeCheckout(repo)], fail);
     expect(priorArt.run(db, { ...ctx, arg: "a.ts", home: dirname(repo) }).denominator).toContain(
-      "in 1 of 1 repos indexed",
+      "in 1 of 1 checkouts indexed",
     );
   } finally {
     db.close();
