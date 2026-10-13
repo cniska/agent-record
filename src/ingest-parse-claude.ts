@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MessageId, ResponseId, ToolCallId, TurnId } from "./ingest-ids";
 import { jsonOrNull, lineOf, nonEmpty } from "./ingest-parse";
 import {
   type MessageRow,
@@ -20,10 +21,10 @@ const SKILL_BODY_PREFIX = "Base directory for this skill:";
 const ContentBlock = z.looseObject({
   type: z.string().optional(),
   text: z.string().optional(),
-  id: z.string().optional(),
+  id: ToolCallId.optional(),
   name: z.string().optional(),
   input: z.record(z.string(), z.unknown()).nullish(),
-  tool_use_id: z.string().optional(),
+  tool_use_id: ToolCallId.optional(),
   is_error: z.boolean().optional(),
   content: z.unknown().optional(),
 });
@@ -45,7 +46,7 @@ const ClaudeUsage = z.looseObject({
 
 const ClaudeLine = z.looseObject({
   type: z.string().optional(),
-  uuid: z.string().optional(),
+  uuid: MessageId.optional(),
   timestamp: Timestamp.optional(),
   cwd: z.string().optional(),
   gitBranch: z.string().optional(),
@@ -55,15 +56,15 @@ const ClaudeLine = z.looseObject({
   isMeta: z.boolean().nullish(),
   session_id: z.string().optional(),
   promptSource: z.string().optional(),
-  promptId: z.string().optional(),
+  promptId: TurnId.optional(),
   permissionMode: z.string().optional(),
   origin: z.looseObject({ kind: z.string().optional() }).optional(),
   attributionSkill: z.string().nullish(),
   requestId: z.string().optional(),
   effort: z.string().optional(),
   agentId: z.string().optional(),
-  parentUuid: z.string().nullish(),
-  sourceToolUseID: z.string().nullish(),
+  parentUuid: MessageId.nullish(),
+  sourceToolUseID: ToolCallId.nullish(),
   interruptedMessageId: z.string().nullish(),
   toolDenialKind: z.string().nullish(),
   userFeedback: z.unknown().optional(),
@@ -81,7 +82,7 @@ const ClaudeLine = z.looseObject({
     .optional(),
   message: z
     .looseObject({
-      id: z.string().optional(),
+      id: MessageId.optional(),
       model: z.string().optional(),
       content: z.union([z.string(), z.array(ContentBlock.nullable())]).optional(),
       usage: ClaudeUsage.nullish(),
@@ -156,7 +157,7 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
         continue;
       }
       turns.push({
-        turnId: line.uuid,
+        turnId: TurnId.parse(line.uuid),
         tsStart: line.durationMs == null ? null : timestampMinus(ts, line.durationMs),
         tsEnd: ts,
         durationMs: line.durationMs ?? null,
@@ -232,7 +233,7 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
       const u = line.message.usage;
       if (u) {
         usage.push({
-          responseId: line.message.id,
+          responseId: ResponseId.parse(line.message.id),
           messageId: line.message.id,
           ts,
           model,
@@ -271,17 +272,16 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
       const body = line.isMeta === true && text ? parseSkillBody(text) : null;
       if (body) {
         const { name, ...fields } = body;
-        const toolUseId = nonEmpty(line.sourceToolUseID);
-        const parentUuid = nonEmpty(line.parentUuid);
-        if (toolUseId) skillLoads.push({ toolUseId, ...fields });
-        else if (parentUuid) skillLoads.push({ parentUuid, skillName: name, ...fields });
+        if (line.sourceToolUseID) skillLoads.push({ toolUseId: line.sourceToolUseID, ...fields });
+        else if (line.parentUuid)
+          skillLoads.push({ parentUuid: line.parentUuid, skillName: name, ...fields });
       }
       messages.push({
         id: line.uuid,
         ts,
         role: "user",
         model: null,
-        turnId: nonEmpty(line.promptId),
+        turnId: line.promptId ?? null,
         promptSource: nonEmpty(line.promptSource),
         originKind: nonEmpty(line.origin?.kind),
         isMeta: line.isMeta === true,

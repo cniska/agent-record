@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { claudeTranscriptLines, withoutTimestamp, withTimestamp } from "./fixtures.test-support";
+import { claudeTranscriptLines, withFields, withoutTimestamp } from "./fixtures.test-support";
 import { parseClaudeChunk } from "./ingest-parse-claude";
 
 const lines = claudeTranscriptLines("s-1").map((l) => JSON.stringify(l));
@@ -188,7 +188,7 @@ describe("parseClaudeChunk", () => {
 
   test("stores a time with an offset as UTC", () => {
     const [, first] = claudeTranscriptLines("s-1");
-    const offset = withTimestamp(first, "2026-09-16T12:01:00+02:00");
+    const offset = withFields(first, { timestamp: "2026-09-16T12:01:00+02:00" });
     expect(parseClaudeChunk([offset], 1).messages.map((m) => m.ts)).toEqual<string[]>([
       "2026-09-16T10:01:00.000Z",
     ]);
@@ -196,7 +196,7 @@ describe("parseClaudeChunk", () => {
 
   test("drops a line whose time does not parse", () => {
     const [, first] = claudeTranscriptLines("s-1");
-    const unparsable = withTimestamp(first, "2026-02-30T10:00:00Z");
+    const unparsable = withFields(first, { timestamp: "2026-02-30T10:00:00Z" });
     const chunk = parseClaudeChunk([unparsable], 7);
     expect(chunk.dropped).toEqual([7]);
     expect(chunk.messages).toEqual([]);
@@ -233,6 +233,14 @@ describe("parseClaudeChunk", () => {
 
   test("reports nothing dropped for a chunk that parsed whole", () => {
     expect(parsed.dropped).toEqual([]);
+  });
+
+  test("drops a line whose id is empty", () => {
+    const [, first] = claudeTranscriptLines("s-1");
+    const unnamed = withFields(first, { uuid: "" });
+    const chunk = parseClaudeChunk([unnamed], 9);
+    expect(chunk.dropped).toEqual([9]);
+    expect(chunk.messages).toEqual([]);
   });
 
   test("keeps no cursor state", () => {

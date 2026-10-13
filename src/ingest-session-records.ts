@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MessageId, ResponseId, ToolCallId, TurnId } from "./ingest-ids";
 import { SkillLoadRow } from "./ingest-skill-load";
 import { Timestamp } from "./timestamp";
 
@@ -35,11 +36,11 @@ export const NO_FACTS: SessionFacts = {
 
 export const MessageRow = z
   .strictObject({
-    id: z.string(),
+    id: MessageId,
     ts: Timestamp,
     role: z.enum(ROLES),
     model: nullableString,
-    turnId: nullableString,
+    turnId: TurnId.nullable(),
     promptSource: nullableString,
     originKind: nullableString,
     isMeta: z.boolean(),
@@ -57,7 +58,7 @@ export type MessageRow = z.infer<typeof MessageRow>;
 
 export const UsageRow = z
   .strictObject({
-    responseId: z.string(),
+    responseId: ResponseId,
     ts: Timestamp,
     model: nullableString,
     inputTokens: z.number(),
@@ -65,14 +66,14 @@ export const UsageRow = z
     cacheWriteTokens: z.number(),
     outputTokens: z.number(),
     attributionSkill: nullableString,
-    messageId: nullableString,
+    messageId: MessageId.nullable(),
   })
   .readonly();
 export type UsageRow = z.infer<typeof UsageRow>;
 
 export const TurnRow = z
   .strictObject({
-    turnId: z.string(),
+    turnId: TurnId,
     tsStart: nullableTime,
     tsEnd: nullableTime,
     durationMs: nullableNumber,
@@ -86,8 +87,8 @@ export type TurnRow = z.infer<typeof TurnRow>;
 
 export const ToolCallRow = z
   .strictObject({
-    id: z.string(),
-    messageId: nullableString,
+    id: ToolCallId,
+    messageId: MessageId.nullable(),
     model: nullableString,
     attributionSkill: nullableString,
     tsCall: nullableTime,

@@ -4,6 +4,7 @@ import { basename } from "node:path";
 import { writeTransaction } from "./db";
 import { gitSubcommands } from "./git-operations";
 import { readChunk } from "./ingest-chunk";
+import type { SessionId } from "./ingest-ids";
 import type { ChunkParser, ParsedChunk, SessionFacts } from "./ingest-session-records";
 import { readingSource } from "./ingest-source-read";
 import type { Kind, Tool } from "./ingest-tools";
@@ -15,8 +16,8 @@ export type FileSpec = SourceFile & { readonly tool: Tool };
 export type SourceFile = {
   readonly path: string;
   readonly kind: Kind;
-  readonly sessionId: string;
-  readonly parentId: string | null;
+  readonly sessionId: SessionId;
+  readonly parentId: SessionId | null;
   readonly agentType: string | null;
   readonly parse: ChunkParser;
 };

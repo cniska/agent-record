@@ -3,16 +3,18 @@ import { existsSync } from "node:fs";
 import { basename } from "node:path";
 import type { SourceFile } from "./ingest";
 import { faultIngest } from "./ingest-contract";
+import { SessionId, sessionIdOf } from "./ingest-ids";
 import { CodexState, NO_CODEX_STATE, parseCodexChunk } from "./ingest-parse-codex";
 import { parseJson, readingSource } from "./ingest-source-read";
 
 const ROLLOUT_NAME = /^rollout-[0-9T:-]+-([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})$/;
 
-export function threadIdOf(path: string): string | null {
-  return ROLLOUT_NAME.exec(basename(path, ".jsonl"))?.[1] ?? null;
+export function threadIdOf(path: string): SessionId | null {
+  const thread = ROLLOUT_NAME.exec(basename(path, ".jsonl"))?.[1];
+  return thread === undefined ? null : SessionId.parse(thread);
 }
 
-function readState(thread: string, raw: string | null): CodexState {
+function readState(thread: SessionId, raw: string | null): CodexState {
   if (!raw) return NO_CODEX_STATE;
   const read = parseJson(raw, CodexState);
   if (read.kind === "invalid")
@@ -30,7 +32,7 @@ export const CODEX_TITLES = "state_5.sqlite";
 export function listCodexRollouts(paths: readonly string[]): SourceFile[] {
   return paths.flatMap((path): SourceFile[] => {
     const threadId = threadIdOf(path);
-    if (!threadId) return [];
+    if (threadId === null) return [];
     return [
       {
         path,
@@ -57,11 +59,12 @@ function threadRows(statePath: string): { id: string; title: string | null }[] {
   }
 }
 
-export function readCodexTitles(statePath: string): Map<string, string> {
-  const titles = new Map<string, string>();
+export function readCodexTitles(statePath: string): Map<SessionId, string> {
+  const titles = new Map<SessionId, string>();
   if (!existsSync(statePath)) return titles;
   for (const row of readingSource("titles_unreadable", statePath, () => threadRows(statePath))) {
-    if (row.title) titles.set(row.id, row.title);
+    const thread = sessionIdOf(row.id);
+    if (thread !== null && row.title) titles.set(thread, row.title);
   }
   return titles;
 }

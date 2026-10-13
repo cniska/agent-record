@@ -781,7 +781,7 @@ describe("ingest", () => {
     try {
       const report = sync(db, env);
       const id = `orphan1@${SESSION}`;
-      expect(report.orphanSubagents).toEqual([id]);
+      expect(report.orphanSubagents).toEqual<string[]>([id]);
       expect(report.failures).toEqual([]);
       expect(db.prepare("SELECT parent_id FROM session WHERE id = ?").get(id)).toEqual({
         parent_id: null,

@@ -18,6 +18,7 @@ import { errorCode } from "./error-read";
 import { archivedPath as archived, asUnprivileged, scratchEnv } from "./fixtures.test-support";
 import { archiveSources } from "./ingest-archive";
 import { readCodexTitles } from "./ingest-codex-source";
+import { SessionId } from "./ingest-ids";
 import { archiveDir, claudeProjectsDir, codexDir, type Env, grokSessionsDir } from "./paths";
 
 const SESSION = "0b8f2c1e-7d4a-4e2b-9c3f-5a6d7e8f9a0b";
@@ -252,7 +253,7 @@ describe("archiving sidecars and the titles store", () => {
     db.close();
     archive(env);
     const titles = readCodexTitles(archived("codex", live, env));
-    expect(titles.get("t1")).toBe("renamed");
+    expect(titles.get(SessionId.parse("t1"))).toBe("renamed");
     expect(titles.size).toBe(399);
   });
 });

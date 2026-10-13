@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MessageId, ResponseId, ToolCallId } from "./ingest-ids";
 import { lineOf, nonEmpty } from "./ingest-parse";
 import {
   type MessageRow,
@@ -15,7 +16,7 @@ import { Timestamp } from "./timestamp";
 const PiContent = z.looseObject({
   type: z.string().optional(),
   text: z.string().optional(),
-  id: z.string().optional(),
+  id: ToolCallId.optional(),
   name: z.string().optional(),
   arguments: z.record(z.string(), z.unknown()).optional(),
 });
@@ -32,8 +33,8 @@ const PiMessage = z.looseObject({
       cacheWrite: z.number().optional(),
     })
     .optional(),
-  responseId: z.string().optional(),
-  toolCallId: z.string().optional(),
+  responseId: ResponseId.optional(),
+  toolCallId: ToolCallId.optional(),
   toolName: z.string().optional(),
   isError: z.boolean().optional(),
 });
@@ -41,7 +42,7 @@ type PiMessage = z.infer<typeof PiMessage>;
 
 const PiLine = z.looseObject({
   type: z.string().optional(),
-  id: z.string().optional(),
+  id: MessageId.optional(),
   timestamp: Timestamp.optional(),
   cwd: z.string().optional(),
   title: z.string().optional(),
@@ -54,7 +55,7 @@ function textOf(content: PiMessage["content"]): string | null {
   );
 }
 
-function usageOf(message: PiMessage, ts: Timestamp, messageId: string | null): UsageRow[] {
+function usageOf(message: PiMessage, ts: Timestamp, messageId: MessageId | null): UsageRow[] {
   const { usage, responseId } = message;
   if (usage === undefined || responseId === undefined) return [];
   return [

@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { MessageId, ToolCallId } from "./ingest-ids";
 import { Timestamp } from "./timestamp";
 
 export const HOWS = ["model", "user", "read"] as const;
@@ -16,15 +17,15 @@ type SkillBodyFields = Readonly<z.infer<typeof SkillBodyFields>>;
 export const SkillLoadRow = z.union([
   z
     .strictObject({
-      toolCallId: z.string(),
+      toolCallId: ToolCallId,
       ts: Timestamp,
       model: z.string().nullable(),
       skillName: z.string(),
       how: z.enum(HOWS),
     })
     .readonly(),
-  SkillBodyFields.extend({ toolUseId: z.string() }).readonly(),
-  SkillBodyFields.extend({ parentUuid: z.string(), skillName: z.string() }).readonly(),
+  SkillBodyFields.extend({ toolUseId: ToolCallId }).readonly(),
+  SkillBodyFields.extend({ parentUuid: MessageId, skillName: z.string() }).readonly(),
 ]);
 export type SkillLoadRow = z.infer<typeof SkillLoadRow>;
 

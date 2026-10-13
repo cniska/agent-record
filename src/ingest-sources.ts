@@ -9,6 +9,7 @@ import {
 } from "./ingest-codex-source";
 import type { Failure } from "./ingest-contract";
 import { GROK_SESSIONS, grokSidecars, listGrokSessions } from "./ingest-grok-source";
+import type { SessionId } from "./ingest-ids";
 import { listPiSessions, PI_SESSIONS } from "./ingest-pi-source";
 import { scan } from "./ingest-scan";
 import type { Tool } from "./ingest-tools";
@@ -25,10 +26,10 @@ export type SessionSource = {
   readonly root: (env: Env) => string;
   readonly sessions: readonly string[];
   readonly sidecars: (sessionPath: string) => readonly string[];
-  readonly movedKey: ((sessionPath: string) => string | null) | null;
+  readonly movedKey: ((sessionPath: string) => SessionId | null) | null;
   readonly titles: {
     readonly file: string;
-    readonly read: (path: string) => ReadonlyMap<string, string>;
+    readonly read: (path: string) => ReadonlyMap<SessionId, string>;
   } | null;
   readonly list: (paths: readonly string[], fail: Failure) => SourceFile[];
 };

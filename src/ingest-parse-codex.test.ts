@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { codexRolloutLines, withoutTimestamp } from "./fixtures.test-support";
+import { SessionId, TurnId } from "./ingest-ids";
 import { parseCodexChunk } from "./ingest-parse-codex";
 
-const THREAD = "01a0a651-086e-7150-8650-cef0f4025a58";
+const THREAD = SessionId.parse("01a0a651-086e-7150-8650-cef0f4025a58");
 const FRESH = { id: THREAD, state: { model: null, turnId: null } };
 const modern = codexRolloutLines(THREAD, { withIds: true }).map((l) => JSON.stringify(l));
 const legacy = codexRolloutLines(THREAD, { withIds: false }).map((l) => JSON.stringify(l));
@@ -12,14 +13,14 @@ describe("parseCodexChunk", () => {
     const parsed = parseCodexChunk(modern, 1, FRESH);
     const assistants = parsed.messages.filter((m) => m.role === "assistant");
     expect(assistants.map((m) => m.model)).toEqual(["gpt-5.6-luna", "gpt-5.6-sol"]);
-    expect(assistants.map((m) => m.turnId)).toEqual(["turn-1", "turn-2"]);
+    expect(assistants.map((m) => m.turnId)).toEqual<string[]>(["turn-1", "turn-2"]);
   });
 
   test("addresses a message with no id by thread and the line it is on", () => {
     const parsed = parseCodexChunk(legacy, 1, FRESH);
     expect(parsed.messages).toHaveLength(3);
     expect(new Set(parsed.messages.map((m) => m.id)).size).toBe(3);
-    expect(parsed.messages[0]?.id).toBe(`${THREAD}:3`);
+    expect(parsed.messages[0]?.id).toBe<string>(`${THREAD}:3`);
   });
 
   test("points each message at the line of the file it came from", () => {
@@ -64,14 +65,17 @@ describe("parseCodexChunk", () => {
     const cold = parseCodexChunk(tail, 1, FRESH);
     expect(cold.usage[0]?.model).toBeNull();
 
-    const warm = parseCodexChunk(tail, 1, { id: THREAD, state: { model: "gpt-5.6-luna", turnId: "turn-1" } });
+    const warm = parseCodexChunk(tail, 1, {
+      id: THREAD,
+      state: { model: "gpt-5.6-luna", turnId: TurnId.parse("turn-1") },
+    });
     expect(warm.usage[0]?.model).toBe("gpt-5.6-luna");
-    expect(warm.messages[0]?.turnId).toBe("turn-1");
+    expect(warm.messages[0]?.turnId).toBe<string>("turn-1");
   });
 
   test("records a turn that has started and not ended with its start and no end", () => {
     const opened = parseCodexChunk(modern.slice(0, 2), 1, FRESH);
-    expect(opened.turns).toEqual([
+    expect(opened.turns).toEqual<object[]>([
       {
         turnId: "turn-1",
         tsStart: JSON.parse(modern[1] ?? "{}").timestamp,
@@ -94,6 +98,18 @@ describe("parseCodexChunk", () => {
     const parsed = parseCodexChunk([abort], 5, FRESH);
     expect(parsed.turns).toEqual([]);
     expect(parsed.dropped).toEqual([5]);
+  });
+
+  test("drops a message line whose id is empty, and names an id-less one by its line", () => {
+    const message = (id: unknown) =>
+      JSON.stringify({
+        type: "response_item",
+        timestamp: "2026-09-16T10:09:00.000Z",
+        payload: { type: "message", role: "assistant", id, content: [{ type: "output_text", text: "ok" }] },
+      });
+    const parsed = parseCodexChunk([message(""), message(null)], 5, FRESH);
+    expect(parsed.dropped).toEqual([5]);
+    expect(parsed.messages.map((m) => m.id)).toEqual<string[]>([`${THREAD}:6`]);
   });
 
   test("hands back the turn state for the next chunk", () => {

@@ -38,7 +38,7 @@ describe("a Pi or omp session", () => {
 
     expect(
       messages.map(({ id, role, text, model, srcLine }) => ({ id, role, text, model, srcLine })),
-    ).toEqual([
+    ).toEqual<object[]>([
       { id: "u1", role: "user", text: "add a greeting", model: null, srcLine: 5 },
       { id: "a1", role: "assistant", text: "Reading the readme first.", model: "model-a", srcLine: 6 },
     ]);
@@ -161,7 +161,7 @@ describe("a Pi or omp session", () => {
     const { messages, usage } = parsePiChunk([silent], 1);
 
     expect(messages).toEqual([]);
-    expect(usage.map(({ responseId, messageId }) => ({ responseId, messageId }))).toEqual([
+    expect(usage.map(({ responseId, messageId }) => ({ responseId, messageId }))).toEqual<object[]>([
       { responseId: "resp_2", messageId: null },
     ]);
   });
@@ -176,6 +176,18 @@ describe("a Pi or omp session", () => {
     const call = parsePiChunk([nameless], 1).toolCalls.find((t) => t.id === "call_9");
     expect(call).toBeDefined();
     expect(call?.toolName).toBeNull();
+  });
+
+  test("drops a message line whose id is empty", () => {
+    const unnamed = JSON.stringify({
+      type: "message",
+      id: "",
+      timestamp: "2026-01-01T10:05:00.000Z",
+      message: { role: "user", content: [{ type: "text", text: "who am I" }] },
+    });
+    const parsed = parsePiChunk([unnamed], 4);
+    expect(parsed.dropped).toEqual([4]);
+    expect(parsed.messages).toEqual([]);
   });
 
   test("keeps no cursor state", () => {

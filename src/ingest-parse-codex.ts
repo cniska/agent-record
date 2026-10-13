@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MessageId, ResponseId, type SessionId, ToolCallId, TurnId } from "./ingest-ids";
 import { jsonOrNull, lineOf, nonEmpty } from "./ingest-parse";
 import {
   type MessageRow,
@@ -13,7 +14,7 @@ import {
 import { type SkillLoadRow, skillFromFileRead } from "./ingest-skill-load";
 import { EpochMs, EpochSeconds, Timestamp } from "./timestamp";
 
-export const CodexState = z.strictObject({ model: z.string().nullable(), turnId: z.string().nullable() });
+export const CodexState = z.strictObject({ model: z.string().nullable(), turnId: TurnId.nullable() });
 export type CodexState = z.infer<typeof CodexState>;
 
 export const NO_CODEX_STATE: CodexState = { model: null, turnId: null };
@@ -36,7 +37,7 @@ const CodexLine = z.looseObject({
   payload: z
     .looseObject({
       type: z.string().optional(),
-      id: z.string().nullish(),
+      id: MessageId.nullish(),
       role: z.string().optional(),
       content: z.array(CodexContent.nullable()).nullish(),
       timestamp: Timestamp.optional(),
@@ -44,9 +45,9 @@ const CodexLine = z.looseObject({
       originator: z.string().nullish(),
       cli_version: z.string().nullish(),
       git: z.looseObject({ branch: z.string().optional() }).optional(),
-      turn_id: z.string().nullish(),
+      turn_id: TurnId.nullish(),
       model: z.string().nullish(),
-      response_id: z.string().optional(),
+      response_id: ResponseId.optional(),
       usage: CodexUsage.nullish(),
       started_at: EpochSeconds.optional(),
       completed_at: EpochSeconds.optional(),
@@ -57,7 +58,7 @@ const CodexLine = z.looseObject({
       completed_at_ms: EpochMs.optional(),
       item: z
         .looseObject({
-          id: z.string().optional(),
+          id: ToolCallId.optional(),
           type: z.string().optional(),
           command: z.unknown().optional(),
           changes: z.record(z.string(), z.unknown()).optional(),
@@ -87,7 +88,7 @@ function visibleText(content: (z.infer<typeof CodexContent> | null)[] | null | u
   return parts.length > 0 ? parts.join("\n") : null;
 }
 
-type CodexThread = { readonly id: string; readonly state: CodexState };
+type CodexThread = { readonly id: SessionId; readonly state: CodexState };
 
 export function parseCodexChunk(
   lines: readonly string[],
@@ -137,7 +138,7 @@ export function parseCodexChunk(
     if (line.type === "turn_context") {
       current = {
         model: nonEmpty(p.model) ?? current.model,
-        turnId: nonEmpty(p.turn_id) ?? current.turnId,
+        turnId: p.turn_id ?? current.turnId,
       };
       const cwd = p.cwd ?? null;
       session.push({ ...NO_FACTS, cwd, project: projectOf(cwd) });
@@ -165,7 +166,7 @@ export function parseCodexChunk(
       const injected = /^\s*(#\s*AGENTS\.md instructions|<[a-z_]+>|\[\s*\{)/.test(text ?? "");
       const promptSource = p.role === "user" ? (injected ? "system" : "typed") : null;
 
-      const id = nonEmpty(p.id) ?? `${thread.id}:${srcLine}`;
+      const id = p.id ?? MessageId.parse(`${thread.id}:${srcLine}`);
       messages.push({
         id,
         ts,

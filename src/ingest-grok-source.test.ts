@@ -172,7 +172,7 @@ describe("grok sessions", () => {
       const report = sync(db, env);
       expect(report.sources.find((source) => source.tool === "grok")).toEqual({ tool: "grok", files: 3 });
       expect(report.dropped).toEqual([{ path: archivedPath("grok", path, env), lines: [8] }]);
-      expect(report.orphanSubagents).toEqual([ORPHAN]);
+      expect(report.orphanSubagents).toEqual<string[]>([ORPHAN]);
       expect(
         db
           .prepare("SELECT id, tool, cwd, title, git_branch, agent_type, parent_id FROM session WHERE id = ?")
@@ -241,7 +241,7 @@ describe("grok sessions", () => {
     const [spec] = listSource(SESSION_SOURCES.grok, SESSION_SOURCES.grok.root(env), (failed, error) =>
       failures.push({ path: failed, error }),
     );
-    expect(spec?.sessionId).toBe(ORPHAN);
+    expect(spec?.sessionId).toBe<string>(ORPHAN);
     expect(spec?.parentId).toBeNull();
     expect(failures).toEqual([
       {
@@ -253,6 +253,19 @@ describe("grok sessions", () => {
         }),
       },
     ]);
+  });
+
+  test("names a summary.json whose session id is empty as unreadable", () => {
+    const env = scratchEnv(newRoot());
+    const path = writeSession(env, ORPHAN, [], { info: { id: "" }, parent_session_id: PARENT });
+    const summary = join(dirname(path), "summary.json");
+    const failures: { path: string; code: unknown }[] = [];
+    const [spec] = listSource(SESSION_SOURCES.grok, SESSION_SOURCES.grok.root(env), (failed, error) =>
+      failures.push({ path: failed, code: errorCode(error) }),
+    );
+    expect(spec?.sessionId).toBe<string>(ORPHAN);
+    expect(spec?.parentId).toBeNull();
+    expect(failures).toEqual([{ path: summary, code: "sidecar_unreadable" }]);
   });
 
   test("names a summary.json that is not JSON as unreadable", () => {
@@ -275,7 +288,7 @@ describe("grok sessions", () => {
     const [spec] = listSource(SESSION_SOURCES.grok, SESSION_SOURCES.grok.root(env), (_, error) =>
       failures.push(error),
     );
-    expect(spec?.sessionId).toBe(ORPHAN);
+    expect(spec?.sessionId).toBe<string>(ORPHAN);
     expect(failures).toEqual([]);
   });
 });

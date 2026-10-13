@@ -15,7 +15,7 @@ describe("a grok update line", () => {
     const good = event({ sessionUpdate: "tool_call", toolCallId: "call-9" }, "tool-good");
     const parsed = parseGrokChunk([JSON.stringify(bad), JSON.stringify(good)], 1);
     expect(parsed.dropped).toEqual([1]);
-    expect(parsed.toolCalls.map((call) => call.id)).toEqual(["call-9"]);
+    expect(parsed.toolCalls.map((call) => call.id)).toEqual<string[]>(["call-9"]);
   });
 
   test("keeps an update line whose content is a list of tool output blocks", () => {
@@ -23,7 +23,7 @@ describe("a grok update line", () => {
     const line = event({ sessionUpdate: "tool_call_update", toolCallId: "call-7", content }, "tool-list");
     const parsed = parseGrokChunk([JSON.stringify(line)], 1);
     expect(parsed.dropped).toEqual([]);
-    expect(parsed.toolCalls.map((call) => call.id)).toEqual(["call-7"]);
+    expect(parsed.toolCalls.map((call) => call.id)).toEqual<string[]>(["call-7"]);
   });
 
   test("keeps an update line whose optional fields are null", () => {
@@ -39,7 +39,14 @@ describe("a grok update line", () => {
     );
     const parsed = parseGrokChunk([JSON.stringify(line)], 1);
     expect(parsed.dropped).toEqual([]);
-    expect(parsed.toolCalls.map((call) => call.id)).toEqual(["call-8"]);
+    expect(parsed.toolCalls.map((call) => call.id)).toEqual<string[]>(["call-8"]);
+  });
+
+  test("drops an update line whose event id is empty", () => {
+    const line = event({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "hi" } }, "");
+    const parsed = parseGrokChunk([JSON.stringify(line)], 3);
+    expect(parsed.dropped).toEqual([3]);
+    expect(parsed.messages).toEqual([]);
   });
 
   test("keeps no cursor state", () => {

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { MessageId, ToolCallId } from "./ingest-ids";
 import { lineOf, nonEmpty } from "./ingest-parse";
 import {
   type MessageRow,
@@ -16,7 +17,7 @@ type GrokContent = z.infer<typeof GrokContent>;
 const GrokUpdate = z.looseObject({
   sessionUpdate: z.string().optional(),
   content: z.union([GrokContent, z.array(z.unknown())]).nullish(),
-  toolCallId: z.string().optional(),
+  toolCallId: ToolCallId.optional(),
   rawInput: z.record(z.string(), z.unknown()).nullish(),
   locations: z.array(z.looseObject({ path: z.string().nullish() })).nullish(),
   status: z.string().nullish(),
@@ -35,7 +36,7 @@ const GrokLine = z.looseObject({
     .looseObject({
       update: GrokUpdate.optional(),
       _meta: z
-        .looseObject({ eventId: z.string().optional(), agentTimestampMs: EpochMs.optional() })
+        .looseObject({ eventId: MessageId.optional(), agentTimestampMs: EpochMs.optional() })
         .optional(),
     })
     .optional(),
