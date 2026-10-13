@@ -1,0 +1,32 @@
+# agent-gate:no-comments:3
+name: No comments
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  no-comments:
+    name: No comments
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Judge each file the push changes
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PUSHED_REF: ${{ github.ref }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if ! git cat-file -e "$BASE_SHA^{commit}" 2>/dev/null && [ "$PUSHED_REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
+            BASE_SHA="origin/$DEFAULT_BRANCH"
+          fi
+          node .githooks/no-comments/scan.cjs --format github "$BASE_SHA" "$HEAD_SHA"

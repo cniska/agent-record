@@ -10,5 +10,5 @@ A local record of coding-agent sessions and the queries over it. [`SPEC.md`](SPE
 - Fix the cause, never work around it, and add no debt.
 - A bug fix lands with a test watched failing first.
 - No test waits real time: a wait or a clock is passed in, as `now` is.
-- Code carries no comments, tool contracts aside. A why goes into a name, a test, or this file.
+- Code carries no comments. `.githooks/pre-commit.d/no-comments` refuses a comment a commit adds, other than a directive a tool reads. A why goes into a name, a test, or this file.
 - Commit directly to `main`. `.githooks/commit-msg` judges the message: one Conventional Commit subject, ASCII, at most 50 characters, and no body.

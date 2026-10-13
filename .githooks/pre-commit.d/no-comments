@@ -1,0 +1,11 @@
+#!/bin/sh
+# agent-gate:no-comments:2
+set -eu
+
+[ -f "$(git rev-parse --git-path MERGE_HEAD)" ] && exit 0
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "no-comments: node is not on PATH, so the commit's comments cannot be judged; install Node.js" >&2
+  exit 3
+fi
+exec node "$(dirname "$0")/../no-comments/scan.cjs"

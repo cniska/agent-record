@@ -1,0 +1,8 @@
+#!/bin/sh
+# agent-gate:githooks:1
+set -eu
+
+for step in "$(dirname "$0")"/pre-commit.d/*; do
+  [ -f "$step" ] && [ -x "$step" ] || continue
+  "$step" || exit $?
+done
