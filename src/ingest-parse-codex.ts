@@ -93,7 +93,7 @@ function visibleText(
   return parts.length > 0 ? parts.join("\n") : undefined;
 }
 
-export type CodexThread = { readonly id: string; readonly state: CodexState };
+type CodexThread = { readonly id: string; readonly state: CodexState };
 
 export function parseCodexChunk(
   lines: readonly string[],
