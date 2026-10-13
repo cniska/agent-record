@@ -3,8 +3,8 @@ import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { invariant } from "./assert";
 import { refuseRecord } from "./db-contract";
+import { sqliteCode } from "./db-error";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
-import { sqliteCodeOf } from "./error-code";
 
 export function recordVersion(db: Database): number {
   const row = db.query<{ user_version: number }, []>("PRAGMA user_version").get();
@@ -42,7 +42,7 @@ export function openRecordFile(
     return db;
   } catch (error) {
     db?.close();
-    const code = sqliteCodeOf(error);
+    const code = sqliteCode(error);
     if (UNOPENABLE_CODES.some((unopenable) => code?.startsWith(unopenable)))
       throw refuseRecord("record_unopenable", { path }, error);
     throw error;

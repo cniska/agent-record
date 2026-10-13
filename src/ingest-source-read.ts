@@ -1,10 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import type { z } from "zod";
+import { isEnvironmentError } from "./error-code";
 import { type Failure, refuseIngest } from "./ingest-contract";
-
-export function isEnvironmentError(error: unknown): error is Error & { readonly errno: number } {
-  return error instanceof Error && "errno" in error && typeof error.errno === "number";
-}
 
 export function readingSource<T>(
   code: "source_unreadable" | "titles_unreadable",

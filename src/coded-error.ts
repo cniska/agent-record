@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { errorDetail } from "./error-code";
 
 const ErrorKind = z.enum(["refusal", "fault"]);
 export type ErrorKind = z.infer<typeof ErrorKind>;
@@ -80,10 +81,6 @@ const faultUnexpected = faulter<{ readonly command_failed: { readonly detail: st
     resolve: () => BUG,
   },
 });
-
-export function errorDetail(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
 
 export function codedOf(error: unknown): CodedError {
   if (error instanceof CodedError) return error;

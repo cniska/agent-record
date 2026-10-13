@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { constants } from "node:os";
-import { errorDetail } from "./coded-error";
+import { errorDetail } from "./error-code";
 import { refuseGit } from "./git-contract";
 
 export type GitRun = { readonly status: number; readonly out: string; readonly err: string };
