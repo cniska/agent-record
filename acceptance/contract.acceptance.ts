@@ -1,8 +1,10 @@
 import { afterEach, expect, test } from "bun:test";
-import { readdirSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { z } from "zod";
 import {
   DOCTOR_RESULT,
+  doctor,
   type Home,
   okLine,
   QUERY_RESULT,
@@ -188,4 +190,39 @@ test("AC-24 query and sql with no record are refused naming sync, and create no 
   expect(readdirSync(home.root, { recursive: true })).toEqual([]);
 });
 
-test.todo("AC-29 each failure the spec lists is a refusal with a code and fix, never command_failed", () => {});
+function expectUnopenableRefusedEverywhere(home: Home): void {
+  const fix = `make ${home.record} a file you can read and write, or move it aside and run \`agent-record rebuild\``;
+  for (const { command, args } of [...READERS_AND_WRITER, { command: "rebuild", args: ["rebuild"] }]) {
+    const error = refused(runCli(home, args), command);
+    expect({ command, kind: error.kind, code: error.code, meta: error.meta, resolve: error.resolve }).toEqual(
+      {
+        command,
+        kind: "refusal",
+        code: "record_unopenable",
+        meta: { path: home.record },
+        resolve: fix,
+      },
+    );
+  }
+  const { report } = doctor(home);
+  expect(report.checks.find(({ name }) => name === "record")).toMatchObject({ state: "fail", fix });
+}
+
+test("AC-29 a directory at the record path is refused by every command naming the path, never command_failed", () => {
+  const home = scratchHome();
+  mkdirSync(home.record, { recursive: true });
+
+  expectUnopenableRefusedEverywhere(home);
+  expect(readdirSync(home.record)).toEqual([]);
+});
+
+test("AC-29 a record that is not a database is refused by every command naming the path, never command_failed", () => {
+  const home = scratchHome();
+  mkdirSync(dirname(home.record), { recursive: true });
+  writeFileSync(home.record, "not a database\n");
+
+  expectUnopenableRefusedEverywhere(home);
+  expect(readFileSync(home.record, "utf8")).toBe("not a database\n");
+});
+
+test.todo("AC-29 a busy record is refused by every command with a code and fix, never command_failed", () => {});

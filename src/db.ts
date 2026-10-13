@@ -1,4 +1,4 @@
-import { Database } from "bun:sqlite";
+import { Database, type DatabaseOptions, SQLiteError } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { invariant } from "./assert";
@@ -23,13 +23,36 @@ export function refuseOtherVersion(db: Database): void {
   if (found !== SCHEMA_VERSION) throw refuseRecord("record_version", { found, expected: SCHEMA_VERSION });
 }
 
+const UNOPENABLE_CODES = ["SQLITE_CANTOPEN", "SQLITE_NOTADB"] as const;
+
+export function openRecordFile(
+  path: string,
+  { busyTimeoutMs, ...options }: DatabaseOptions & { readonly busyTimeoutMs: number },
+): Database {
+  let db: Database | null = null;
+  try {
+    db = new Database(path, options);
+    db.run(`PRAGMA busy_timeout = ${busyTimeoutMs}`);
+    recordVersion(db);
+    return db;
+  } catch (error) {
+    db?.close();
+    const code = error instanceof SQLiteError ? (error.code ?? "") : "";
+    if (UNOPENABLE_CODES.some((unopenable) => code.startsWith(unopenable)))
+      throw refuseRecord("record_unopenable", { path }, error);
+    throw error;
+  }
+}
+
 const CONCURRENT_WRITER_WAIT_MS = 5000;
 
 export function openDb(path: string, opts: { forRebuild?: boolean; busyTimeoutMs?: number } = {}): Database {
   mkdirSync(dirname(path), { recursive: true });
-  const db = new Database(path, { create: true });
+  const db = openRecordFile(path, {
+    create: true,
+    busyTimeoutMs: opts.busyTimeoutMs ?? CONCURRENT_WRITER_WAIT_MS,
+  });
   try {
-    db.run(`PRAGMA busy_timeout = ${opts.busyTimeoutMs ?? CONCURRENT_WRITER_WAIT_MS}`);
     const fresh = isFresh(db);
     if (!fresh && !opts.forRebuild) refuseOtherVersion(db);
     db.run("PRAGMA journal_mode = WAL");

@@ -3,6 +3,7 @@ import { refuser } from "./coded-error";
 export const refuseRecord = refuser<{
   readonly record_version: { readonly found: number; readonly expected: number };
   readonly no_database: { readonly path: string };
+  readonly record_unopenable: { readonly path: string };
   readonly lock_held: { readonly path: string; readonly pid: number };
   readonly record_busy: { readonly path: string };
   readonly lock_contended: { readonly path: string };
@@ -19,6 +20,11 @@ export const refuseRecord = refuser<{
   no_database: {
     message: ({ path }) => `no database at ${path}; run \`agent-record sync\` first`,
     resolve: () => "agent-record sync",
+  },
+  record_unopenable: {
+    message: ({ path }) => `SQLite cannot open ${path} as the record`,
+    resolve: ({ path }) =>
+      `make ${path} a file you can read and write, or move it aside and run \`agent-record rebuild\``,
   },
   lock_held: {
     message: ({ path, pid }) =>

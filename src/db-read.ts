@@ -1,12 +1,18 @@
-import { Database, SQLiteError } from "bun:sqlite";
+import { type Database, SQLiteError } from "bun:sqlite";
 import { existsSync } from "node:fs";
-import { isFresh, refuseOtherVersion } from "./db";
+import { isFresh, openRecordFile, refuseOtherVersion } from "./db";
 import { refuseRecord } from "./db-contract";
+
+const READERS_DO_NOT_WAIT_MS = 0;
 
 export function readingRecord<T>(path: string, use: (db: Database) => T): T {
   if (!existsSync(path)) throw refuseRecord("no_database", { path });
   try {
-    const db = new Database(path, { readwrite: true, create: false });
+    const db = openRecordFile(path, {
+      readwrite: true,
+      create: false,
+      busyTimeoutMs: READERS_DO_NOT_WAIT_MS,
+    });
     try {
       db.run("PRAGMA query_only = ON");
       if (isFresh(db)) throw refuseRecord("no_database", { path });
