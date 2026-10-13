@@ -1,12 +1,12 @@
 const WORKTREE_SEGMENT = "/.claude/worktrees/";
 
-export function worktreeOf(path: string | null | undefined): string | null {
+export function worktreeOf(path: string | null): string | null {
   if (!path) return null;
   const at = path.indexOf(WORKTREE_SEGMENT);
   if (at === -1) return null;
   const rest = path.slice(at + WORKTREE_SEGMENT.length);
   const name = rest.split("/")[0];
-  return name && name.length > 0 ? name : null;
+  return name || null;
 }
 
 export function projectOf(cwd: string | null): string | null {
