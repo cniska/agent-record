@@ -126,14 +126,14 @@ export function parseClaudeChunk(lines: string[], firstLineNumber: number): Pars
       dropped.push(srcLine);
       continue;
     }
+    const ts = nonEmpty(line.timestamp);
+    if (ts) session.push({ ts });
 
     if (line.type === "ai-title" || line.type === "custom-title") {
       const title = nonEmpty(line.aiTitle) ?? nonEmpty(line.customTitle);
       if (title) session.push({ title });
       continue;
     }
-
-    const ts = nonEmpty(line.timestamp);
 
     if (line.type === "system" && line.subtype === "turn_duration" && line.uuid) {
       if (!ts) {
@@ -162,7 +162,6 @@ export function parseClaudeChunk(lines: string[], firstLineNumber: number): Pars
       }
       const model = nonEmpty(line.message.model);
       session.push({
-        ts,
         cwd: line.cwd,
         project: projectOf(line.cwd),
         gitBranch: nonEmpty(line.gitBranch),
@@ -254,7 +253,6 @@ export function parseClaudeChunk(lines: string[], firstLineNumber: number): Pars
         }
       }
       session.push({
-        ts,
         cwd: line.cwd,
         project: projectOf(line.cwd),
         gitBranch: nonEmpty(line.gitBranch),

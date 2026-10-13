@@ -101,9 +101,10 @@ export function parsePiChunk(lines: string[], firstLineNumber: number): ParsedCh
       continue;
     }
     const ts = line.timestamp;
+    if (ts) session.push({ ts });
     switch (line.type) {
       case "session":
-        session.push({ ts, cwd: line.cwd, project: projectOf(line.cwd) });
+        session.push({ cwd: line.cwd, project: projectOf(line.cwd) });
         continue;
       case "title":
       case "title_change":

@@ -87,11 +87,15 @@ describe("a Pi or omp session", () => {
     const { session } = parsePiChunk(LINES, 1);
 
     expect(session).toContainEqual({
-      ts: "2026-01-01T10:00:00.000Z",
       cwd: "/home/dev/widgets",
       project: "/home/dev/widgets",
     });
     expect(session).toContainEqual({ title: "Greet the reader" });
+  });
+
+  test("takes the session's last time from its latest timestamped line, not its header", () => {
+    const times = parsePiChunk(LINES, 1).session.flatMap(({ ts }) => (ts ? [ts] : []));
+    expect(times.sort().at(-1)).toBe("2026-01-01T10:02:00.000Z");
   });
 
   test("records what the owner and the agent said, not its thinking or the harness's reminders", () => {

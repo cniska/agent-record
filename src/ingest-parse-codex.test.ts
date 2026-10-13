@@ -96,9 +96,24 @@ describe("parseCodexChunk", () => {
     expect(JSON.parse(parsed.cursorState ?? "{}")).toEqual({ model: "gpt-5.6-sol", turnId: "turn-2" });
   });
 
+  test("takes the session's last time from its latest timestamped line, not its last turn's start", () => {
+    const times = parseCodexChunk(modern, 1, THREAD, {}).session.flatMap(({ ts }) => (ts ? [ts] : []));
+    expect(times.sort().at(-1)).toBe("2026-09-16T10:09:00.000Z");
+  });
+
+  test("counts a timestamped line that carries no payload toward the session's last time", () => {
+    const bare = JSON.stringify({ timestamp: "2026-09-16T11:00:00.000Z", type: "event_msg" });
+    const parsed = parseCodexChunk([...modern, bare], 1, THREAD, {});
+    const times = parsed.session.flatMap(({ ts }) => (ts ? [ts] : []));
+    expect({ latest: times.sort().at(-1), dropped: parsed.dropped }).toEqual({
+      latest: "2026-09-16T11:00:00.000Z",
+      dropped: [],
+    });
+  });
+
   test("takes session facts from session_meta", () => {
     const parsed = parseCodexChunk(modern, 1, THREAD, {});
-    expect(parsed.session[0]).toMatchObject({
+    expect(parsed.session.find((facts) => facts.gitBranch !== undefined)).toMatchObject({
       cwd: "/Users/x/code/demo",
       gitBranch: "main",
       cliVersion: "0.154.0",

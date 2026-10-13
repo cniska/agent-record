@@ -115,9 +115,10 @@ export function parseCodexChunk(
       dropped.push(firstLineNumber + index);
       continue;
     }
+    const ts = nonEmpty(line.timestamp);
+    if (ts) session.push({ ts });
     const p = line.payload;
     if (!p) continue;
-    const ts = nonEmpty(line.timestamp);
     if (!ts) {
       dropped.push(firstLineNumber + index);
       continue;
@@ -126,7 +127,7 @@ export function parseCodexChunk(
 
     if (line.type === "session_meta") {
       session.push({
-        ts: p.timestamp ?? ts,
+        ts: p.timestamp,
         cwd: p.cwd,
         project: projectOf(p.cwd),
         gitBranch: nonEmpty(p.git?.branch),
@@ -141,11 +142,7 @@ export function parseCodexChunk(
         model: nonEmpty(p.model) ?? current.model,
         turnId: nonEmpty(p.turn_id) ?? current.turnId,
       };
-      session.push({
-        ts,
-        cwd: p.cwd,
-        project: projectOf(p.cwd),
-      });
+      session.push({ cwd: p.cwd, project: projectOf(p.cwd) });
       if (current.turnId) {
         turns.push({
           turnId: current.turnId,

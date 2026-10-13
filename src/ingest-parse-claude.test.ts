@@ -72,6 +72,11 @@ describe("parseClaudeChunk", () => {
     expect(parsed.messages.find((m) => m.id === "msg-1")?.attributionSkill).toBe("build");
   });
 
+  test("takes the session's last time from its latest timestamped line, whatever its type", () => {
+    const times = parsed.session.flatMap(({ ts }) => (ts ? [ts] : []));
+    expect(times.sort().at(-1)).toBe("2026-09-16T10:08:00.000Z");
+  });
+
   test("takes the session title from an ai-title line", () => {
     expect(parsed.session.some((s) => s.title === "Add the parser")).toBe(true);
   });
