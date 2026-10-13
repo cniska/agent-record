@@ -28,13 +28,20 @@ export function listClaudeSessions(paths: readonly string[], fail: Failure): Sou
 }
 
 function transcript(path: string): SourceFile {
-  return { path, kind: "transcript", sessionId: basename(path, ".jsonl"), parse: parseClaudeChunk };
+  return {
+    path,
+    kind: "transcript",
+    sessionId: basename(path, ".jsonl"),
+    parentId: null,
+    agentType: null,
+    parse: parseClaudeChunk,
+  };
 }
 
 const SubagentMeta = z.looseObject({ agentType: z.string().optional() });
 
-function agentTypeOf(path: string, fail: Failure): string | undefined {
-  return readSidecar(metaPathOf(path), SubagentMeta, fail)?.agentType || undefined;
+function agentTypeOf(path: string, fail: Failure): string | null {
+  return readSidecar(metaPathOf(path), SubagentMeta, fail)?.agentType || null;
 }
 
 function subagent(path: string, fail: Failure): SourceFile {

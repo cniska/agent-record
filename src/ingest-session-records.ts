@@ -84,8 +84,14 @@ export type ParsedChunk = {
   toolCalls: ToolCallRow[];
   skillLoads: SkillLoadRow[];
   dropped: number[];
-  cursorState?: string;
+  cursorState: string | null;
 };
+
+export type ChunkParser = (
+  lines: readonly string[],
+  firstLineNumber: number,
+  state: string | null,
+) => ParsedChunk;
 
 const WORKTREE_MARKER = "/.claude/worktrees/";
 

@@ -41,4 +41,9 @@ describe("a grok update line", () => {
     expect(parsed.dropped).toEqual([]);
     expect(parsed.toolCalls.map((call) => call.id)).toEqual(["call-8"]);
   });
+
+  test("keeps no cursor state", () => {
+    const line = event({ sessionUpdate: "tool_call", toolCallId: "call-1" }, "tool-1");
+    expect(parseGrokChunk([JSON.stringify(line)], 1).cursorState).toBeNull();
+  });
 });

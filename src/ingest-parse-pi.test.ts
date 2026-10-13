@@ -198,6 +198,10 @@ describe("a Pi or omp session", () => {
     expect(call?.toolName).toBeUndefined();
   });
 
+  test("keeps no cursor state", () => {
+    expect(parsePiChunk(LINES, 1).cursorState).toBeNull();
+  });
+
   test("sets aside a line that does not parse", () => {
     expect(parsePiChunk(["{not json", ...LINES.slice(1, 2)], 10).dropped).toEqual([10]);
   });

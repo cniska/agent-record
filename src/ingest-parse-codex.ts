@@ -93,11 +93,12 @@ function visibleText(
   return parts.length > 0 ? parts.join("\n") : undefined;
 }
 
+export type CodexThread = { readonly id: string; readonly state: CodexState };
+
 export function parseCodexChunk(
-  lines: string[],
+  lines: readonly string[],
   firstLineNumber: number,
-  threadId: string,
-  state: CodexState,
+  thread: CodexThread,
 ): ParsedChunk {
   const session: SessionFacts[] = [];
   const messages: MessageRow[] = [];
@@ -106,7 +107,7 @@ export function parseCodexChunk(
   const toolCalls: ToolCallRow[] = [];
   const skillLoads: SkillLoadRow[] = [];
   const dropped: number[] = [];
-  let current: CodexState = { ...state };
+  let current: CodexState = { ...thread.state };
 
   for (const [index, raw] of lines.entries()) {
     if (raw.length === 0) continue;
@@ -163,7 +164,7 @@ export function parseCodexChunk(
       const injected = /^\s*(#\s*AGENTS\.md instructions|<[a-z_]+>|\[\s*\{)/.test(text ?? "");
       const promptSource = p.role === "user" ? (injected ? "system" : "typed") : undefined;
 
-      const id = nonEmpty(p.id) ?? `${threadId}:${srcLine}`;
+      const id = nonEmpty(p.id) ?? `${thread.id}:${srcLine}`;
       messages.push({
         id,
         ts,

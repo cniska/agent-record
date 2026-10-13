@@ -56,7 +56,7 @@ function toolNameOf(update: GrokUpdate): string | undefined {
   return nonEmpty(update._meta?.["x.ai/tool"]?.name);
 }
 
-export function parseGrokChunk(lines: string[], firstLineNumber: number): ParsedChunk {
+export function parseGrokChunk(lines: readonly string[], firstLineNumber: number): ParsedChunk {
   const session: SessionFacts[] = [];
   const messages: MessageRow[] = [];
   const toolCalls: ToolCallRow[] = [];
@@ -111,5 +111,5 @@ export function parseGrokChunk(lines: string[], firstLineNumber: number): Parsed
     });
   }
 
-  return { session, messages, usage: [], turns: [], toolCalls, skillLoads: [], dropped };
+  return { session, messages, usage: [], turns: [], toolCalls, skillLoads: [], dropped, cursorState: null };
 }

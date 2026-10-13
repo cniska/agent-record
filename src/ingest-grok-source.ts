@@ -78,12 +78,11 @@ export function listGrokSessions(paths: readonly string[], fail: Failure): Sourc
       path,
       kind: "transcript",
       sessionId: summary?.id ?? basename(sessionDir),
-      parentId: summary?.parentId,
-      agentType: summary?.agentType,
+      parentId: summary?.parentId ?? null,
+      agentType: summary?.agentType ?? null,
       parse: (lines, first) => {
         const parsed = parseGrokChunk(lines, first);
-        parsed.session.push(...facts);
-        return parsed;
+        return { ...parsed, session: [...parsed.session, ...facts] };
       },
     });
   }
@@ -97,7 +96,7 @@ function orderParents(specs: SourceFile[]): SourceFile[] {
   const placed = new Set<string>();
   while (remaining.length > 0) {
     const ready = remaining.filter(
-      (spec) => spec.parentId == null || !ids.has(spec.parentId) || placed.has(spec.parentId),
+      (spec) => spec.parentId === null || !ids.has(spec.parentId) || placed.has(spec.parentId),
     );
     if (ready.length === 0) return ordered.concat(remaining);
     for (const spec of ready) {

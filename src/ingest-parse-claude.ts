@@ -109,7 +109,7 @@ function feedbackText(value: unknown): string | undefined {
   return typeof value === "string" ? value : JSON.stringify(value);
 }
 
-export function parseClaudeChunk(lines: string[], firstLineNumber: number): ParsedChunk {
+export function parseClaudeChunk(lines: readonly string[], firstLineNumber: number): ParsedChunk {
   const session: SessionFacts[] = [];
   const messages: MessageRow[] = [];
   const usage: UsageRow[] = [];
@@ -294,5 +294,5 @@ export function parseClaudeChunk(lines: string[], firstLineNumber: number): Pars
     }
   }
 
-  return { session, messages, usage, turns, toolCalls, skillLoads, dropped };
+  return { session, messages, usage, turns, toolCalls, skillLoads, dropped, cursorState: null };
 }

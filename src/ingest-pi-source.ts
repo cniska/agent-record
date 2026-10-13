@@ -9,6 +9,8 @@ export function listPiSessions(paths: readonly string[]): SourceFile[] {
     path,
     kind: "transcript",
     sessionId: basename(path, ".jsonl").slice(basename(path).indexOf("_") + 1),
-    parse: (lines, first) => parsePiChunk(lines, first),
+    parentId: null,
+    agentType: null,
+    parse: parsePiChunk,
   }));
 }

@@ -222,7 +222,7 @@ describe("grok sessions", () => {
       failures.push({ path: failed, error }),
     );
     expect(spec?.sessionId).toBe(ORPHAN);
-    expect(spec?.parentId).toBeUndefined();
+    expect(spec?.parentId).toBeNull();
     expect(failures).toEqual([
       {
         path: summary,

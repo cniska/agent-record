@@ -36,7 +36,10 @@ export function listCodexRollouts(paths: readonly string[]): SourceFile[] {
         path,
         kind: "rollout",
         sessionId: threadId,
-        parse: (lines, first, state) => parseCodexChunk(lines, first, threadId, readState(threadId, state)),
+        parentId: null,
+        agentType: null,
+        parse: (lines, first, state) =>
+          parseCodexChunk(lines, first, { id: threadId, state: readState(threadId, state) }),
       },
     ];
   });

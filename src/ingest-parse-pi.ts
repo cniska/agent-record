@@ -85,7 +85,7 @@ function callsOf(message: PiMessage, ts: string, srcLine: number): ToolCallRow[]
   });
 }
 
-export function parsePiChunk(lines: string[], firstLineNumber: number): ParsedChunk {
+export function parsePiChunk(lines: readonly string[], firstLineNumber: number): ParsedChunk {
   const session: SessionFacts[] = [];
   const messages: MessageRow[] = [];
   const usage: UsageRow[] = [];
@@ -147,5 +147,5 @@ export function parsePiChunk(lines: string[], firstLineNumber: number): ParsedCh
     toolCalls.push(...callsOf(message, ts, srcLine));
   }
 
-  return { session, messages, usage, turns: [], toolCalls, skillLoads: [], dropped };
+  return { session, messages, usage, turns: [], toolCalls, skillLoads: [], dropped, cursorState: null };
 }

@@ -82,14 +82,15 @@ export function sync(db: Database, env: Env = process.env): SyncReport {
       return reset;
     };
     const resetSessions = new Set<string>();
-    for (const file of files) {
-      if (file.parentId && !sessionExists.get(file.parentId)) {
-        report.orphanSubagents.push(file.sessionId);
-        file.parentId = undefined;
-      }
+    const linked: SourceFile[] = [];
+    for (const listed of files) {
+      const orphan = listed.parentId !== null && !sessionExists.get(listed.parentId);
+      if (orphan) report.orphanSubagents.push(listed.sessionId);
+      const file = orphan ? { ...listed, parentId: null } : listed;
+      linked.push(file);
       if (ingest(file)) resetSessions.add(file.sessionId);
     }
-    for (const file of files) {
+    for (const file of linked) {
       if (resetSessions.has(file.sessionId)) ingest(file);
     }
     report.sources.push({ tool, files: files.length });

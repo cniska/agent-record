@@ -208,4 +208,8 @@ describe("parseClaudeChunk", () => {
   test("reports nothing dropped for a chunk that parsed whole", () => {
     expect(parsed.dropped).toEqual([]);
   });
+
+  test("keeps no cursor state", () => {
+    expect(parsed.cursorState).toBeNull();
+  });
 });
