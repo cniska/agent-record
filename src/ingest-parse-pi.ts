@@ -6,7 +6,6 @@ import {
   NO_FACTS,
   NO_TOOL_CALL,
   type ParsedChunk,
-  projectOf,
   type SessionFacts,
   type ToolCallRow,
   type UsageRow,
@@ -109,11 +108,9 @@ export function parsePiChunk(lines: readonly string[], firstLineNumber: number):
     const ts = line.timestamp ?? null;
     if (ts) session.push({ ...NO_FACTS, ts });
     switch (line.type) {
-      case "session": {
-        const cwd = line.cwd ?? null;
-        session.push({ ...NO_FACTS, cwd, project: projectOf(cwd) });
+      case "session":
+        session.push({ ...NO_FACTS, cwd: line.cwd ?? null });
         continue;
-      }
       case "title":
       case "title_change":
         if (line.title) session.push({ ...NO_FACTS, title: line.title });

@@ -5,7 +5,6 @@ import {
   type MessageRow,
   NO_FACTS,
   type ParsedChunk,
-  projectOf,
   type SessionFacts,
   type ToolCallRow,
   type TurnRow,
@@ -122,11 +121,9 @@ export function parseCodexChunk(
     const srcLine = firstLineNumber + index;
 
     if (line.type === "session_meta") {
-      const cwd = p.cwd ?? null;
       session.push({
         ts: p.timestamp ?? null,
-        cwd,
-        project: projectOf(cwd),
+        cwd: p.cwd ?? null,
         gitBranch: nonEmpty(p.git?.branch),
         cliVersion: nonEmpty(p.cli_version),
         entrypoint: nonEmpty(p.originator),
@@ -140,8 +137,7 @@ export function parseCodexChunk(
         model: nonEmpty(p.model) ?? current.model,
         turnId: p.turn_id ?? current.turnId,
       };
-      const cwd = p.cwd ?? null;
-      session.push({ ...NO_FACTS, cwd, project: projectOf(cwd) });
+      session.push({ ...NO_FACTS, cwd: p.cwd ?? null });
       if (current.turnId) {
         turns.push({
           turnId: current.turnId,

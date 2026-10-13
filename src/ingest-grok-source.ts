@@ -5,7 +5,7 @@ import type { Failure } from "./ingest-contract";
 import { SessionId, sessionIdOf } from "./ingest-ids";
 import { nonEmpty } from "./ingest-parse";
 import { parseGrokChunk } from "./ingest-parse-grok";
-import { projectOf, type SessionFacts } from "./ingest-session-records";
+import type { SessionFacts } from "./ingest-session-records";
 import { readSidecar } from "./ingest-source-read";
 
 const SummaryFile = z.looseObject({
@@ -29,12 +29,10 @@ export function grokSidecars(sessionPath: string): readonly string[] {
 
 function summaryFacts(summary: SummaryFile | null): SessionFacts[] {
   if (!summary) return [];
-  const cwd = nonEmpty(summary.info?.cwd);
   return [
     {
       ts: null,
-      cwd,
-      project: projectOf(cwd),
+      cwd: nonEmpty(summary.info?.cwd),
       gitBranch: nonEmpty(summary.head_branch),
       cliVersion: null,
       entrypoint: null,

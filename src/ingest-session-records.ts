@@ -15,7 +15,6 @@ export const SessionFacts = z
   .strictObject({
     ts: nullableTime,
     cwd: nullableString,
-    project: nullableString,
     gitBranch: nullableString,
     cliVersion: nullableString,
     entrypoint: nullableString,
@@ -27,7 +26,6 @@ export type SessionFacts = z.infer<typeof SessionFacts>;
 export const NO_FACTS: SessionFacts = {
   ts: null,
   cwd: null,
-  project: null,
   gitBranch: null,
   cliVersion: null,
   entrypoint: null,
@@ -146,11 +144,3 @@ export type ChunkParser = (
   firstLineNumber: number,
   state: string | null,
 ) => ParsedChunk;
-
-const WORKTREE_MARKER = "/.claude/worktrees/";
-
-export function projectOf(cwd: string | null): string | null {
-  if (!cwd) return null;
-  const at = cwd.indexOf(WORKTREE_MARKER);
-  return at === -1 ? cwd : cwd.slice(0, at);
-}

@@ -222,7 +222,6 @@ describe("parseClaudeChunk", () => {
       {
         ts: null,
         cwd: null,
-        project: null,
         gitBranch: null,
         cliVersion: null,
         entrypoint: null,

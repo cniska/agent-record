@@ -11,7 +11,6 @@ describe("a Pi or omp session", () => {
     expect(session).toContainEqual({
       ts: null,
       cwd: "/home/dev/widgets",
-      project: "/home/dev/widgets",
       gitBranch: null,
       cliVersion: null,
       entrypoint: null,
@@ -20,7 +19,6 @@ describe("a Pi or omp session", () => {
     expect(session).toContainEqual({
       ts: null,
       cwd: null,
-      project: null,
       gitBranch: null,
       cliVersion: null,
       entrypoint: null,

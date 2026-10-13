@@ -9,6 +9,12 @@ export function worktreeOf(path: string | null | undefined): string | null {
   return name && name.length > 0 ? name : null;
 }
 
+export function projectOf(cwd: string | null): string | null {
+  if (!cwd) return null;
+  const at = cwd.indexOf(WORKTREE_SEGMENT);
+  return at === -1 ? cwd : cwd.slice(0, at);
+}
+
 export const withoutWorktree = (col: string): string => {
   const at = `instr(${col}, '${WORKTREE_SEGMENT}')`;
   const root = `substr(${col}, 1, ${at} - 1)`;

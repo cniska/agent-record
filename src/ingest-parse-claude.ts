@@ -6,7 +6,6 @@ import {
   NO_FACTS,
   NO_TOOL_CALL,
   type ParsedChunk,
-  projectOf,
   type SessionFacts,
   type ToolCallRow,
   type TurnRow,
@@ -109,11 +108,9 @@ function resultSize(content: unknown, result: ClaudeToolUseResult | undefined): 
 }
 
 function sessionFactsOf(line: z.infer<typeof ClaudeLine>): SessionFacts {
-  const cwd = line.cwd ?? null;
   return {
     ...NO_FACTS,
-    cwd,
-    project: projectOf(cwd),
+    cwd: line.cwd ?? null,
     gitBranch: nonEmpty(line.gitBranch),
     cliVersion: nonEmpty(line.version),
     entrypoint: nonEmpty(line.entrypoint),

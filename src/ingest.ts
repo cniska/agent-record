@@ -9,7 +9,7 @@ import type { ChunkParser, ParsedChunk, SessionFacts } from "./ingest-session-re
 import { readingSource } from "./ingest-source-read";
 import type { Kind, Tool } from "./ingest-tools";
 import type { Timestamp } from "./timestamp";
-import { worktreeOf } from "./worktree";
+import { projectOf, worktreeOf } from "./worktree";
 
 export type FileSpec = SourceFile & { readonly tool: Tool };
 
@@ -51,7 +51,6 @@ const START: Omit<Cursor, "path"> = { bytes: 0, lines: 0, state: null };
 
 type FoldedSession = {
   cwd: string | null;
-  project: string | null;
   gitBranch: string | null;
   cliVersion: string | null;
   entrypoint: string | null;
@@ -63,7 +62,6 @@ type FoldedSession = {
 function foldSession(facts: readonly SessionFacts[]): FoldedSession {
   const out: FoldedSession = {
     cwd: null,
-    project: null,
     gitBranch: null,
     cliVersion: null,
     entrypoint: null,
@@ -77,7 +75,6 @@ function foldSession(facts: readonly SessionFacts[]): FoldedSession {
       if (!out.tsLast || f.ts > out.tsLast) out.tsLast = f.ts;
     }
     out.cwd ??= f.cwd;
-    out.project ??= f.project;
     out.entrypoint ??= f.entrypoint;
     if (f.gitBranch) out.gitBranch = f.gitBranch;
     if (f.cliVersion) out.cliVersion = f.cliVersion;
@@ -296,7 +293,7 @@ export function createIngester(db: Database) {
       $agentType: spec.agentType,
       $cwd: s.cwd,
       $worktree: worktreeOf(s.cwd),
-      $project: s.project,
+      $project: projectOf(s.cwd),
       $gitBranch: s.gitBranch,
       $cliVersion: s.cliVersion,
       $entrypoint: s.entrypoint,
