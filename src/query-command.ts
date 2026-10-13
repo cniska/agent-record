@@ -17,7 +17,8 @@ export const queryCommand: Command = {
     }
     const query = findQuery(name);
     if (query === undefined) throw refuseQuery("unknown_query", { name });
-    const { arg, flags } = parseArg(rest, ["rows"], query.usage);
-    return new Ran(runQuery(query, arg, rowsOf(flags.rows)), 0);
+    const { arg, flags } = parseArg(rest, ["rows", ...query.flags], query.usage);
+    const { rows, ...own } = flags;
+    return new Ran(runQuery(query, { arg, flags: own, maxRows: rowsOf(rows) }), 0);
   },
 };

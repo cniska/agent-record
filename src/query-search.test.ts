@@ -41,7 +41,7 @@ describe("search", () => {
   test("finds the word that was typed", () => {
     const db = seeded();
     const result = ask(db, { arg: "checkout" });
-    expect(result.columns).toEqual(["session", "when", "ref", "role", "project", "terms", "text"]);
+    expect(result.columns).toEqual(["session", "at", "role", "project", "terms", "text"]);
     expect(result.rows.map((r) => String(r[0]))).toEqual(["s1"]);
     db.close();
   });
@@ -49,7 +49,7 @@ describe("search", () => {
   test("matches what someone said, not text injected into the session", () => {
     const db = seeded();
     const result = ask(db, { arg: "checkout" });
-    expect(String(result.rows[0]?.[6])).not.toContain("Injected");
+    expect(String(result.rows[0]?.[5])).not.toContain("Injected");
     expect(result.denominator).toContain("1 of 2 messages that carry text anyone said");
     db.close();
   });
@@ -57,8 +57,8 @@ describe("search", () => {
   test("prints the matching message's session and timestamp, which thread reads", () => {
     const db = seeded();
     const result = ask(db, { arg: "checkout" });
-    expect(result.rows[0]?.[result.columns.indexOf("ref")]).toBe("s1@2026-09-01T10:30:00Z");
-    expect(result.denominator).toContain("agent-record query thread <session>@<when>");
+    expect(result.rows[0]?.slice(0, 2)).toEqual(["s1", "2026-09-01T10:30:00Z"]);
+    expect(result.denominator).toContain("agent-record query thread <session> --at <at>");
     db.close();
   });
 
@@ -70,7 +70,7 @@ describe("search", () => {
       ["We settled on the shadow checkout back then."],
     );
     const result = ask(db, { arg: "settled" });
-    expect(result.rows.map((r) => String(r[1]))).toEqual(["2024-03-04T09:00"]);
+    expect(result.rows.map((r) => String(r[1]))).toEqual(["2024-03-04T09:00:00Z"]);
     db.close();
   });
 
@@ -83,9 +83,9 @@ describe("search", () => {
     );
     const result = ask(db, { arg: "decided" });
     expect(result.rows.map((r) => String(r[0]))).toEqual(["s1"]);
-    const ref = String(result.rows[0]?.[result.columns.indexOf("ref")]);
-    expect(ref).toBe("s1@2026-09-01T10:33:00Z");
-    const thread = findQuery("thread")?.run(db, { ...ctx, arg: ref });
+    const [session, at] = result.rows[0] ?? [];
+    expect([session, at]).toEqual(["s1", "2026-09-01T10:33:00Z"]);
+    const thread = findQuery("thread")?.run(db, { ...ctx, arg: String(session), flags: { at: String(at) } });
     expect(thread?.rows.some((row) => String(row[3]).includes("decided against"))).toBe(true);
     db.close();
   });
@@ -120,11 +120,11 @@ describe("search", () => {
     );
     const result = ask(db, { arg: "orchard bramble candlewick driftwood emberfall" });
     expect(result.rows.length).toBe(2);
-    const strongIndex = result.rows.findIndex((r) => String(r[6]).includes("bramble"));
-    const weakIndex = result.rows.findIndex((r) => String(r[6]).includes("alone"));
+    const strongIndex = result.rows.findIndex((r) => String(r[5]).includes("bramble"));
+    const weakIndex = result.rows.findIndex((r) => String(r[5]).includes("alone"));
     expect(strongIndex).toBeLessThan(weakIndex);
-    expect(result.rows[strongIndex]?.[5]).toBe("4/5");
-    expect(result.rows[weakIndex]?.[5]).toBe("1/5");
+    expect(result.rows[strongIndex]?.[4]).toBe("4/5");
+    expect(result.rows[weakIndex]?.[4]).toBe("1/5");
     db.close();
   });
 
@@ -139,7 +139,7 @@ describe("search", () => {
        VALUES ('m-late', 's1', '2026-09-02T09:05:00Z', 'user', 'thistledown', '/f.jsonl', 11)`,
     );
     const result = ask(db, { arg: "thistledown" });
-    expect(result.rows.map((r) => String(r[1]))).toEqual(["2026-09-02T09:05", "2026-09-02T09:00"]);
+    expect(result.rows.map((r) => String(r[1]))).toEqual(["2026-09-02T09:05:00Z", "2026-09-02T09:00:00Z"]);
     db.close();
   });
 
@@ -155,8 +155,8 @@ describe("search", () => {
       [`candlewick driftwood ${"filler ".repeat(60)}`],
     );
     const result = ask(db, { arg: "candlewick driftwood" });
-    expect(result.rows.map((r) => String(r[5]))).toEqual(["2/2", "2/2"]);
-    expect(String(result.rows[0]?.[1])).toBe("2026-09-02T09:00");
+    expect(result.rows.map((r) => String(r[4]))).toEqual(["2/2", "2/2"]);
+    expect(String(result.rows[0]?.[1])).toBe("2026-09-02T09:00:00Z");
     db.close();
   });
 
@@ -174,7 +174,7 @@ describe("search", () => {
     const result = ask(db, { arg: "checkout zzznoword" });
     expect(result.denominator).toContain("This term matched nothing anyone said: zzznoword");
     expect(result.rows.map((r) => String(r[0]))).toEqual(["s1"]);
-    expect(result.rows[0]?.[5]).toBe("1/2");
+    expect(result.rows[0]?.[4]).toBe("1/2");
     db.close();
   });
 
@@ -186,7 +186,7 @@ describe("search", () => {
     );
     const result = ask(db, { arg: "checkout zzzmetaword" });
     expect(result.denominator).toContain("This term matched nothing anyone said: zzzmetaword");
-    expect(result.rows.every((r) => !String(r[6]).includes("zzzmetaword"))).toBe(true);
+    expect(result.rows.every((r) => !String(r[5]).includes("zzzmetaword"))).toBe(true);
     db.close();
   });
 

@@ -1,4 +1,5 @@
 import type { Database } from "bun:sqlite";
+import type { Flags } from "./cli-flags";
 import { refuser } from "./coded-error";
 
 export type Cell = string | number | null;
@@ -9,22 +10,25 @@ export type QueryResult = Rows & { readonly denominator: string; readonly note: 
 
 export type CappedResult = QueryResult & { readonly more: string | null };
 
-export type QueryContext = {
+export type QueryContext<Flag extends string = string> = {
   readonly arg: string;
+  readonly flags: Flags<Flag>;
   readonly home: string;
   readonly maxRows: number;
 };
 
-export type Query = {
+export type Query<Flag extends string = string> = {
   readonly name: string;
   readonly summary: string;
   readonly usage: string;
-  readonly run: (db: Database, ctx: QueryContext) => QueryResult;
+  readonly flags: readonly Flag[];
+  readonly run: (db: Database, ctx: QueryContext<Flag>) => QueryResult;
 };
 
 export const refuseQuery = refuser<{
   readonly unknown_query: { readonly name: string };
   readonly not_a_count: { readonly value: string };
+  readonly not_a_time: { readonly value: string };
   readonly ambiguous_session: { readonly prefix: string; readonly matches: readonly string[] };
 }>({
   unknown_query: {
@@ -34,6 +38,10 @@ export const refuseQuery = refuser<{
   not_a_count: {
     message: ({ value }) => `--rows ${value} is not a count of at least 1`,
     resolve: () => "--rows <n>, a whole number of at least 1",
+  },
+  not_a_time: {
+    message: ({ value }) => `--at ${value} is not a time`,
+    resolve: () => "--at <ts>, an ISO time such as 2026-09-01T10:30:00Z",
   },
   ambiguous_session: {
     message: ({ prefix, matches }) =>

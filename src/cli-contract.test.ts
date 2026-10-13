@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { allCommands, findCommand } from "./cli-commands";
 import { runCli, scratchEnv } from "./fixtures.test-support";
+import { SYNCED_SESSION, syncedRecord } from "./query.test-support";
 import { QUERIES } from "./query-registry";
 
 const COMMANDS = await allCommands();
@@ -150,6 +151,28 @@ describe("the command contract", () => {
     });
   });
 
+  test("thread takes --at, and a query that does not take it refuses it", () => {
+    const root = mkdtempSync(join(tmpdir(), "agent-record-at-"));
+    try {
+      syncedRecord(root);
+      const run = runCli(scratchEnv(root), [
+        "query",
+        "thread",
+        SYNCED_SESSION.slice(0, 8),
+        "--at",
+        "2026-09-16T10:04",
+      ]);
+      expect(run.exitCode).toBe(0);
+      expect(JSON.parse(run.stdout).result.denominator).toContain("centered on 2026-09-16T10:04");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+    expect(refused(["query", "search", "words", "--at", "2026-09-16T10:04"])).toMatchObject({
+      exitCode: 1,
+      error: { code: "unknown_flag", resolve: 'agent-record query search "<words>" [--rows <n>]' },
+    });
+  });
+
   test("--rows refuses what is not a count", () => {
     expect(refused(["query", "search", "words", "--rows", "0"])).toEqual({
       exitCode: 1,
@@ -170,7 +193,10 @@ describe("the command contract", () => {
     }
   });
 
-  test("every named query's usage names --rows, the flag its parse takes", () => {
-    for (const query of QUERIES) expect(query.usage).toEndWith(" [--rows <n>]");
+  test("every named query's usage names each flag its parse takes, --rows last", () => {
+    for (const query of QUERIES) {
+      for (const flag of query.flags) expect(query.usage).toContain(` [--${flag} <`);
+      expect(query.usage).toEndWith(" [--rows <n>]");
+    }
   });
 });

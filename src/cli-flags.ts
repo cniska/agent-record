@@ -1,6 +1,6 @@
 import { refuseUsage } from "./cli-contract";
 
-type Flags<Flag extends string> = Readonly<Partial<Record<Flag, string>>>;
+export type Flags<Flag extends string> = Readonly<Partial<Record<Flag, string>>>;
 
 function scan<Flag extends string>(
   args: readonly string[],

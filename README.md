@@ -54,7 +54,7 @@ Each command prints one JSON line.
 | `agent-record doctor` | Judge whether the record is current and readable, naming the fix for each problem; exits 1 when a check fails |
 | `agent-record query list` | Name the queries |
 | `agent-record query search "<words>"` | Find messages by keyword |
-| `agent-record query thread <id-prefix>[@<ts>]` | Read the exchange around a hit |
+| `agent-record query thread <id-prefix> [--at <ts>]` | Read the exchange around a hit |
 | `agent-record query prior-art "<path fragment>"` | Find where a file shape already exists on disk |
 | `agent-record sql "<select>"` | Run one read-only statement |
 

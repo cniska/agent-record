@@ -34,7 +34,7 @@ const TIMELINE = `WITH timeline AS (
 
 const IN_ORDER = "ORDER BY ts, rank, line";
 
-const SHOWN = `SELECT substr(ts, 1, 16) AS "when", role, skill,
+const SHOWN = `SELECT ts AS at, role, skill,
                       replace(substr(text, 1, ${TRANSCRIPT_READING_CHARS}), char(10), ' ') AS text`;
 
 type Counts = {
@@ -63,16 +63,10 @@ function countsOf(db: Database, id: string, at: string | null): Counts {
   return counts;
 }
 
-function passageTime(ref: string): string | undefined {
-  const cut = ref.lastIndexOf("@");
-  if (cut === -1) return undefined;
-  const tail = ref.slice(cut + 1);
-  return ISO_TIMESTAMP.test(tail) ? tail : undefined;
-}
-
-function parsePassageRef(ref: string): { id: string; at?: string } {
-  const at = passageTime(ref);
-  return at === undefined ? { id: ref } : { id: ref.slice(0, ref.length - at.length - 1), at };
+function passageTime(at: string | undefined): string | null {
+  if (at === undefined) return null;
+  if (!ISO_TIMESTAMP.test(at)) throw refuseQuery("not_a_time", { value: at });
+  return at;
 }
 
 function unshown(earlier: number, later: number): string {
@@ -80,12 +74,14 @@ function unshown(earlier: number, later: number): string {
   return `; ${earlier} earlier and ${later} later rows not shown, --rows <n> to widen`;
 }
 
-export const thread: Query = {
+export const thread: Query<"at"> = {
   name: "thread",
   summary: "read one session's exchange and the tool calls in it, or the stretch around a timestamp",
-  usage: "agent-record query thread <id-prefix>[@<ts>] [--rows <n>]",
+  usage: "agent-record query thread <id-prefix> [--at <ts>] [--rows <n>]",
+  flags: ["at"],
   run: (db, ctx) => {
-    const { id: prefix, at } = parsePassageRef(ctx.arg);
+    const prefix = ctx.arg;
+    const at = passageTime(ctx.flags.at);
     const found = db
       .query<{ id: string }, [string]>(
         "SELECT id FROM session WHERE instr(lower(id), lower(?)) = 1 ORDER BY id LIMIT 2",
@@ -104,7 +100,7 @@ export const thread: Query = {
       return { denominator: "0 sessions", ...whole(""), note: `no session starts with ${prefix}` };
     }
     const { id } = match;
-    const counts = countsOf(db, id, at ?? null);
+    const counts = countsOf(db, id, at);
     const before = Math.ceil(ctx.maxRows / 2);
     const after = ctx.maxRows - before;
     const result = at

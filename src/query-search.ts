@@ -14,10 +14,11 @@ function termsOf(words: string): { readonly terms: readonly Term[]; readonly dro
   };
 }
 
-export const search: Query = {
+export const search: Query<never> = {
   name: "search",
   summary: "find a message by the words in it, across every session",
   usage: 'agent-record query search "<words>" [--rows <n>]',
+  flags: [],
   run: (db, ctx) => {
     const words = ctx.arg;
     const { terms, dropped } = termsOf(words);
@@ -37,8 +38,7 @@ export const search: Query = {
       db,
       `WITH per_term AS (${perTerm}),
             counted AS (SELECT rowid, count(*) AS matched FROM per_term GROUP BY rowid)
-       SELECT substr(m.session_id, 1, 8) AS session, substr(m.ts, 1, 16) AS "when",
-              m.session_id || '@' || m.ts AS ref, m.role,
+       SELECT m.session_id AS session, m.ts AS at, m.role,
               replace(coalesce(s.project, ''), ? || '/', '') AS project,
               c.matched || '/' || ? AS terms,
               replace(snippet(message_fts, 0, '[', ']', '…', 12), char(10), ' ') AS text
@@ -60,7 +60,7 @@ export const search: Query = {
         (missing.length > 0
           ? ` ${missing.length === 1 ? "This term matched" : "These terms matched"} nothing anyone said: ${missing.join(", ")}.`
           : "") +
-        " `agent-record query thread <session>@<when>` reads the exchange a hit sits in.",
+        " `agent-record query thread <session> --at <at>` reads the exchange a hit sits in.",
       ...result,
       note:
         result.rows.length === 0

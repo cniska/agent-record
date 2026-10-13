@@ -31,7 +31,7 @@ export function seeded(): Database {
   return db;
 }
 
-export const ctx: QueryContext = { arg: "", home: "/home", maxRows: 40 };
+export const ctx: QueryContext = { arg: "", flags: {}, home: "/home", maxRows: 40 };
 
 export function syncedRecord(root: string): string {
   const env = scratchEnv(root);

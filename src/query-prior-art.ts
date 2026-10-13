@@ -7,10 +7,11 @@ const PER_WHERE = 3;
 
 const MATCHES = "instr(lower(path), lower(?)) > 0";
 
-export const priorArt: Query = {
+export const priorArt: Query<never> = {
   name: "prior-art",
   summary: "where a path like this one already exists across the repos on disk, newest first",
   usage: 'agent-record query prior-art "<path fragment>" [--rows <n>]',
+  flags: [],
   run: (db, ctx) => {
     const fragment = ctx.arg;
     const result = select(

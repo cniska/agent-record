@@ -68,9 +68,13 @@ describe("thread", () => {
     expect(whole.denominator).toContain("1 messages anyone said");
     expect(whole.denominator).not.toContain("centered on");
 
-    const passage = thread.run(db, { ...ctx, arg: `${id}@2026-09-01T10:45:00.000Z` });
+    const passage = thread.run(db, { ...ctx, arg: id, flags: { at: "2026-09-01T10:45:00.000Z" } });
     expect(passage.denominator).toContain("centered on 2026-09-01T10:45:00.000Z");
-    expect(passage.rows.length).toBe(1);
+    expect(column(passage, "at")).toEqual(["2026-09-01T10:45:00.000Z"]);
+
+    expect(thread.run(db, { ...ctx, arg: `${id}@2026-09-01T10:45:00.000Z` }).note).toBe(
+      `no session starts with ${id}@2026-09-01T10:45:00.000Z`,
+    );
     db.close();
   });
 
@@ -114,7 +118,7 @@ describe("thread", () => {
     db.close();
   });
 
-  test("centers on a timestamp with half the rows on each side, and says how many it left out", () => {
+  test("centers on --at with half the rows on each side, and says how many it left out", () => {
     const db = withActions();
     const call = db.prepare(
       `INSERT INTO tool_call (id, session_id, ts_call, tool_name, file_path, src_file)
@@ -123,7 +127,7 @@ describe("thread", () => {
     for (let minute = 10; minute < 30; minute += 1) {
       call.run(`t-read-${minute}`, `2026-09-01T10:${minute}:00Z`, `/w/before-${minute}.ts`);
     }
-    const passage = thread.run(db, { ...ctx, arg: "s1@2026-09-01T10:34:00Z", maxRows: 4 });
+    const passage = thread.run(db, { ...ctx, arg: "s1", flags: { at: "2026-09-01T10:34:00Z" }, maxRows: 4 });
     expect(column(passage, "text")).toEqual([
       "Edit: /w/src/sync.ts",
       "denied (user-rejected): not that file",
@@ -134,9 +138,23 @@ describe("thread", () => {
       "centered on 2026-09-01T10:34:00Z; 22 earlier and 0 later rows not shown, --rows <n> to widen; 1 tool calls with no time are not shown",
     );
 
-    const wide = thread.run(db, { ...ctx, arg: "s1@2026-09-01T10:34:00Z", maxRows: 60 });
+    const wide = thread.run(db, { ...ctx, arg: "s1", flags: { at: "2026-09-01T10:34:00Z" }, maxRows: 60 });
     expect(wide.denominator).toEndWith(
       "centered on 2026-09-01T10:34:00Z; 1 tool calls with no time are not shown",
+    );
+    db.close();
+  });
+
+  test("refuses an --at that is not a time, naming the shape it takes", () => {
+    const db = seeded();
+    expect(() => thread.run(db, { ...ctx, arg: "s1", flags: { at: "yesterday" } })).toThrow(
+      expect.objectContaining({
+        code: "not_a_time",
+        message: "--at yesterday is not a time",
+        meta: { value: "yesterday" },
+        resolve: "--at <ts>, an ISO time such as 2026-09-01T10:30:00Z",
+        kind: "refusal",
+      }),
     );
     db.close();
   });
@@ -164,7 +182,7 @@ describe("thread", () => {
       const run = (arg: string) => thread.run(db, { ...ctx, arg });
 
       expect(run("a_").note).toBe("no session starts with a_");
-      expect(run("a%")).toMatchObject({ columns: ["when", "role", "skill", "text"], rows: [] });
+      expect(run("a%")).toMatchObject({ columns: ["at", "role", "skill", "text"], rows: [] });
       expect(run("AB").denominator).toStartWith("session ab-1:");
     } finally {
       db.close();
@@ -182,7 +200,8 @@ describe("thread", () => {
 
         const centered = thread.run(db, {
           ...ctx,
-          arg: `${SYNCED_SESSION.slice(0, 8)}@2026-09-16T10:04`,
+          arg: SYNCED_SESSION.slice(0, 8),
+          flags: { at: "2026-09-16T10:04" },
         });
         expect(centered.denominator).toContain("centered on");
 
