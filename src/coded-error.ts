@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { errorDetail } from "./error-code";
+import { errorDetail } from "./error-read";
 
 const ErrorKind = z.enum(["refusal", "fault"]);
 export type ErrorKind = z.infer<typeof ErrorKind>;

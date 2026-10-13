@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { openDb } from "./db";
-import { errorCode } from "./error-code";
+import { errorCode } from "./error-read";
 import { archivedPath, grokUpdate, scratchEnv } from "./fixtures.test-support";
 import { listSource, SESSION_SOURCES } from "./ingest-sources";
 import { sync } from "./ingest-sync";

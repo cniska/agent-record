@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SCHEMA_SQL } from "./db-schema";
-import { errorCode } from "./error-code";
+import { errorCode } from "./error-read";
 import { probeCheckout } from "./git-probe";
 import { indexRepoFiles, trackedFiles } from "./repo-files";
 

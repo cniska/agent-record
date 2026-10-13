@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { refuseRecord } from "./db-contract";
-import { errorCode } from "./error-code";
+import { errorCode } from "./error-read";
 import { type Env, locksDir } from "./paths";
 
 const PID = /^[1-9]\d*$/;

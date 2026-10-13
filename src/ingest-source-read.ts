@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import type { z } from "zod";
-import { isEnvironmentError } from "./error-code";
+import { isEnvironmentError } from "./error-read";
 import { type Failure, refuseIngest } from "./ingest-contract";
 
 export function readingSource<T>(

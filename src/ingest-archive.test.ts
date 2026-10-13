@@ -14,7 +14,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { errorCode } from "./error-code";
+import { errorCode } from "./error-read";
 import { archivedPath as archived, scratchEnv } from "./fixtures.test-support";
 import { archiveSources } from "./ingest-archive";
 import { readCodexTitles } from "./ingest-codex-source";

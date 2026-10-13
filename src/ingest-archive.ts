@@ -15,7 +15,7 @@ import {
 } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 import { invariant } from "./assert";
-import { isEnvironmentError } from "./error-code";
+import { isEnvironmentError } from "./error-read";
 import { type Failure, refuseIngest } from "./ingest-contract";
 import { scan } from "./ingest-scan";
 import { SESSION_SOURCES, type SessionSource } from "./ingest-sources";

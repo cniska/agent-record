@@ -3,7 +3,7 @@ import { type Command, Ran } from "./cli-contract";
 import { parseArg } from "./cli-flags";
 import { sqliteCode } from "./db-error";
 import { readingRecord } from "./db-read";
-import { errorDetail } from "./error-code";
+import { errorDetail } from "./error-read";
 import { dbPath } from "./paths";
 import { cellOf } from "./query";
 import type { Cell, Rows } from "./query-contract";

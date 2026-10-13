@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { SCHEMA_SQL } from "./db-schema";
-import { errorCode } from "./error-code";
+import { errorCode } from "./error-read";
 import { repoWithWorktree } from "./git-fixtures.test-support";
 import { ingestCommits, probeCheckouts, repoRoots } from "./ingest-git";
 import { indexRepoFiles } from "./repo-files";
