@@ -32,8 +32,8 @@ function refusalOr<T>(probe: () => T): T | CodedError {
 
 function recordHealth(env: Env): Health {
   const name = "record";
-  const refusal = refusalOr(() => readingRecord(dbPath(env), () => null));
-  if (refusal !== null) return { name, state: "fail", detail: refusal.message, fix: refusal.resolve };
+  const read = refusalOr(() => readingRecord(dbPath(env), () => null));
+  if (read instanceof CodedError) return { name, state: "fail", detail: read.message, fix: read.resolve };
   return { name, state: "ok", detail: `schema version ${SCHEMA_VERSION}`, fix: null };
 }
 

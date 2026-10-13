@@ -1,7 +1,8 @@
-import { type Database, SQLiteError } from "bun:sqlite";
+import type { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
 import { isFresh, openRecordFile, refuseOtherVersion } from "./db";
 import { refuseRecord } from "./db-contract";
+import { sqliteCodeOf } from "./error-code";
 
 const READERS_DO_NOT_WAIT_MS = 0;
 
@@ -22,8 +23,7 @@ export function readingRecord<T>(path: string, use: (db: Database) => T): T {
       db.close();
     }
   } catch (error) {
-    if (error instanceof SQLiteError && error.code?.startsWith("SQLITE_BUSY"))
-      throw refuseRecord("record_busy", { path }, error);
+    if (sqliteCodeOf(error)?.startsWith("SQLITE_BUSY")) throw refuseRecord("record_busy", { path }, error);
     throw error;
   }
 }

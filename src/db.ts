@@ -1,9 +1,10 @@
-import { Database, type DatabaseOptions, SQLiteError } from "bun:sqlite";
+import { Database, type DatabaseOptions } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { invariant } from "./assert";
 import { refuseRecord } from "./db-contract";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
+import { sqliteCodeOf } from "./error-code";
 
 export function recordVersion(db: Database): number {
   const row = db.query<{ user_version: number }, []>("PRAGMA user_version").get();
@@ -23,6 +24,10 @@ export function refuseOtherVersion(db: Database): void {
   if (found !== SCHEMA_VERSION) throw refuseRecord("record_version", { found, expected: SCHEMA_VERSION });
 }
 
+function failNowIfUnopenable(db: Database): void {
+  recordVersion(db);
+}
+
 const UNOPENABLE_CODES = ["SQLITE_CANTOPEN", "SQLITE_NOTADB"] as const;
 
 export function openRecordFile(
@@ -33,12 +38,12 @@ export function openRecordFile(
   try {
     db = new Database(path, options);
     db.run(`PRAGMA busy_timeout = ${busyTimeoutMs}`);
-    recordVersion(db);
+    failNowIfUnopenable(db);
     return db;
   } catch (error) {
     db?.close();
-    const code = error instanceof SQLiteError ? (error.code ?? "") : "";
-    if (UNOPENABLE_CODES.some((unopenable) => code.startsWith(unopenable)))
+    const code = sqliteCodeOf(error);
+    if (UNOPENABLE_CODES.some((unopenable) => code?.startsWith(unopenable)))
       throw refuseRecord("record_unopenable", { path }, error);
     throw error;
   }

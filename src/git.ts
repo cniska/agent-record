@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { constants } from "node:os";
+import { errorDetail } from "./coded-error";
 import { refuseGit } from "./git-contract";
 
 export type GitRun = { readonly status: number; readonly out: string; readonly err: string };
@@ -7,7 +8,7 @@ export type GitRun = { readonly status: number; readonly out: string; readonly e
 function unavailable(args: readonly string[], error: unknown) {
   return refuseGit("git_unavailable", {
     command: `git ${args.join(" ")}`,
-    detail: error instanceof Error ? error.message : String(error),
+    detail: errorDetail(error),
   });
 }
 

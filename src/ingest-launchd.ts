@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { invariant } from "./assert";
+import { errorDetail } from "./coded-error";
 import { copyBackup } from "./file-backup";
 import { refuseIngest } from "./ingest-contract";
 import { type Env, resolveHomeDir, stateDir } from "./paths";
@@ -89,7 +90,7 @@ export function agentLoaded(env: Env = process.env): boolean {
   } catch (error) {
     throw refuseIngest("launchctl_unavailable", {
       command: args.join(" "),
-      detail: error instanceof Error ? error.message : String(error),
+      detail: errorDetail(error),
     });
   }
 }

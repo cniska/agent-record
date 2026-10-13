@@ -81,8 +81,11 @@ const faultUnexpected = faulter<{ readonly command_failed: { readonly detail: st
   },
 });
 
+export function errorDetail(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
 export function codedOf(error: unknown): CodedError {
   if (error instanceof CodedError) return error;
-  const detail = error instanceof Error ? error.message : String(error);
-  return faultUnexpected("command_failed", { detail }, error);
+  return faultUnexpected("command_failed", { detail: errorDetail(error) }, error);
 }

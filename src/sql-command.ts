@@ -1,7 +1,9 @@
-import { type Database, SQLiteError } from "bun:sqlite";
+import type { Database } from "bun:sqlite";
 import { type Command, Ran } from "./cli-contract";
 import { parseArg } from "./cli-flags";
+import { errorDetail } from "./coded-error";
 import { readingRecord } from "./db-read";
+import { sqliteCodeOf } from "./error-code";
 import { dbPath } from "./paths";
 import { cellOf } from "./query";
 import type { Cell, Rows } from "./query-contract";
@@ -11,10 +13,10 @@ import { refuseSql } from "./sql-contract";
 const SQL_DENOMINATOR = "the rows the statement returned, in the order SQLite returned them";
 
 function refusalOf(error: unknown, statement: string): unknown {
-  if (!(error instanceof SQLiteError)) return error;
-  if (error.code === "SQLITE_ERROR")
-    return refuseSql("sql_invalid", { statement, detail: error.message }, error);
-  if (error.code?.startsWith("SQLITE_READONLY")) return refuseSql("sql_writes", { statement }, error);
+  const code = sqliteCodeOf(error);
+  if (code === "SQLITE_ERROR")
+    return refuseSql("sql_invalid", { statement, detail: errorDetail(error) }, error);
+  if (code?.startsWith("SQLITE_READONLY")) return refuseSql("sql_writes", { statement }, error);
   return error;
 }
 
