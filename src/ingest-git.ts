@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { existsSync, realpathSync } from "node:fs";
+import { invariant } from "./assert";
 import { writeTransaction } from "./db";
 import { checkoutRoot } from "./git-checkout";
 import { type Checkout, probeCheckout } from "./git-probe";
@@ -7,6 +8,7 @@ import { originLabel } from "./git-remote";
 import type { Failure } from "./ingest-contract";
 import { type Commit, readCommits } from "./ingest-git-source";
 import { isScratchRepo } from "./ingest-scratch";
+import { Timestamp, timestampMinus } from "./timestamp";
 
 export type GitReport = { repos: number; commits: number; files: number; unchanged: number };
 
@@ -52,6 +54,11 @@ export function ingestCommits(db: Database, checkouts: readonly Checkout[], fail
   const newestOf = db.query<{ ts: string | null }, [string]>(
     "SELECT max(ts) AS ts FROM repo_commit WHERE repo = ?",
   );
+  const newestCommitTime = (repo: string): Timestamp | null => {
+    const newest = Timestamp.nullable().safeParse(newestOf.get(repo)?.ts ?? null);
+    invariant(newest.success, "a stored commit time parses as a time");
+    return newest.data;
+  };
   const headUnchanged = db.query<{ one: number }, [string, string | null]>(
     "SELECT 1 AS one FROM checkout WHERE path = ? AND head IS ?",
   );
@@ -62,9 +69,9 @@ export function ingestCommits(db: Database, checkouts: readonly Checkout[], fail
   const report: GitReport = { repos: 0, commits: 0, files: 0, unchanged: 0 };
   const readHead = (path: string, repo: string, head: string): boolean => {
     let read: { label: string | null; commits: Commit[] };
+    const newest = newestCommitTime(repo);
+    const since = newest === null ? null : timestampMinus(newest, OVERLAP_DAYS * 86_400_000);
     try {
-      const newest = newestOf.get(repo)?.ts;
-      const since = newest ? new Date(Date.parse(newest) - OVERLAP_DAYS * 86_400_000).toISOString() : null;
       read = { label: originLabel(repo), commits: readCommits(path, head, since) };
     } catch (error) {
       fail(path, error);

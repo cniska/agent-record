@@ -20,7 +20,7 @@ export function commitKind(subject: string): string | null {
   return match?.[1] ?? null;
 }
 
-export function readCommits(checkout: string, head: string, since: string | null): Commit[] {
+export function readCommits(checkout: string, head: string, since: Timestamp | null): Commit[] {
   const args = [
     "log",
     head,
