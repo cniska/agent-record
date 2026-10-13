@@ -1,6 +1,7 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { lchownSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 import { z } from "zod";
+import { invariant } from "./assert";
 import { archiveRootOf } from "./ingest-archive";
 import { SESSION_SOURCES } from "./ingest-sources";
 import type { Tool } from "./ingest-tools";
@@ -12,6 +13,23 @@ export function scratchEnv(root: string): Env {
     XDG_DATA_HOME: join(root, "data"),
     XDG_STATE_HOME: join(root, "state"),
   };
+}
+
+const UNPRIVILEGED_UID = 65534;
+
+export function asUnprivileged<T>(env: Env, run: () => T): T {
+  const { getuid, seteuid } = process;
+  if (getuid?.() !== 0 || !seteuid) return run();
+  const root = env.HOME;
+  invariant(root !== undefined, "a scratch env has a HOME");
+  const tree = readdirSync(root, { recursive: true }).map((path) => join(root, String(path)));
+  for (const path of [root, ...tree]) lchownSync(path, UNPRIVILEGED_UID, -1);
+  seteuid(UNPRIVILEGED_UID);
+  try {
+    return run();
+  } finally {
+    seteuid(0);
+  }
 }
 
 function writeLines(path: string, lines: unknown[]): string {

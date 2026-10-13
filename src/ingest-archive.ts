@@ -1,5 +1,4 @@
 import {
-  accessSync,
   appendFileSync,
   closeSync,
   constants,
@@ -163,7 +162,7 @@ function isFileSystemError(error: unknown): error is Error & { readonly syscall:
 
 function isReadable(path: string): boolean {
   try {
-    accessSync(path, constants.R_OK);
+    closeSync(openSync(path, "r"));
     return true;
   } catch (error) {
     if (!isFileSystemError(error)) throw error;

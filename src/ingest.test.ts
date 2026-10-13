@@ -15,6 +15,7 @@ import { basename, dirname, join } from "node:path";
 import { openDb } from "./db";
 import {
   archivedPath,
+  asUnprivileged,
   bytesThroughLine,
   claudeTranscriptLines,
   codexRolloutLines,
@@ -528,7 +529,7 @@ describe("ingest", () => {
 
     const db = openDb(dbPath(env));
     try {
-      expect(sync(db, env).failures).toEqual([
+      expect(asUnprivileged(env, () => sync(db, env)).failures).toEqual([
         {
           path: locked,
           error: expect.objectContaining({

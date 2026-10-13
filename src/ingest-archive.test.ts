@@ -15,7 +15,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { errorCode } from "./error-read";
-import { archivedPath as archived, scratchEnv } from "./fixtures.test-support";
+import { archivedPath as archived, asUnprivileged, scratchEnv } from "./fixtures.test-support";
 import { archiveSources } from "./ingest-archive";
 import { readCodexTitles } from "./ingest-codex-source";
 import { archiveDir, claudeProjectsDir, codexDir, type Env, grokSessionsDir } from "./paths";
@@ -151,7 +151,7 @@ describe("archiving session files", () => {
     const copyRoot = join(archiveDir(env), "claude");
     mkdirSync(copyRoot, { recursive: true });
     chmodSync(copyRoot, 0o555);
-    const result = archive(env);
+    const result = asUnprivileged(env, () => archive(env));
     chmodSync(copyRoot, 0o755);
     expect(result.failures).toEqual([{ path: archived("claude", live, env), code: "archive_unwritable" }]);
     expect(readFileSync(live, "utf8")).toBe('{"a":1}\n');
@@ -163,7 +163,7 @@ describe("archiving session files", () => {
     const locked = write(claudeTranscript(env), '{"a":1}\n');
     const open = write(rollout(env, "sessions"), '{"b":2}\n');
     chmodSync(locked, 0o000);
-    const result = archive(env);
+    const result = asUnprivileged(env, () => archive(env));
     chmodSync(locked, 0o644);
     expect(result.failures).toEqual([{ path: locked, code: "source_unreadable" }]);
     expect(existsSync(archived("claude", locked, env))).toBe(false);
