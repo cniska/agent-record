@@ -2,6 +2,8 @@ import { z } from "zod";
 import { lineOf, nonEmpty } from "./ingest-parse";
 import {
   type MessageRow,
+  NO_FACTS,
+  NO_TOOL_CALL,
   type ParsedChunk,
   projectOf,
   type SessionFacts,
@@ -45,24 +47,25 @@ const PiLine = z.looseObject({
   message: PiMessage.optional(),
 });
 
-function textOf(content: PiMessage["content"]): string | undefined {
+function textOf(content: PiMessage["content"]): string | null {
   return nonEmpty(
     (content ?? []).flatMap((part) => (part.type === "text" && part.text ? [part.text] : [])).join("\n"),
   );
 }
 
-function usageOf(message: PiMessage, ts: string, messageId: string | undefined): UsageRow[] {
+function usageOf(message: PiMessage, ts: string, messageId: string | null): UsageRow[] {
   const { usage, responseId } = message;
   if (usage === undefined || responseId === undefined) return [];
   return [
     {
       responseId,
       ts,
-      model: message.model,
+      model: message.model ?? null,
       inputTokens: usage.input ?? 0,
       cacheReadTokens: usage.cacheRead ?? 0,
       cacheWriteTokens: usage.cacheWrite ?? 0,
       outputTokens: usage.output ?? 0,
+      attributionSkill: null,
       messageId,
     },
   ];
@@ -73,12 +76,13 @@ function callsOf(message: PiMessage, ts: string, srcLine: number): ToolCallRow[]
     if (part.type !== "toolCall" || part.id === undefined) return [];
     return [
       {
+        ...NO_TOOL_CALL,
         id: part.id,
         tsCall: ts,
         toolName: nonEmpty(part.name),
         filePath: nonEmpty(part.arguments?.path),
         command: nonEmpty(part.arguments?.command),
-        model: message.model,
+        model: message.model ?? null,
         srcLineCall: srcLine,
       },
     ];
@@ -100,15 +104,17 @@ export function parsePiChunk(lines: readonly string[], firstLineNumber: number):
       dropped.push(srcLine);
       continue;
     }
-    const ts = line.timestamp;
-    if (ts) session.push({ ts });
+    const ts = line.timestamp ?? null;
+    if (ts) session.push({ ...NO_FACTS, ts });
     switch (line.type) {
-      case "session":
-        session.push({ cwd: line.cwd, project: projectOf(line.cwd) });
+      case "session": {
+        const cwd = line.cwd ?? null;
+        session.push({ ...NO_FACTS, cwd, project: projectOf(cwd) });
         continue;
+      }
       case "title":
       case "title_change":
-        if (line.title) session.push({ title: line.title });
+        if (line.title) session.push({ ...NO_FACTS, title: line.title });
         continue;
       case "message":
         break;
@@ -116,14 +122,15 @@ export function parsePiChunk(lines: readonly string[], firstLineNumber: number):
         continue;
     }
     const { message, id } = line;
-    if (message === undefined || id === undefined || ts === undefined) continue;
+    if (message === undefined || id === undefined || ts === null) continue;
     if (message.role === "toolResult") {
       if (message.toolCallId === undefined) continue;
       toolCalls.push({
+        ...NO_TOOL_CALL,
         id: message.toolCallId,
         tsResult: ts,
         toolName: nonEmpty(message.toolName),
-        isError: message.isError,
+        isError: message.isError ?? null,
         srcLineResult: srcLine,
       });
       continue;
@@ -135,15 +142,23 @@ export function parsePiChunk(lines: readonly string[], firstLineNumber: number):
         id,
         ts,
         role: message.role,
-        model: message.model,
+        model: message.model ?? null,
+        turnId: null,
+        promptSource: null,
+        originKind: null,
         isMeta: false,
         isSkillBody: false,
+        attributionSkill: null,
+        slashCommand: null,
+        denialKind: null,
+        userFeedback: null,
         text,
         srcLine,
+        extra: null,
       });
     }
     if (message.role !== "assistant") continue;
-    usage.push(...usageOf(message, ts, text ? id : undefined));
+    usage.push(...usageOf(message, ts, text ? id : null));
     toolCalls.push(...callsOf(message, ts, srcLine));
   }
 

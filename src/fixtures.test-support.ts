@@ -337,6 +337,93 @@ export function withoutTimestamp(line: unknown): string {
   return JSON.stringify(rest);
 }
 
+export function piSessionLines(): unknown[] {
+  return [
+    { type: "title", v: 1, title: "Greet the reader", source: "auto", updatedAt: "2026-01-01T10:30:00.000Z" },
+    {
+      type: "session",
+      version: 3,
+      id: "aaaaaaaa-0000-4000-8000-000000000001",
+      timestamp: "2026-01-01T10:00:00.000Z",
+      cwd: "/home/dev/widgets",
+    },
+    {
+      type: "model_change",
+      id: "m1",
+      parentId: null,
+      timestamp: "2026-01-01T10:00:01.000Z",
+      provider: "acme",
+      modelId: "model-a",
+    },
+    {
+      type: "thinking_level_change",
+      id: "t1",
+      parentId: "m1",
+      timestamp: "2026-01-01T10:00:01.000Z",
+      thinkingLevel: "high",
+    },
+    {
+      type: "message",
+      id: "u1",
+      parentId: "t1",
+      timestamp: "2026-01-01T10:01:00.000Z",
+      message: {
+        role: "user",
+        content: [{ type: "text", text: "add a greeting" }],
+        timestamp: 1767261660000,
+      },
+    },
+    {
+      type: "message",
+      id: "a1",
+      parentId: "u1",
+      timestamp: "2026-01-01T10:01:05.000Z",
+      message: {
+        role: "assistant",
+        content: [
+          { type: "thinking", thinking: "planning" },
+          { type: "text", text: "Reading the readme first." },
+          { type: "toolCall", id: "call_1", name: "read", arguments: { path: "README.md" } },
+          { type: "toolCall", id: "call_2", name: "bash", arguments: { command: "bun test" } },
+        ],
+        provider: "acme",
+        model: "model-a",
+        usage: { input: 1000, output: 20, cacheRead: 100, cacheWrite: 7, reasoning: 5, totalTokens: 1132 },
+        stopReason: "toolUse",
+        responseId: "resp_1",
+      },
+    },
+    {
+      type: "message",
+      id: "r1",
+      parentId: "a1",
+      timestamp: "2026-01-01T10:01:06.000Z",
+      message: { role: "toolResult", toolCallId: "call_1", toolName: "read", isError: false, content: [] },
+    },
+    {
+      type: "message",
+      id: "r2",
+      parentId: "r1",
+      timestamp: "2026-01-01T10:01:08.000Z",
+      message: { role: "toolResult", toolCallId: "call_2", toolName: "bash", isError: true, content: [] },
+    },
+    {
+      type: "message",
+      id: "d1",
+      parentId: "r2",
+      timestamp: "2026-01-01T10:02:00.000Z",
+      message: { role: "developer", content: [{ type: "text", text: "a reminder from the harness" }] },
+    },
+    {
+      type: "custom",
+      customType: "tool_execution_start",
+      data: {},
+      id: "c1",
+      timestamp: "2026-01-01T10:01:05.500Z",
+    },
+  ];
+}
+
 export function grokUpdate(sessionId: string, update: unknown, eventId: string, ms: number): unknown {
   return {
     timestamp: Math.floor(ms / 1000),

@@ -3,7 +3,7 @@ import { codexRolloutLines, withoutTimestamp } from "./fixtures.test-support";
 import { parseCodexChunk } from "./ingest-parse-codex";
 
 const THREAD = "01a0a651-086e-7150-8650-cef0f4025a58";
-const FRESH = { id: THREAD, state: {} };
+const FRESH = { id: THREAD, state: { model: null, turnId: null } };
 const modern = codexRolloutLines(THREAD, { withIds: true }).map((l) => JSON.stringify(l));
 const legacy = codexRolloutLines(THREAD, { withIds: false }).map((l) => JSON.stringify(l));
 
@@ -62,7 +62,7 @@ describe("parseCodexChunk", () => {
   test("resumes the turn in effect when a chunk starts after the turn_context", () => {
     const tail = modern.slice(2);
     const cold = parseCodexChunk(tail, 1, FRESH);
-    expect(cold.usage[0]?.model).toBeUndefined();
+    expect(cold.usage[0]?.model).toBeNull();
 
     const warm = parseCodexChunk(tail, 1, { id: THREAD, state: { model: "gpt-5.6-luna", turnId: "turn-1" } });
     expect(warm.usage[0]?.model).toBe("gpt-5.6-luna");
@@ -75,8 +75,12 @@ describe("parseCodexChunk", () => {
       {
         turnId: "turn-1",
         tsStart: JSON.parse(modern[1] ?? "{}").timestamp,
+        tsEnd: null,
+        durationMs: null,
+        messageCount: null,
         status: "started",
         model: "gpt-5.6-luna",
+        timeToFirstTokenMs: null,
       },
     ]);
   });
@@ -114,7 +118,7 @@ describe("parseCodexChunk", () => {
 
   test("takes session facts from session_meta", () => {
     const parsed = parseCodexChunk(modern, 1, FRESH);
-    expect(parsed.session.find((facts) => facts.gitBranch !== undefined)).toMatchObject({
+    expect(parsed.session.find((facts) => facts.gitBranch !== null)).toMatchObject({
       cwd: "/Users/x/code/demo",
       gitBranch: "main",
       cliVersion: "0.154.0",
@@ -189,7 +193,7 @@ describe("parseCodexChunk", () => {
       {
         toolCallId: "item-7",
         ts: "2026-09-16T10:00:00.000Z",
-        model: undefined,
+        model: null,
         skillName: "plan",
         how: "read",
       },
@@ -218,7 +222,7 @@ describe("parseCodexChunk", () => {
     );
     expect(parsed.dropped).toEqual([]);
     expect(parsed.usage).toMatchObject([{ responseId: "r-1", outputTokens: 0 }]);
-    expect(parsed.toolCalls).toMatchObject([{ id: "i-1", isError: undefined }]);
+    expect(parsed.toolCalls).toMatchObject([{ id: "i-1", isError: null }]);
   });
 
   test("keeps a message line whose content is null", () => {

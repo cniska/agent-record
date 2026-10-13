@@ -64,7 +64,7 @@ describe("agent-record doctor", () => {
     expect(check(env, "record")).toEqual({
       name: "record",
       state: "ok",
-      detail: "schema version 5",
+      detail: "schema version 6",
       fix: null,
     });
   });

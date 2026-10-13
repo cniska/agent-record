@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { jsonOrUndefined, lineOf, nonEmpty } from "./ingest-parse";
+import { jsonOrNull, lineOf, nonEmpty } from "./ingest-parse";
 import {
   type MessageRow,
+  NO_FACTS,
   type ParsedChunk,
   projectOf,
   type SessionFacts,
@@ -11,8 +12,10 @@ import {
 } from "./ingest-session-records";
 import { type SkillLoadRow, skillFromFileRead } from "./ingest-skill-load";
 
-export const CodexState = z.looseObject({ model: z.string().optional(), turnId: z.string().optional() });
+export const CodexState = z.strictObject({ model: z.string().nullable(), turnId: z.string().nullable() });
 export type CodexState = z.infer<typeof CodexState>;
+
+export const NO_CODEX_STATE: CodexState = { model: null, turnId: null };
 
 const CodexContent = z.looseObject({ type: z.string().optional(), text: z.string().optional() });
 
@@ -68,29 +71,27 @@ const CodexLine = z.looseObject({
     .optional(),
 });
 
-function durationMs(d: CodexDuration | undefined): number | undefined {
-  if (!d) return undefined;
+function durationMs(d: CodexDuration | undefined): number | null {
+  if (!d) return null;
   return Math.round((d.secs ?? 0) * 1000 + (d.nanos ?? 0) / 1e6);
 }
 
-function msSince(value: number | undefined): string | undefined {
-  return value == null ? undefined : new Date(value).toISOString();
+function msSince(value: number | undefined): string | null {
+  return value == null ? null : new Date(value).toISOString();
 }
 
-function commandText(value: unknown): string | undefined {
-  return Array.isArray(value) ? value.map(String).join(" ") : undefined;
+function commandText(value: unknown): string | null {
+  return Array.isArray(value) ? value.map(String).join(" ") : null;
 }
 
-function epochSeconds(value: number | undefined): string | undefined {
-  return value == null ? undefined : new Date(value * 1000).toISOString();
+function epochSeconds(value: number | undefined): string | null {
+  return value == null ? null : new Date(value * 1000).toISOString();
 }
 
-function visibleText(
-  content: (z.infer<typeof CodexContent> | null)[] | null | undefined,
-): string | undefined {
-  if (!Array.isArray(content)) return undefined;
+function visibleText(content: (z.infer<typeof CodexContent> | null)[] | null | undefined): string | null {
+  if (!Array.isArray(content)) return null;
   const parts = content.flatMap((b) => (b?.text !== undefined ? [b.text] : []));
-  return parts.length > 0 ? parts.join("\n") : undefined;
+  return parts.length > 0 ? parts.join("\n") : null;
 }
 
 type CodexThread = { readonly id: string; readonly state: CodexState };
@@ -117,7 +118,7 @@ export function parseCodexChunk(
       continue;
     }
     const ts = nonEmpty(line.timestamp);
-    if (ts) session.push({ ts });
+    if (ts) session.push({ ...NO_FACTS, ts });
     const p = line.payload;
     if (!p) continue;
     if (!ts) {
@@ -127,13 +128,15 @@ export function parseCodexChunk(
     const srcLine = firstLineNumber + index;
 
     if (line.type === "session_meta") {
+      const cwd = p.cwd ?? null;
       session.push({
-        ts: p.timestamp,
-        cwd: p.cwd,
-        project: projectOf(p.cwd),
+        ts: p.timestamp ?? null,
+        cwd,
+        project: projectOf(cwd),
         gitBranch: nonEmpty(p.git?.branch),
         cliVersion: nonEmpty(p.cli_version),
         entrypoint: nonEmpty(p.originator),
+        title: null,
       });
       continue;
     }
@@ -143,13 +146,18 @@ export function parseCodexChunk(
         model: nonEmpty(p.model) ?? current.model,
         turnId: nonEmpty(p.turn_id) ?? current.turnId,
       };
-      session.push({ cwd: p.cwd, project: projectOf(p.cwd) });
+      const cwd = p.cwd ?? null;
+      session.push({ ...NO_FACTS, cwd, project: projectOf(cwd) });
       if (current.turnId) {
         turns.push({
           turnId: current.turnId,
           tsStart: ts,
+          tsEnd: null,
+          durationMs: null,
+          messageCount: null,
           status: "started",
           model: current.model,
+          timeToFirstTokenMs: null,
         });
       }
       continue;
@@ -162,28 +170,33 @@ export function parseCodexChunk(
     ) {
       const text = visibleText(p.content);
       const injected = /^\s*(#\s*AGENTS\.md instructions|<[a-z_]+>|\[\s*\{)/.test(text ?? "");
-      const promptSource = p.role === "user" ? (injected ? "system" : "typed") : undefined;
+      const promptSource = p.role === "user" ? (injected ? "system" : "typed") : null;
 
       const id = nonEmpty(p.id) ?? `${thread.id}:${srcLine}`;
       messages.push({
         id,
         ts,
         role: p.role,
-        model: p.role === "assistant" ? current.model : undefined,
+        model: p.role === "assistant" ? current.model : null,
         turnId: current.turnId,
         promptSource,
+        originKind: null,
         isMeta: false,
         isSkillBody: false,
+        attributionSkill: null,
+        slashCommand: null,
+        denialKind: null,
+        userFeedback: null,
         text,
         srcLine,
-        extra: jsonOrUndefined({ content_types: p.content?.map((c) => c?.type).filter(Boolean) }),
+        extra: jsonOrNull({ content_types: p.content?.map((c) => c?.type).filter(Boolean) }),
       });
       continue;
     }
 
     if (line.type === "event_msg" && (p.type === "task_complete" || p.type === "turn_aborted") && p.turn_id) {
       const status = p.type === "task_complete" ? "completed" : nonEmpty(p.reason);
-      if (status === undefined) {
+      if (status === null) {
         dropped.push(srcLine);
         continue;
       }
@@ -191,11 +204,11 @@ export function parseCodexChunk(
         turnId: p.turn_id,
         tsStart: epochSeconds(p.started_at),
         tsEnd: epochSeconds(p.completed_at) ?? ts,
-        durationMs: p.duration_ms,
-        messageCount: undefined,
+        durationMs: p.duration_ms ?? null,
+        messageCount: null,
         status,
-        model: undefined,
-        timeToFirstTokenMs: p.time_to_first_token_ms,
+        model: null,
+        timeToFirstTokenMs: p.time_to_first_token_ms ?? null,
       });
       continue;
     }
@@ -205,7 +218,7 @@ export function parseCodexChunk(
       const kind = item.type ?? "";
       if (kind === "CommandExecution" || kind === "FileChange" || kind === "McpToolCall") {
         const cmd = typeof item.command === "string" ? item.command : commandText(item.command);
-        const readSkill = cmd ? skillFromFileRead(cmd) : undefined;
+        const readSkill = cmd ? skillFromFileRead(cmd) : null;
         if (readSkill) {
           skillLoads.push({
             toolCallId: item.id,
@@ -217,17 +230,20 @@ export function parseCodexChunk(
         }
         toolCalls.push({
           id: item.id,
+          messageId: null,
           model: current.model,
+          attributionSkill: null,
           tsCall: msSince(p.started_at_ms) ?? ts,
           tsResult: msSince(p.completed_at_ms) ?? ts,
           toolName: kind,
-          filePath:
-            kind === "FileChange" ? Object.keys(item.changes ?? {}).join(" ") || undefined : undefined,
-          command: typeof item.command === "string" ? item.command : commandText(item.command),
-          isError: item.status != null ? item.status !== "completed" : undefined,
-          exitCode: item.exit_code,
+          skillName: null,
+          filePath: kind === "FileChange" ? Object.keys(item.changes ?? {}).join(" ") || null : null,
+          command: cmd,
+          isError: item.status != null ? item.status !== "completed" : null,
+          isInterrupted: null,
+          exitCode: item.exit_code ?? null,
           durationMs: durationMs(item.duration),
-          resultBytes: (item.stdout?.length ?? 0) + (item.stderr?.length ?? 0) || undefined,
+          resultBytes: (item.stdout?.length ?? 0) + (item.stderr?.length ?? 0) || null,
           srcLineCall: srcLine,
           srcLineResult: srcLine,
         });
@@ -251,6 +267,8 @@ export function parseCodexChunk(
         cacheReadTokens: cached,
         cacheWriteTokens: u.cache_write_input_tokens ?? 0,
         outputTokens: u.output_tokens ?? 0,
+        attributionSkill: null,
+        messageId: null,
       });
     }
   }

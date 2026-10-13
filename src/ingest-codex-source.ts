@@ -3,17 +3,17 @@ import { existsSync } from "node:fs";
 import { basename } from "node:path";
 import type { SourceFile } from "./ingest";
 import { faultIngest } from "./ingest-contract";
-import { CodexState, parseCodexChunk } from "./ingest-parse-codex";
+import { CodexState, NO_CODEX_STATE, parseCodexChunk } from "./ingest-parse-codex";
 import { parseJson, readingSource } from "./ingest-source-read";
 
 const ROLLOUT_NAME = /^rollout-[0-9T:-]+-([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})$/;
 
-export function threadIdOf(path: string): string | undefined {
-  return ROLLOUT_NAME.exec(basename(path, ".jsonl"))?.[1];
+export function threadIdOf(path: string): string | null {
+  return ROLLOUT_NAME.exec(basename(path, ".jsonl"))?.[1] ?? null;
 }
 
 function readState(thread: string, raw: string | null): CodexState {
-  if (!raw) return {};
+  if (!raw) return NO_CODEX_STATE;
   const read = parseJson(raw, CodexState);
   if (read.kind === "invalid")
     throw faultIngest("cursor_state_corrupt", { thread, state: raw, detail: read.detail });

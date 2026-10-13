@@ -24,7 +24,7 @@ describe("parseClaudeChunk", () => {
   test("keeps tool results out of the message text", () => {
     const toolResult = parsed.messages.find((m) => m.id === "u-2");
     expect(toolResult).toBeDefined();
-    expect(toolResult?.text).toBeUndefined();
+    expect(toolResult?.text).toBeNull();
     expect(JSON.stringify(parsed)).not.toContain("SECRET FILE CONTENTS");
   });
 
@@ -202,7 +202,17 @@ describe("parseClaudeChunk", () => {
   test("keeps a line that writes no timed row, timestamp or not", () => {
     const titled = parseClaudeChunk([JSON.stringify({ type: "ai-title", aiTitle: "Untimed" })], 1);
     expect(titled.dropped).toEqual([]);
-    expect(titled.session).toEqual([{ title: "Untimed" }]);
+    expect(titled.session).toEqual([
+      {
+        ts: null,
+        cwd: null,
+        project: null,
+        gitBranch: null,
+        cliVersion: null,
+        entrypoint: null,
+        title: "Untimed",
+      },
+    ]);
   });
 
   test("reports nothing dropped for a chunk that parsed whole", () => {

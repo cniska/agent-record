@@ -1,96 +1,31 @@
 import { describe, expect, test } from "bun:test";
+import { piSessionLines } from "./fixtures.test-support";
 import { parsePiChunk } from "./ingest-parse-pi";
 
-const LINES = [
-  { type: "title", v: 1, title: "Greet the reader", source: "auto", updatedAt: "2026-01-01T10:30:00.000Z" },
-  {
-    type: "session",
-    version: 3,
-    id: "aaaaaaaa-0000-4000-8000-000000000001",
-    timestamp: "2026-01-01T10:00:00.000Z",
-    cwd: "/home/dev/widgets",
-  },
-  {
-    type: "model_change",
-    id: "m1",
-    parentId: null,
-    timestamp: "2026-01-01T10:00:01.000Z",
-    provider: "acme",
-    modelId: "model-a",
-  },
-  {
-    type: "thinking_level_change",
-    id: "t1",
-    parentId: "m1",
-    timestamp: "2026-01-01T10:00:01.000Z",
-    thinkingLevel: "high",
-  },
-  {
-    type: "message",
-    id: "u1",
-    parentId: "t1",
-    timestamp: "2026-01-01T10:01:00.000Z",
-    message: { role: "user", content: [{ type: "text", text: "add a greeting" }], timestamp: 1767261660000 },
-  },
-  {
-    type: "message",
-    id: "a1",
-    parentId: "u1",
-    timestamp: "2026-01-01T10:01:05.000Z",
-    message: {
-      role: "assistant",
-      content: [
-        { type: "thinking", thinking: "planning" },
-        { type: "text", text: "Reading the readme first." },
-        { type: "toolCall", id: "call_1", name: "read", arguments: { path: "README.md" } },
-        { type: "toolCall", id: "call_2", name: "bash", arguments: { command: "bun test" } },
-      ],
-      provider: "acme",
-      model: "model-a",
-      usage: { input: 1000, output: 20, cacheRead: 100, cacheWrite: 7, reasoning: 5, totalTokens: 1132 },
-      stopReason: "toolUse",
-      responseId: "resp_1",
-    },
-  },
-  {
-    type: "message",
-    id: "r1",
-    parentId: "a1",
-    timestamp: "2026-01-01T10:01:06.000Z",
-    message: { role: "toolResult", toolCallId: "call_1", toolName: "read", isError: false, content: [] },
-  },
-  {
-    type: "message",
-    id: "r2",
-    parentId: "r1",
-    timestamp: "2026-01-01T10:01:08.000Z",
-    message: { role: "toolResult", toolCallId: "call_2", toolName: "bash", isError: true, content: [] },
-  },
-  {
-    type: "message",
-    id: "d1",
-    parentId: "r2",
-    timestamp: "2026-01-01T10:02:00.000Z",
-    message: { role: "developer", content: [{ type: "text", text: "a reminder from the harness" }] },
-  },
-  {
-    type: "custom",
-    customType: "tool_execution_start",
-    data: {},
-    id: "c1",
-    timestamp: "2026-01-01T10:01:05.500Z",
-  },
-].map((line) => JSON.stringify(line));
+const LINES = piSessionLines().map((line) => JSON.stringify(line));
 
 describe("a Pi or omp session", () => {
   test("records the session's directory and title", () => {
     const { session } = parsePiChunk(LINES, 1);
 
     expect(session).toContainEqual({
+      ts: null,
       cwd: "/home/dev/widgets",
       project: "/home/dev/widgets",
+      gitBranch: null,
+      cliVersion: null,
+      entrypoint: null,
+      title: null,
     });
-    expect(session).toContainEqual({ title: "Greet the reader" });
+    expect(session).toContainEqual({
+      ts: null,
+      cwd: null,
+      project: null,
+      gitBranch: null,
+      cliVersion: null,
+      entrypoint: null,
+      title: "Greet the reader",
+    });
   });
 
   test("takes the session's last time from its latest timestamped line, not its header", () => {
@@ -104,7 +39,7 @@ describe("a Pi or omp session", () => {
     expect(
       messages.map(({ id, role, text, model, srcLine }) => ({ id, role, text, model, srcLine })),
     ).toEqual([
-      { id: "u1", role: "user", text: "add a greeting", model: undefined, srcLine: 5 },
+      { id: "u1", role: "user", text: "add a greeting", model: null, srcLine: 5 },
       { id: "a1", role: "assistant", text: "Reading the readme first.", model: "model-a", srcLine: 6 },
     ]);
   });
@@ -115,34 +50,78 @@ describe("a Pi or omp session", () => {
     expect(toolCalls).toEqual([
       {
         id: "call_1",
-        tsCall: "2026-01-01T10:01:05.000Z",
-        toolName: "read",
-        filePath: "README.md",
-        command: undefined,
+        messageId: null,
         model: "model-a",
+        attributionSkill: null,
+        tsCall: "2026-01-01T10:01:05.000Z",
+        tsResult: null,
+        toolName: "read",
+        skillName: null,
+        filePath: "README.md",
+        command: null,
+        isError: null,
+        isInterrupted: null,
+        exitCode: null,
+        durationMs: null,
+        resultBytes: null,
         srcLineCall: 6,
+        srcLineResult: null,
       },
       {
         id: "call_2",
-        tsCall: "2026-01-01T10:01:05.000Z",
-        toolName: "bash",
-        filePath: undefined,
-        command: "bun test",
+        messageId: null,
         model: "model-a",
+        attributionSkill: null,
+        tsCall: "2026-01-01T10:01:05.000Z",
+        tsResult: null,
+        toolName: "bash",
+        skillName: null,
+        filePath: null,
+        command: "bun test",
+        isError: null,
+        isInterrupted: null,
+        exitCode: null,
+        durationMs: null,
+        resultBytes: null,
         srcLineCall: 6,
+        srcLineResult: null,
       },
       {
         id: "call_1",
+        messageId: null,
+        model: null,
+        attributionSkill: null,
+        tsCall: null,
         tsResult: "2026-01-01T10:01:06.000Z",
         toolName: "read",
+        skillName: null,
+        filePath: null,
+        command: null,
         isError: false,
+        isInterrupted: null,
+        exitCode: null,
+        durationMs: null,
+        resultBytes: null,
+        srcLineCall: null,
         srcLineResult: 7,
       },
       {
         id: "call_2",
+        messageId: null,
+        model: null,
+        attributionSkill: null,
+        tsCall: null,
         tsResult: "2026-01-01T10:01:08.000Z",
         toolName: "bash",
+        skillName: null,
+        filePath: null,
+        command: null,
         isError: true,
+        isInterrupted: null,
+        exitCode: null,
+        durationMs: null,
+        resultBytes: null,
+        srcLineCall: null,
         srcLineResult: 8,
       },
     ]);
@@ -160,6 +139,7 @@ describe("a Pi or omp session", () => {
         cacheReadTokens: 100,
         cacheWriteTokens: 7,
         outputTokens: 20,
+        attributionSkill: null,
         messageId: "a1",
       },
     ]);
@@ -182,7 +162,7 @@ describe("a Pi or omp session", () => {
 
     expect(messages).toEqual([]);
     expect(usage.map(({ responseId, messageId }) => ({ responseId, messageId }))).toEqual([
-      { responseId: "resp_2", messageId: undefined },
+      { responseId: "resp_2", messageId: null },
     ]);
   });
 
@@ -195,7 +175,7 @@ describe("a Pi or omp session", () => {
     });
     const call = parsePiChunk([nameless], 1).toolCalls.find((t) => t.id === "call_9");
     expect(call).toBeDefined();
-    expect(call?.toolName).toBeUndefined();
+    expect(call?.toolName).toBeNull();
   });
 
   test("keeps no cursor state", () => {

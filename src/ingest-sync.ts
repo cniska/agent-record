@@ -17,7 +17,7 @@ export type SyncReport = {
   filesRead: number;
   orphanSubagents: string[];
   failures: { path: string; error: ErrorRecord }[];
-  dropped: { path: string; lines: number[] }[];
+  dropped: { path: string; lines: readonly number[] }[];
   git: GitReport;
   repoFiles: RepoFileReport;
 };
@@ -57,14 +57,14 @@ export function sync(db: Database, env: Env = process.env): SyncReport {
     }
   };
 
-  const titlesOf = (source: SessionSource, root: string): ReadonlyMap<string, string> | undefined => {
-    if (!source.titles) return undefined;
+  const titlesOf = (source: SessionSource, root: string): ReadonlyMap<string, string> | null => {
+    if (source.titles === null) return null;
     const path = join(root, source.titles.file);
     try {
       return source.titles.read(path);
     } catch (error) {
       fail(path, error);
-      return undefined;
+      return null;
     }
   };
 

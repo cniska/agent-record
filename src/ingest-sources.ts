@@ -24,22 +24,41 @@ import {
 export type SessionSource = {
   readonly root: (env: Env) => string;
   readonly sessions: readonly string[];
-  readonly sidecars?: (sessionPath: string) => readonly string[];
-  readonly movedKey?: (sessionPath: string) => string | undefined;
-  readonly titles?: { readonly file: string; readonly read: (path: string) => ReadonlyMap<string, string> };
+  readonly sidecars: (sessionPath: string) => readonly string[];
+  readonly movedKey: ((sessionPath: string) => string | null) | null;
+  readonly titles: {
+    readonly file: string;
+    readonly read: (path: string) => ReadonlyMap<string, string>;
+  } | null;
   readonly list: (paths: readonly string[], fail: Failure) => SourceFile[];
 };
+
+const NO_SIDECARS = (): readonly string[] => [];
+
+function piSource(root: (env: Env) => string): SessionSource {
+  return {
+    root,
+    sessions: PI_SESSIONS,
+    sidecars: NO_SIDECARS,
+    movedKey: null,
+    titles: null,
+    list: listPiSessions,
+  };
+}
 
 export const SESSION_SOURCES: Readonly<Record<Tool, SessionSource>> = {
   claude: {
     root: claudeProjectsDir,
     sessions: CLAUDE_SESSIONS,
     sidecars: claudeSidecars,
+    movedKey: null,
+    titles: null,
     list: listClaudeSessions,
   },
   codex: {
     root: codexDir,
     sessions: CODEX_SESSIONS,
+    sidecars: NO_SIDECARS,
     movedKey: threadIdOf,
     titles: { file: CODEX_TITLES, read: readCodexTitles },
     list: listCodexRollouts,
@@ -48,10 +67,12 @@ export const SESSION_SOURCES: Readonly<Record<Tool, SessionSource>> = {
     root: grokSessionsDir,
     sessions: GROK_SESSIONS,
     sidecars: grokSidecars,
+    movedKey: null,
+    titles: null,
     list: listGrokSessions,
   },
-  pi: { root: piSessionsDir, sessions: PI_SESSIONS, list: listPiSessions },
-  omp: { root: ompSessionsDir, sessions: PI_SESSIONS, list: listPiSessions },
+  pi: piSource(piSessionsDir),
+  omp: piSource(ompSessionsDir),
 };
 
 export function listSource(source: SessionSource, root: string, fail: Failure): SourceFile[] {

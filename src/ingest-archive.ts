@@ -134,14 +134,14 @@ function followMoves(
   livePaths: readonly string[],
 ): void {
   const movedKey = source.movedKey;
-  if (!movedKey) return;
+  if (movedKey === null) return;
   const orphans = scan(copyRoot, source.sessions).filter(
     (copy) => !existsSync(rebaseScanned(copyRoot, liveRoot, copy)),
   );
   for (const live of livePaths) {
     const copy = rebaseScanned(liveRoot, copyRoot, live);
     const key = movedKey(live);
-    if (key === undefined || existsSync(copy)) continue;
+    if (key === null || existsSync(copy)) continue;
     const liveSize = statSync(live).size;
     const index = orphans.findIndex((orphan) => {
       if (movedKey(orphan) !== key) return false;
@@ -212,11 +212,11 @@ export function archiveSources(
     }
     for (const live of sessions) {
       mirror(live, copyOf(live), mirrorSessionFile);
-      for (const sidecar of source.sidecars?.(live) ?? []) {
+      for (const sidecar of source.sidecars(live)) {
         if (existsSync(sidecar)) mirror(sidecar, copyOf(sidecar), mirrorWhole);
       }
     }
-    if (source.titles) {
+    if (source.titles !== null) {
       const titles = join(liveRoot, source.titles.file);
       if (existsSync(titles)) mirror(titles, copyOf(titles), mirrorWhole);
     }

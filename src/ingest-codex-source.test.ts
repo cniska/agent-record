@@ -26,13 +26,13 @@ function parseWithRawState(state: string) {
 
 describe("a Codex rollout listing", () => {
   test("faults on cursor state that fails its schema, since agent-record wrote it", () => {
-    expect(() => parseWithRawState(JSON.stringify({ model: 5 }))).toThrow(
+    expect(() => parseWithRawState(JSON.stringify({ model: 5, turnId: null }))).toThrow(
       expect.objectContaining({
         kind: "fault",
         code: "cursor_state_corrupt",
         meta: {
           thread: THREAD,
-          state: '{"model":5}',
+          state: '{"model":5,"turnId":null}',
           detail: "model: Invalid input: expected string, received number",
         },
       }),
@@ -46,7 +46,7 @@ describe("a Codex rollout listing", () => {
   });
 
   test("carries the model from cursor state that passes its schema", () => {
-    const parsed = parseWithRawState(JSON.stringify({ model: "gpt-x" }));
+    const parsed = parseWithRawState(JSON.stringify({ model: "gpt-x", turnId: null }));
     expect(parsed?.messages.find((m) => m.role === "assistant")?.model).toBe("gpt-x");
   });
 });

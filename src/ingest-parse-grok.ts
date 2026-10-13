@@ -1,6 +1,13 @@
 import { z } from "zod";
 import { lineOf, nonEmpty } from "./ingest-parse";
-import type { MessageRow, ParsedChunk, SessionFacts, ToolCallRow } from "./ingest-session-records";
+import {
+  type MessageRow,
+  NO_FACTS,
+  NO_TOOL_CALL,
+  type ParsedChunk,
+  type SessionFacts,
+  type ToolCallRow,
+} from "./ingest-session-records";
 
 const GrokContent = z.looseObject({ type: z.string().optional(), text: z.string().optional() });
 type GrokContent = z.infer<typeof GrokContent>;
@@ -33,26 +40,26 @@ const GrokLine = z.looseObject({
     .optional(),
 });
 
-function iso(ms: number | undefined, seconds: number | undefined): string | undefined {
-  const value = ms ?? (seconds == null ? undefined : seconds * 1000);
-  if (value == null || !Number.isFinite(value)) return undefined;
+function iso(ms: number | undefined, seconds: number | undefined): string | null {
+  const value = ms ?? (seconds == null ? null : seconds * 1000);
+  if (value == null || !Number.isFinite(value)) return null;
   return new Date(value).toISOString();
 }
 
-function textOf(content: GrokContent | unknown[] | null | undefined): string | undefined {
-  if (!content || Array.isArray(content)) return undefined;
-  if (content.type !== "text") return undefined;
+function textOf(content: GrokContent | unknown[] | null | undefined): string | null {
+  if (!content || Array.isArray(content)) return null;
+  if (content.type !== "text") return null;
   return nonEmpty(content.text);
 }
 
-function filePathOf(update: GrokUpdate): string | undefined {
+function filePathOf(update: GrokUpdate): string | null {
   const fromInput = nonEmpty(update.rawInput?.file_path) ?? nonEmpty(update.rawInput?.target_file);
   if (fromInput) return fromInput;
   const located = update.locations?.find((location) => nonEmpty(location.path));
   return nonEmpty(located?.path);
 }
 
-function toolNameOf(update: GrokUpdate): string | undefined {
+function toolNameOf(update: GrokUpdate): string | null {
   return nonEmpty(update._meta?.["x.ai/tool"]?.name);
 }
 
@@ -73,7 +80,7 @@ export function parseGrokChunk(lines: readonly string[], firstLineNumber: number
     const update = line.params?.update;
     const kind = update?.sessionUpdate;
     const ts = iso(line.params?._meta?.agentTimestampMs, line.timestamp);
-    if (ts) session.push({ ts });
+    if (ts) session.push({ ...NO_FACTS, ts });
     if (!update || !kind || !ts) continue;
 
     if (kind === "user_message_chunk" || kind === "agent_message_chunk") {
@@ -84,11 +91,19 @@ export function parseGrokChunk(lines: readonly string[], firstLineNumber: number
         id,
         ts,
         role: kind === "user_message_chunk" ? "user" : "assistant",
-        model: update._meta?.modelId ?? undefined,
+        model: update._meta?.modelId ?? null,
+        turnId: null,
+        promptSource: null,
+        originKind: null,
         isMeta: false,
         isSkillBody: false,
+        attributionSkill: null,
+        slashCommand: null,
+        denialKind: null,
+        userFeedback: null,
         text,
         srcLine,
+        extra: null,
       });
       continue;
     }
@@ -99,15 +114,16 @@ export function parseGrokChunk(lines: readonly string[], firstLineNumber: number
     const failed = update.status === "failed" || update.status === "error";
     const finished = update.status === "completed" || failed;
     toolCalls.push({
+      ...NO_TOOL_CALL,
       id,
-      tsCall: kind === "tool_call" ? ts : undefined,
-      tsResult: finished ? ts : undefined,
+      tsCall: kind === "tool_call" ? ts : null,
+      tsResult: finished ? ts : null,
       toolName: toolNameOf(update),
       filePath: filePathOf(update),
       command: nonEmpty(update.rawInput?.command),
-      isError: failed ? true : undefined,
-      srcLineCall: kind === "tool_call" ? srcLine : undefined,
-      srcLineResult: kind === "tool_call_update" ? srcLine : undefined,
+      isError: failed ? true : null,
+      srcLineCall: kind === "tool_call" ? srcLine : null,
+      srcLineResult: kind === "tool_call_update" ? srcLine : null,
     });
   }
 

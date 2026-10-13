@@ -7,17 +7,6 @@ import { parseGrokChunk } from "./ingest-parse-grok";
 import { projectOf, type SessionFacts } from "./ingest-session-records";
 import { readSidecar } from "./ingest-source-read";
 
-type GrokSummary = {
-  id: string;
-  cwd?: string;
-  project?: string;
-  gitBranch?: string;
-  title?: string;
-  parentId?: string;
-  agentType?: string;
-  startedAt?: string;
-};
-
 const SummaryFile = z.looseObject({
   info: z.looseObject({ id: z.string().optional(), cwd: z.string().optional() }).optional(),
   generated_title: z.string().nullish(),
@@ -26,6 +15,7 @@ const SummaryFile = z.looseObject({
   created_at: z.string().nullish(),
   agent_name: z.string().nullish(),
 });
+type SummaryFile = z.infer<typeof SummaryFile>;
 
 export const GROK_SESSIONS = ["*/*/updates.jsonl"] as const;
 
@@ -37,33 +27,18 @@ export function grokSidecars(sessionPath: string): readonly string[] {
   return [summaryPathOf(sessionPath)];
 }
 
-function readGrokSummary(sessionPath: string, fail: Failure): GrokSummary | undefined {
-  const sessionDir = dirname(sessionPath);
-  const file = readSidecar(summaryPathOf(sessionPath), SummaryFile, fail);
-  if (!file) return undefined;
-  const id = nonEmpty(file.info?.id) ?? basename(sessionDir);
-  const cwd = nonEmpty(file.info?.cwd);
-  return {
-    id,
-    cwd,
-    project: projectOf(cwd),
-    gitBranch: nonEmpty(file.head_branch),
-    title: nonEmpty(file.generated_title),
-    parentId: nonEmpty(file.parent_session_id),
-    agentType: nonEmpty(file.agent_name),
-    startedAt: nonEmpty(file.created_at),
-  };
-}
-
-function summaryFacts(summary: GrokSummary | undefined): SessionFacts[] {
+function summaryFacts(summary: SummaryFile | null): SessionFacts[] {
   if (!summary) return [];
+  const cwd = nonEmpty(summary.info?.cwd);
   return [
     {
-      ts: summary.startedAt,
-      cwd: summary.cwd,
-      project: summary.project,
-      gitBranch: summary.gitBranch,
-      title: summary.title,
+      ts: nonEmpty(summary.created_at),
+      cwd,
+      project: projectOf(cwd),
+      gitBranch: nonEmpty(summary.head_branch),
+      cliVersion: null,
+      entrypoint: null,
+      title: nonEmpty(summary.generated_title),
     },
   ];
 }
@@ -71,15 +46,14 @@ function summaryFacts(summary: GrokSummary | undefined): SessionFacts[] {
 export function listGrokSessions(paths: readonly string[], fail: Failure): SourceFile[] {
   const specs: SourceFile[] = [];
   for (const path of paths) {
-    const sessionDir = dirname(path);
-    const summary = readGrokSummary(path, fail);
+    const summary = readSidecar(summaryPathOf(path), SummaryFile, fail);
     const facts = summaryFacts(summary);
     specs.push({
       path,
       kind: "transcript",
-      sessionId: summary?.id ?? basename(sessionDir),
-      parentId: summary?.parentId ?? null,
-      agentType: summary?.agentType ?? null,
+      sessionId: nonEmpty(summary?.info?.id) ?? basename(dirname(path)),
+      parentId: nonEmpty(summary?.parent_session_id),
+      agentType: nonEmpty(summary?.agent_name),
       parse: (lines, first) => {
         const parsed = parseGrokChunk(lines, first);
         return { ...parsed, session: [...parsed.session, ...facts] };

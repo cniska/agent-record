@@ -1,7 +1,9 @@
 import { z } from "zod";
-import { jsonOrUndefined, lineOf, nonEmpty } from "./ingest-parse";
+import { jsonOrNull, lineOf, nonEmpty } from "./ingest-parse";
 import {
   type MessageRow,
+  NO_FACTS,
+  NO_TOOL_CALL,
   type ParsedChunk,
   projectOf,
   type SessionFacts,
@@ -86,14 +88,14 @@ const ClaudeLine = z.looseObject({
     .optional(),
 });
 
-function visibleText(content: string | (ContentBlock | null)[] | undefined): string | undefined {
+function visibleText(content: string | (ContentBlock | null)[] | undefined): string | null {
   if (typeof content === "string") return nonEmpty(content);
-  if (!Array.isArray(content)) return undefined;
+  if (!Array.isArray(content)) return null;
   const parts = content.flatMap((b) => (b?.type === "text" && b.text !== undefined ? [b.text] : []));
-  return parts.length > 0 ? parts.join("\n") : undefined;
+  return parts.length > 0 ? parts.join("\n") : null;
 }
 
-function resultSize(content: unknown, result: ClaudeToolUseResult | undefined): number | undefined {
+function resultSize(content: unknown, result: ClaudeToolUseResult | undefined): number | null {
   const parts: string[] = [];
   if (typeof content === "string") parts.push(content);
   else if (Array.isArray(content)) {
@@ -101,11 +103,23 @@ function resultSize(content: unknown, result: ClaudeToolUseResult | undefined): 
   }
   if (typeof result?.stdout === "string") parts.push(result.stdout);
   if (typeof result?.stderr === "string") parts.push(result.stderr);
-  return parts.length > 0 ? parts.reduce((n, p) => n + p.length, 0) : undefined;
+  return parts.length > 0 ? parts.reduce((n, p) => n + p.length, 0) : null;
 }
 
-function feedbackText(value: unknown): string | undefined {
-  if (value == null) return undefined;
+function sessionFactsOf(line: z.infer<typeof ClaudeLine>): SessionFacts {
+  const cwd = line.cwd ?? null;
+  return {
+    ...NO_FACTS,
+    cwd,
+    project: projectOf(cwd),
+    gitBranch: nonEmpty(line.gitBranch),
+    cliVersion: nonEmpty(line.version),
+    entrypoint: nonEmpty(line.entrypoint),
+  };
+}
+
+function feedbackText(value: unknown): string | null {
+  if (value == null) return null;
   return typeof value === "string" ? value : JSON.stringify(value);
 }
 
@@ -127,11 +141,11 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
       continue;
     }
     const ts = nonEmpty(line.timestamp);
-    if (ts) session.push({ ts });
+    if (ts) session.push({ ...NO_FACTS, ts });
 
     if (line.type === "ai-title" || line.type === "custom-title") {
       const title = nonEmpty(line.aiTitle) ?? nonEmpty(line.customTitle);
-      if (title) session.push({ title });
+      if (title) session.push({ ...NO_FACTS, title });
       continue;
     }
 
@@ -146,11 +160,13 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
         tsStart:
           Number.isFinite(end) && line.durationMs != null
             ? new Date(end - line.durationMs).toISOString()
-            : undefined,
+            : null,
         tsEnd: ts,
-        durationMs: line.durationMs,
-        messageCount: line.messageCount,
+        durationMs: line.durationMs ?? null,
+        messageCount: line.messageCount ?? null,
         status: "completed",
+        model: null,
+        timeToFirstTokenMs: null,
       });
       continue;
     }
@@ -161,24 +177,24 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
         continue;
       }
       const model = nonEmpty(line.message.model);
-      session.push({
-        cwd: line.cwd,
-        project: projectOf(line.cwd),
-        gitBranch: nonEmpty(line.gitBranch),
-        cliVersion: nonEmpty(line.version),
-        entrypoint: nonEmpty(line.entrypoint),
-      });
+      session.push(sessionFactsOf(line));
       messages.push({
         id: line.message.id,
         ts,
         role: "assistant",
         model,
+        turnId: null,
+        promptSource: null,
+        originKind: null,
         isMeta: false,
         isSkillBody: false,
         attributionSkill: nonEmpty(line.attributionSkill),
+        slashCommand: null,
+        denialKind: null,
+        userFeedback: null,
         text: visibleText(line.message.content),
         srcLine,
-        extra: jsonOrUndefined({
+        extra: jsonOrNull({
           requestId: line.requestId,
           effort: line.effort,
           isSidechain: line.isSidechain,
@@ -202,15 +218,16 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
             });
           }
           toolCalls.push({
+            ...NO_TOOL_CALL,
             id: block.id,
             messageId: line.message.id,
             model,
             attributionSkill: nonEmpty(line.attributionSkill),
             tsCall: ts,
             toolName: block.name,
-            skillName: typeof input.skill === "string" ? input.skill : undefined,
-            filePath: typeof input.file_path === "string" ? input.file_path : undefined,
-            command: typeof input.command === "string" ? input.command : undefined,
+            skillName: typeof input.skill === "string" ? input.skill : null,
+            filePath: typeof input.file_path === "string" ? input.file_path : null,
+            command: typeof input.command === "string" ? input.command : null,
             srcLineCall: srcLine,
           });
         }
@@ -243,6 +260,7 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
           if (block?.type !== "tool_result" || !block.tool_use_id) continue;
           const r = line.toolUseResult;
           toolCalls.push({
+            ...NO_TOOL_CALL,
             id: block.tool_use_id,
             tsResult: ts,
             isError: block.is_error === true,
@@ -252,14 +270,8 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
           });
         }
       }
-      session.push({
-        cwd: line.cwd,
-        project: projectOf(line.cwd),
-        gitBranch: nonEmpty(line.gitBranch),
-        cliVersion: nonEmpty(line.version),
-        entrypoint: nonEmpty(line.entrypoint),
-      });
-      const body = line.isMeta === true && text ? parseSkillBody(text) : undefined;
+      session.push(sessionFactsOf(line));
+      const body = line.isMeta === true && text ? parseSkillBody(text) : null;
       if (body) {
         const { name, ...fields } = body;
         const toolUseId = nonEmpty(line.sourceToolUseID);
@@ -271,17 +283,19 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
         id: line.uuid,
         ts,
         role: "user",
+        model: null,
         turnId: nonEmpty(line.promptId),
         promptSource: nonEmpty(line.promptSource),
         originKind: nonEmpty(line.origin?.kind),
         isMeta: line.isMeta === true,
-        isSkillBody: line.isMeta === true && (text?.startsWith(SKILL_BODY_PREFIX) ?? false),
-        slashCommand: text ? skillFromCommand(text) : undefined,
+        isSkillBody: line.isMeta === true && text !== null && text.startsWith(SKILL_BODY_PREFIX),
+        attributionSkill: null,
+        slashCommand: text ? skillFromCommand(text) : null,
         denialKind: nonEmpty(line.toolDenialKind),
         userFeedback: feedbackText(line.userFeedback),
-        text: body ? undefined : text,
+        text: body ? null : text,
         srcLine,
-        extra: jsonOrUndefined({
+        extra: jsonOrNull({
           isSidechain: line.isSidechain,
           agentId: line.agentId,
           permissionMode: line.permissionMode,

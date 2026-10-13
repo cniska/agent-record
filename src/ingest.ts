@@ -25,7 +25,7 @@ export type FileResult = {
   bytes: number;
   lines: number;
   reset: boolean;
-  dropped: number[];
+  dropped: readonly number[];
 };
 
 const FROM_ANOTHER_FILE = "message.src_file IS NOT excluded.src_file";
@@ -47,17 +47,28 @@ const CURSOR_COLUMNS = "path, bytes_ingested AS bytes, lines_ingested AS lines, 
 
 const START: Omit<Cursor, "path"> = { bytes: 0, lines: 0, state: null };
 
-function foldSession(facts: SessionFacts[]) {
-  const out: {
-    cwd?: string;
-    project?: string;
-    gitBranch?: string;
-    cliVersion?: string;
-    entrypoint?: string;
-    tsFirst?: string;
-    tsLast?: string;
-    title?: string;
-  } = {};
+type FoldedSession = {
+  cwd: string | null;
+  project: string | null;
+  gitBranch: string | null;
+  cliVersion: string | null;
+  entrypoint: string | null;
+  tsFirst: string | null;
+  tsLast: string | null;
+  title: string | null;
+};
+
+function foldSession(facts: readonly SessionFacts[]): FoldedSession {
+  const out: FoldedSession = {
+    cwd: null,
+    project: null,
+    gitBranch: null,
+    cliVersion: null,
+    entrypoint: null,
+    tsFirst: null,
+    tsLast: null,
+    title: null,
+  };
   for (const f of facts) {
     if (f.ts) {
       if (!out.tsFirst || f.ts < out.tsFirst) out.tsFirst = f.ts;
@@ -281,15 +292,15 @@ export function createIngester(db: Database) {
       $tool: spec.tool,
       $parent: spec.parentId,
       $agentType: spec.agentType,
-      $cwd: s.cwd ?? null,
+      $cwd: s.cwd,
       $worktree: worktreeOf(s.cwd),
-      $project: s.project ?? null,
-      $gitBranch: s.gitBranch ?? null,
-      $cliVersion: s.cliVersion ?? null,
-      $entrypoint: s.entrypoint ?? null,
-      $tsFirst: s.tsFirst ?? null,
-      $tsLast: s.tsLast ?? null,
-      $title: s.title ?? null,
+      $project: s.project,
+      $gitBranch: s.gitBranch,
+      $cliVersion: s.cliVersion,
+      $entrypoint: s.entrypoint,
+      $tsFirst: s.tsFirst,
+      $tsLast: s.tsLast,
+      $title: s.title,
     });
 
     for (const m of parsed.messages) {
@@ -298,21 +309,21 @@ export function createIngester(db: Database) {
         $sessionId: spec.sessionId,
         $ts: m.ts,
         $role: m.role,
-        $model: m.model ?? null,
-        $turnId: m.turnId ?? null,
-        $promptSource: m.promptSource ?? null,
-        $originKind: m.originKind ?? null,
+        $model: m.model,
+        $turnId: m.turnId,
+        $promptSource: m.promptSource,
+        $originKind: m.originKind,
         $isMeta: m.isMeta ? 1 : 0,
         $isSkillBody: m.isSkillBody ? 1 : 0,
-        $attributionSkill: m.attributionSkill ?? null,
-        $slashCommand: m.slashCommand ?? null,
-        $denialKind: m.denialKind ?? null,
-        $userFeedback: m.userFeedback ?? null,
-        $text: m.text ?? null,
-        $textChars: m.text != null ? m.text.length : null,
+        $attributionSkill: m.attributionSkill,
+        $slashCommand: m.slashCommand,
+        $denialKind: m.denialKind,
+        $userFeedback: m.userFeedback,
+        $text: m.text,
+        $textChars: m.text === null ? null : m.text.length,
         $srcFile: spec.path,
         $srcLine: m.srcLine,
-        $extra: m.extra ?? null,
+        $extra: m.extra,
       });
     }
 
@@ -320,14 +331,14 @@ export function createIngester(db: Database) {
       insertUsage.run({
         $responseId: u.responseId,
         $sessionId: spec.sessionId,
-        $messageId: u.messageId ?? null,
+        $messageId: u.messageId,
         $ts: u.ts,
-        $model: u.model ?? null,
+        $model: u.model,
         $inputTokens: u.inputTokens,
         $cacheReadTokens: u.cacheReadTokens,
         $cacheWriteTokens: u.cacheWriteTokens,
         $outputTokens: u.outputTokens,
-        $attributionSkill: u.attributionSkill ?? null,
+        $attributionSkill: u.attributionSkill,
       });
     }
 
@@ -335,13 +346,13 @@ export function createIngester(db: Database) {
       upsertTurn.run({
         $sessionId: spec.sessionId,
         $turnId: t.turnId,
-        $tsStart: t.tsStart ?? null,
-        $tsEnd: t.tsEnd ?? null,
-        $durationMs: t.durationMs ?? null,
-        $messageCount: t.messageCount ?? null,
+        $tsStart: t.tsStart,
+        $tsEnd: t.tsEnd,
+        $durationMs: t.durationMs,
+        $messageCount: t.messageCount,
         $status: t.status,
-        $model: t.model ?? null,
-        $timeToFirstTokenMs: t.timeToFirstTokenMs ?? null,
+        $model: t.model,
+        $timeToFirstTokenMs: t.timeToFirstTokenMs,
       });
     }
 
@@ -349,23 +360,23 @@ export function createIngester(db: Database) {
       upsertToolCall.run({
         $id: t.id,
         $sessionId: spec.sessionId,
-        $messageId: t.messageId ?? null,
-        $model: t.model ?? null,
-        $attributionSkill: t.attributionSkill ?? null,
-        $tsCall: t.tsCall ?? null,
-        $tsResult: t.tsResult ?? null,
-        $toolName: t.toolName ?? null,
-        $skillName: t.skillName ?? null,
-        $filePath: t.filePath ?? null,
-        $command: t.command ?? null,
-        $isError: t.isError == null ? null : t.isError ? 1 : 0,
-        $isInterrupted: t.isInterrupted == null ? null : t.isInterrupted ? 1 : 0,
-        $exitCode: t.exitCode ?? null,
-        $durationMs: t.durationMs ?? null,
-        $resultBytes: t.resultBytes ?? null,
+        $messageId: t.messageId,
+        $model: t.model,
+        $attributionSkill: t.attributionSkill,
+        $tsCall: t.tsCall,
+        $tsResult: t.tsResult,
+        $toolName: t.toolName,
+        $skillName: t.skillName,
+        $filePath: t.filePath,
+        $command: t.command,
+        $isError: t.isError === null ? null : t.isError ? 1 : 0,
+        $isInterrupted: t.isInterrupted === null ? null : t.isInterrupted ? 1 : 0,
+        $exitCode: t.exitCode,
+        $durationMs: t.durationMs,
+        $resultBytes: t.resultBytes,
         $srcFile: spec.path,
-        $srcLineCall: t.srcLineCall ?? null,
-        $srcLineResult: t.srcLineResult ?? null,
+        $srcLineCall: t.srcLineCall,
+        $srcLineResult: t.srcLineResult,
       });
 
       if (t.command) {
@@ -404,7 +415,7 @@ export function createIngester(db: Database) {
         $sessionId: spec.sessionId,
         $toolCallId: l.toolCallId,
         $ts: l.ts,
-        $model: l.model ?? null,
+        $model: l.model,
         $skillName: l.skillName,
         $how: l.how,
       });
