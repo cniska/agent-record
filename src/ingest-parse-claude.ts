@@ -13,6 +13,7 @@ import {
 } from "./ingest-session-records";
 
 import { parseSkillBody, type SkillLoadRow, skillFromCommand } from "./ingest-skill-load";
+import { Timestamp, timestampMinus } from "./timestamp";
 
 const SKILL_BODY_PREFIX = "Base directory for this skill:";
 
@@ -45,7 +46,7 @@ const ClaudeUsage = z.looseObject({
 const ClaudeLine = z.looseObject({
   type: z.string().optional(),
   uuid: z.string().optional(),
-  timestamp: z.string().optional(),
+  timestamp: Timestamp.optional(),
   cwd: z.string().optional(),
   gitBranch: z.string().optional(),
   version: z.string().optional(),
@@ -140,7 +141,7 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
       dropped.push(srcLine);
       continue;
     }
-    const ts = nonEmpty(line.timestamp);
+    const ts = line.timestamp ?? null;
     if (ts) session.push({ ...NO_FACTS, ts });
 
     if (line.type === "ai-title" || line.type === "custom-title") {
@@ -154,13 +155,9 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
         dropped.push(srcLine);
         continue;
       }
-      const end = Date.parse(ts);
       turns.push({
         turnId: line.uuid,
-        tsStart:
-          Number.isFinite(end) && line.durationMs != null
-            ? new Date(end - line.durationMs).toISOString()
-            : null,
+        tsStart: line.durationMs == null ? null : timestampMinus(ts, line.durationMs),
         tsEnd: ts,
         durationMs: line.durationMs ?? null,
         messageCount: line.messageCount ?? null,

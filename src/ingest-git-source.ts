@@ -1,9 +1,10 @@
 import { ran } from "./git";
 import { refuseGit } from "./git-contract";
+import { Timestamp } from "./timestamp";
 
 export type Commit = {
   sha: string;
-  ts: string;
+  ts: Timestamp;
   author: string | null;
   subject: string;
   kind: string | null;
@@ -50,14 +51,9 @@ export function commitsOf(output: string, command: string): Commit[] {
 
 function commitOf(header: string, files: readonly string[], command: string): Commit {
   const fields = header.split(NUL);
-  const [sha, ts, author, subject] = fields;
-  if (
-    fields.length !== HEADER_FIELDS ||
-    !sha ||
-    !ts ||
-    subject === undefined ||
-    Number.isNaN(Date.parse(ts))
-  ) {
+  const [sha, date, author, subject] = fields;
+  const ts = Timestamp.safeParse(date);
+  if (fields.length !== HEADER_FIELDS || !sha || !ts.success || subject === undefined) {
     throw refuseGit("git_output_malformed", {
       command,
       problem: "a commit record without a sha, a date, an author field and a subject",
@@ -65,7 +61,7 @@ function commitOf(header: string, files: readonly string[], command: string): Co
   }
   return {
     sha,
-    ts: new Date(ts).toISOString(),
+    ts: ts.data,
     author: author || null,
     subject,
     kind: commitKind(subject),

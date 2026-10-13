@@ -30,7 +30,7 @@ describe("a Pi or omp session", () => {
 
   test("takes the session's last time from its latest timestamped line, not its header", () => {
     const times = parsePiChunk(LINES, 1).session.flatMap(({ ts }) => (ts ? [ts] : []));
-    expect(times.sort().at(-1)).toBe("2026-01-01T10:02:00.000Z");
+    expect(times.sort().at(-1)).toBe<string>("2026-01-01T10:02:00.000Z");
   });
 
   test("records what the owner and the agent said, not its thinking or the harness's reminders", () => {
@@ -47,7 +47,7 @@ describe("a Pi or omp session", () => {
   test("records each tool call with its file or command, joined to its result", () => {
     const { toolCalls } = parsePiChunk(LINES, 1);
 
-    expect(toolCalls).toEqual([
+    expect(toolCalls).toEqual<object[]>([
       {
         id: "call_1",
         messageId: null,
@@ -130,7 +130,7 @@ describe("a Pi or omp session", () => {
   test("records the tokens each response used, input as pi reports it, apart from cache reads", () => {
     const { usage } = parsePiChunk(LINES, 1);
 
-    expect(usage).toEqual([
+    expect(usage).toEqual<object[]>([
       {
         responseId: "resp_1",
         ts: "2026-01-01T10:01:05.000Z",

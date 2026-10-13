@@ -24,19 +24,19 @@ function withActions(): Database {
   const db = seeded();
   db.run(
     `INSERT INTO message (id, session_id, ts, role, text, src_file, src_line, denial_kind, user_feedback)
-     VALUES ('m-denied', 's1', '2026-09-01T10:34:00Z', 'user', NULL, '/f.jsonl', 5, 'user-rejected', 'not that file')`,
+     VALUES ('m-denied', 's1', '2026-09-01T10:34:00.000Z', 'user', NULL, '/f.jsonl', 5, 'user-rejected', 'not that file')`,
   );
   db.run(
     `INSERT INTO message (id, session_id, ts, role, text, src_file, src_line)
-     VALUES ('m-after', 's1', '2026-09-01T10:40:00Z', 'assistant', 'Edited the sync instead.', '/f.jsonl', 6)`,
+     VALUES ('m-after', 's1', '2026-09-01T10:40:00.000Z', 'assistant', 'Edited the sync instead.', '/f.jsonl', 6)`,
   );
   const call = db.prepare(
     `INSERT INTO tool_call (id, session_id, ts_call, tool_name, file_path, command, is_error, exit_code, is_interrupted, src_file, src_line_call)
      VALUES (?, 's1', ?, ?, ?, ?, ?, ?, ?, '/f.jsonl', ?)`,
   );
-  call.run("t-bash", "2026-09-01T10:32:00Z", "Bash", null, "bun test\nsrc", 1, 1, 0, 3);
-  call.run("t-edit", "2026-09-01T10:33:00Z", "Edit", "/w/src/sync.ts", null, 0, null, 0, 4);
-  call.run("t-search", "2026-09-01T10:35:00Z", "WebSearch", null, null, null, null, 1, 5);
+  call.run("t-bash", "2026-09-01T10:32:00.000Z", "Bash", null, "bun test\nsrc", 1, 1, 0, 3);
+  call.run("t-edit", "2026-09-01T10:33:00.000Z", "Edit", "/w/src/sync.ts", null, 0, null, 0, 4);
+  call.run("t-search", "2026-09-01T10:35:00.000Z", "WebSearch", null, null, null, null, 1, 5);
   call.run("t-lost", null, "Read", "/w/no-time.ts", null, null, null, null, 7);
   return db;
 }
@@ -56,7 +56,7 @@ describe("thread", () => {
     const id = "a0064e811b74a81cb@79e9c9bc-3a0b-46f6-b935-7a25be925124";
     db.run(
       `INSERT INTO session (id, tool, cwd, project, ts_first, ts_last)
-       VALUES (?, 'claude', '/w', '/home/code/demo', '2026-09-01T10:00:00Z', '2026-09-01T11:00:00Z')`,
+       VALUES (?, 'claude', '/w', '/home/code/demo', '2026-09-01T10:00:00.000Z', '2026-09-01T11:00:00.000Z')`,
       [id],
     );
     db.run(
@@ -101,7 +101,7 @@ describe("thread", () => {
     const db = seeded();
     db.run(
       `INSERT INTO tool_call (id, session_id, ts_call, tool_name, command, src_file, src_line_call)
-       VALUES ('t-nameless', 's1', '2026-09-01T10:32:00Z', NULL, 'ls', '/f.jsonl', 3)`,
+       VALUES ('t-nameless', 's1', '2026-09-01T10:32:00.000Z', NULL, 'ls', '/f.jsonl', 3)`,
     );
     expect(column(thread.run(db, { ...ctx, arg: "s1" }), "text")).toContain("(unnamed): ls");
     db.close();
@@ -111,7 +111,7 @@ describe("thread", () => {
     const db = withActions();
     db.run(
       `INSERT INTO tool_call (id, session_id, ts_call, tool_name, command, src_file, src_line_call)
-       VALUES ('t-same', 's1', '2026-09-01T10:40:00Z', 'Bash', 'git commit', '/f.jsonl', 6)`,
+       VALUES ('t-same', 's1', '2026-09-01T10:40:00.000Z', 'Bash', 'git commit', '/f.jsonl', 6)`,
     );
     const whole = thread.run(db, { ...ctx, arg: "s1" });
     expect(column(whole, "text").slice(-2)).toEqual(["Edited the sync instead.", "Bash: git commit"]);
@@ -127,7 +127,12 @@ describe("thread", () => {
     for (let minute = 10; minute < 30; minute += 1) {
       call.run(`t-read-${minute}`, `2026-09-01T10:${minute}:00Z`, `/w/before-${minute}.ts`);
     }
-    const passage = thread.run(db, { ...ctx, arg: "s1", flags: { at: "2026-09-01T10:34:00Z" }, maxRows: 4 });
+    const passage = thread.run(db, {
+      ...ctx,
+      arg: "s1",
+      flags: { at: "2026-09-01T10:34:00.000Z" },
+      maxRows: 4,
+    });
     expect(column(passage, "text")).toEqual([
       "Edit: /w/src/sync.ts",
       "denied (user-rejected): not that file",
@@ -135,12 +140,17 @@ describe("thread", () => {
       "Edited the sync instead.",
     ]);
     expect(passage.denominator).toEndWith(
-      "centered on 2026-09-01T10:34:00Z; 22 earlier and 0 later rows not shown, --rows <n> to widen; 1 tool calls with no time are not shown",
+      "centered on 2026-09-01T10:34:00.000Z; 22 earlier and 0 later rows not shown, --rows <n> to widen; 1 tool calls with no time are not shown",
     );
 
-    const wide = thread.run(db, { ...ctx, arg: "s1", flags: { at: "2026-09-01T10:34:00Z" }, maxRows: 60 });
+    const wide = thread.run(db, {
+      ...ctx,
+      arg: "s1",
+      flags: { at: "2026-09-01T10:34:00.000Z" },
+      maxRows: 60,
+    });
     expect(wide.denominator).toEndWith(
-      "centered on 2026-09-01T10:34:00Z; 1 tool calls with no time are not shown",
+      "centered on 2026-09-01T10:34:00.000Z; 1 tool calls with no time are not shown",
     );
     db.close();
   });
@@ -201,7 +211,7 @@ describe("thread", () => {
         const centered = thread.run(db, {
           ...ctx,
           arg: SYNCED_SESSION.slice(0, 8),
-          flags: { at: "2026-09-16T10:04" },
+          flags: { at: "2026-09-16T10:04:00.000Z" },
         });
         expect(centered.denominator).toContain("centered on");
 

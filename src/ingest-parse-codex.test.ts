@@ -103,14 +103,14 @@ describe("parseCodexChunk", () => {
 
   test("takes the session's last time from its latest timestamped line, not its last turn's start", () => {
     const times = parseCodexChunk(modern, 1, FRESH).session.flatMap(({ ts }) => (ts ? [ts] : []));
-    expect(times.sort().at(-1)).toBe("2026-09-16T10:09:00.000Z");
+    expect(times.sort().at(-1)).toBe<string>("2026-09-16T10:09:00.000Z");
   });
 
   test("counts a timestamped line that carries no payload toward the session's last time", () => {
     const bare = JSON.stringify({ timestamp: "2026-09-16T11:00:00.000Z", type: "event_msg" });
     const parsed = parseCodexChunk([...modern, bare], 1, FRESH);
     const times = parsed.session.flatMap(({ ts }) => (ts ? [ts] : []));
-    expect({ latest: times.sort().at(-1), dropped: parsed.dropped }).toEqual({
+    expect({ latest: times.sort().at(-1), dropped: parsed.dropped }).toEqual<object>({
       latest: "2026-09-16T11:00:00.000Z",
       dropped: [],
     });
@@ -157,7 +157,7 @@ describe("parseCodexChunk", () => {
     });
     const parsed = parseCodexChunk(untimed, 1, FRESH);
     expect(parsed.dropped).toEqual([4, 5]);
-    expect(parsed.messages.map((m) => m.ts)).toEqual([
+    expect(parsed.messages.map((m) => m.ts)).toEqual<string[]>([
       "2026-09-16T10:03:00.000Z",
       "2026-09-16T10:07:00.000Z",
     ]);
@@ -189,7 +189,7 @@ describe("parseCodexChunk", () => {
       },
     });
     const parsed = parseCodexChunk([read], 1, FRESH);
-    expect(parsed.skillLoads).toEqual([
+    expect(parsed.skillLoads).toEqual<object[]>([
       {
         toolCallId: "item-7",
         ts: "2026-09-16T10:00:00.000Z",

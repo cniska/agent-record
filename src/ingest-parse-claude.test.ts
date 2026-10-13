@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { claudeTranscriptLines, withoutTimestamp } from "./fixtures.test-support";
+import { claudeTranscriptLines, withoutTimestamp, withTimestamp } from "./fixtures.test-support";
 import { parseClaudeChunk } from "./ingest-parse-claude";
 
 const lines = claudeTranscriptLines("s-1").map((l) => JSON.stringify(l));
@@ -74,7 +74,7 @@ describe("parseClaudeChunk", () => {
 
   test("takes the session's last time from its latest timestamped line, whatever its type", () => {
     const times = parsed.session.flatMap(({ ts }) => (ts ? [ts] : []));
-    expect(times.sort().at(-1)).toBe("2026-09-16T10:08:00.000Z");
+    expect(times.sort().at(-1)).toBe<string>("2026-09-16T10:08:00.000Z");
   });
 
   test("takes the session title from an ai-title line", () => {
@@ -186,6 +186,22 @@ describe("parseClaudeChunk", () => {
     expect(chunk.toolCalls).toMatchObject([{ id: "tu-n", toolName: "Bash" }]);
   });
 
+  test("stores a time with an offset as UTC", () => {
+    const [, first] = claudeTranscriptLines("s-1");
+    const offset = withTimestamp(first, "2026-09-16T12:01:00+02:00");
+    expect(parseClaudeChunk([offset], 1).messages.map((m) => m.ts)).toEqual<string[]>([
+      "2026-09-16T10:01:00.000Z",
+    ]);
+  });
+
+  test("drops a line whose time does not parse", () => {
+    const [, first] = claudeTranscriptLines("s-1");
+    const unparsable = withTimestamp(first, "2026-02-30T10:00:00Z");
+    const chunk = parseClaudeChunk([unparsable], 7);
+    expect(chunk.dropped).toEqual([7]);
+    expect(chunk.messages).toEqual([]);
+  });
+
   test("refuses a line whose rows need a timestamp it does not carry", () => {
     const source = claudeTranscriptLines("s-1");
     const untimed = (index: number) => withoutTimestamp(source[index]);
@@ -194,8 +210,8 @@ describe("parseClaudeChunk", () => {
       1,
     );
     expect(chunk.dropped).toEqual([2, 3, 5]);
-    expect(chunk.messages.map((m) => m.ts)).toEqual(["2026-09-16T10:03:00.000Z"]);
-    expect(chunk.usage.map((u) => u.ts)).toEqual(["2026-09-16T10:03:00.000Z"]);
+    expect(chunk.messages.map((m) => m.ts)).toEqual<string[]>(["2026-09-16T10:03:00.000Z"]);
+    expect(chunk.usage.map((u) => u.ts)).toEqual<string[]>(["2026-09-16T10:03:00.000Z"]);
     expect(chunk.turns).toEqual([]);
   });
 

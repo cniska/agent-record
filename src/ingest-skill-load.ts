@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
+import { Timestamp } from "./timestamp";
 
 export const HOWS = ["model", "user", "read"] as const;
 
@@ -16,7 +17,7 @@ export const SkillLoadRow = z.union([
   z
     .strictObject({
       toolCallId: z.string(),
-      ts: z.string(),
+      ts: Timestamp,
       model: z.string().nullable(),
       skillName: z.string(),
       how: z.enum(HOWS),

@@ -14,7 +14,7 @@ Flat, so a module is found by name. A file's prefix is its module: `db-read.ts` 
 | `plugin` | Tests for the Claude Code plugin's hook in `plugin/`, kept here so the plugin ships no tests |
 | `spec` | Tie the IDs in `SPEC.md` to the acceptance suite's test names |
 | `cli` | Dispatch a command and print its result or error (a refusal or a fault) as one JSON line |
-| `coded-error`, `error`, `assert`, `paths`, `file` | Coded errors, refusals and faults; reading a code, a message or an errno off a thrown value; `unreachable` and `invariant`; where every file lives; copying a file aside before it is replaced |
+| `coded-error`, `error`, `assert`, `paths`, `file`, `timestamp` | Coded errors, refusals and faults; reading a code, a message or an errno off a thrown value; `unreachable` and `invariant`; where every file lives; copying a file aside before it is replaced; parsing a time into its canonical UTC text |
 
 ## Terms
 

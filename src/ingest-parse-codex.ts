@@ -11,6 +11,7 @@ import {
   type UsageRow,
 } from "./ingest-session-records";
 import { type SkillLoadRow, skillFromFileRead } from "./ingest-skill-load";
+import { EpochMs, EpochSeconds, Timestamp } from "./timestamp";
 
 export const CodexState = z.strictObject({ model: z.string().nullable(), turnId: z.string().nullable() });
 export type CodexState = z.infer<typeof CodexState>;
@@ -31,14 +32,14 @@ type CodexDuration = z.infer<typeof CodexDuration>;
 
 const CodexLine = z.looseObject({
   type: z.string().optional(),
-  timestamp: z.string().optional(),
+  timestamp: Timestamp.optional(),
   payload: z
     .looseObject({
       type: z.string().optional(),
       id: z.string().nullish(),
       role: z.string().optional(),
       content: z.array(CodexContent.nullable()).nullish(),
-      timestamp: z.string().optional(),
+      timestamp: Timestamp.optional(),
       cwd: z.string().optional(),
       originator: z.string().nullish(),
       cli_version: z.string().nullish(),
@@ -47,13 +48,13 @@ const CodexLine = z.looseObject({
       model: z.string().nullish(),
       response_id: z.string().optional(),
       usage: CodexUsage.nullish(),
-      started_at: z.number().optional(),
-      completed_at: z.number().optional(),
+      started_at: EpochSeconds.optional(),
+      completed_at: EpochSeconds.optional(),
       duration_ms: z.number().optional(),
       time_to_first_token_ms: z.number().optional(),
       reason: z.string().nullish(),
-      started_at_ms: z.number().optional(),
-      completed_at_ms: z.number().optional(),
+      started_at_ms: EpochMs.optional(),
+      completed_at_ms: EpochMs.optional(),
       item: z
         .looseObject({
           id: z.string().optional(),
@@ -76,16 +77,8 @@ function durationMs(d: CodexDuration | undefined): number | null {
   return Math.round((d.secs ?? 0) * 1000 + (d.nanos ?? 0) / 1e6);
 }
 
-function msSince(value: number | undefined): string | null {
-  return value == null ? null : new Date(value).toISOString();
-}
-
 function commandText(value: unknown): string | null {
   return Array.isArray(value) ? value.map(String).join(" ") : null;
-}
-
-function epochSeconds(value: number | undefined): string | null {
-  return value == null ? null : new Date(value * 1000).toISOString();
 }
 
 function visibleText(content: (z.infer<typeof CodexContent> | null)[] | null | undefined): string | null {
@@ -117,7 +110,7 @@ export function parseCodexChunk(
       dropped.push(firstLineNumber + index);
       continue;
     }
-    const ts = nonEmpty(line.timestamp);
+    const ts = line.timestamp ?? null;
     if (ts) session.push({ ...NO_FACTS, ts });
     const p = line.payload;
     if (!p) continue;
@@ -202,8 +195,8 @@ export function parseCodexChunk(
       }
       turns.push({
         turnId: p.turn_id,
-        tsStart: epochSeconds(p.started_at),
-        tsEnd: epochSeconds(p.completed_at) ?? ts,
+        tsStart: p.started_at ?? null,
+        tsEnd: p.completed_at ?? ts,
         durationMs: p.duration_ms ?? null,
         messageCount: null,
         status,
@@ -222,7 +215,7 @@ export function parseCodexChunk(
         if (readSkill) {
           skillLoads.push({
             toolCallId: item.id,
-            ts: msSince(p.started_at_ms) ?? ts,
+            ts: p.started_at_ms ?? ts,
             model: current.model,
             skillName: readSkill,
             how: "read",
@@ -233,8 +226,8 @@ export function parseCodexChunk(
           messageId: null,
           model: current.model,
           attributionSkill: null,
-          tsCall: msSince(p.started_at_ms) ?? ts,
-          tsResult: msSince(p.completed_at_ms) ?? ts,
+          tsCall: p.started_at_ms ?? ts,
+          tsResult: p.completed_at_ms ?? ts,
           toolName: kind,
           skillName: null,
           filePath: kind === "FileChange" ? Object.keys(item.changes ?? {}).join(" ") || null : null,

@@ -3,8 +3,7 @@ import { invariant } from "./assert";
 import { SAID, select } from "./query";
 import { type Query, refuseQuery } from "./query-contract";
 import { rowsToRead } from "./query-row-cap";
-
-const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T[\d:.]+Z?$/;
+import { Timestamp } from "./timestamp";
 
 const TRANSCRIPT_READING_CHARS = 240;
 
@@ -63,10 +62,11 @@ function countsOf(db: Database, id: string, at: string | null): Counts {
   return counts;
 }
 
-function passageTime(at: string | undefined): string | null {
+function passageTime(at: string | undefined): Timestamp | null {
   if (at === undefined) return null;
-  if (!ISO_TIMESTAMP.test(at)) throw refuseQuery("not_a_time", { value: at });
-  return at;
+  const time = Timestamp.safeParse(at);
+  if (!time.success) throw refuseQuery("not_a_time", { value: at });
+  return time.data;
 }
 
 function unshown(earlier: number, later: number): string {

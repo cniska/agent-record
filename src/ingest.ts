@@ -7,6 +7,7 @@ import { readChunk } from "./ingest-chunk";
 import type { ChunkParser, ParsedChunk, SessionFacts } from "./ingest-session-records";
 import { readingSource } from "./ingest-source-read";
 import type { Kind, Tool } from "./ingest-tools";
+import type { Timestamp } from "./timestamp";
 import { worktreeOf } from "./worktree";
 
 export type FileSpec = SourceFile & { readonly tool: Tool };
@@ -53,8 +54,8 @@ type FoldedSession = {
   gitBranch: string | null;
   cliVersion: string | null;
   entrypoint: string | null;
-  tsFirst: string | null;
-  tsLast: string | null;
+  tsFirst: Timestamp | null;
+  tsLast: Timestamp | null;
   title: string | null;
 };
 

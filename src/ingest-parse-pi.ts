@@ -10,6 +10,7 @@ import {
   type ToolCallRow,
   type UsageRow,
 } from "./ingest-session-records";
+import { Timestamp } from "./timestamp";
 
 const PiContent = z.looseObject({
   type: z.string().optional(),
@@ -41,7 +42,7 @@ type PiMessage = z.infer<typeof PiMessage>;
 const PiLine = z.looseObject({
   type: z.string().optional(),
   id: z.string().optional(),
-  timestamp: z.string().optional(),
+  timestamp: Timestamp.optional(),
   cwd: z.string().optional(),
   title: z.string().optional(),
   message: PiMessage.optional(),
@@ -53,7 +54,7 @@ function textOf(content: PiMessage["content"]): string | null {
   );
 }
 
-function usageOf(message: PiMessage, ts: string, messageId: string | null): UsageRow[] {
+function usageOf(message: PiMessage, ts: Timestamp, messageId: string | null): UsageRow[] {
   const { usage, responseId } = message;
   if (usage === undefined || responseId === undefined) return [];
   return [
@@ -71,7 +72,7 @@ function usageOf(message: PiMessage, ts: string, messageId: string | null): Usag
   ];
 }
 
-function callsOf(message: PiMessage, ts: string, srcLine: number): ToolCallRow[] {
+function callsOf(message: PiMessage, ts: Timestamp, srcLine: number): ToolCallRow[] {
   return (message.content ?? []).flatMap((part): ToolCallRow[] => {
     if (part.type !== "toolCall" || part.id === undefined) return [];
     return [

@@ -160,10 +160,10 @@ describe("the command contract", () => {
         "thread",
         SYNCED_SESSION.slice(0, 8),
         "--at",
-        "2026-09-16T10:04",
+        "2026-09-16T10:04:00Z",
       ]);
       expect(run.exitCode).toBe(0);
-      expect(JSON.parse(run.stdout).result.denominator).toContain("centered on 2026-09-16T10:04");
+      expect(JSON.parse(run.stdout).result.denominator).toContain("centered on 2026-09-16T10:04:00.000Z");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

@@ -53,7 +53,7 @@ describe("reading a log record", () => {
         "\0abc\x002026-10-12T07:00:00+03:00\0Ann\0fix: a\na.ts\nb.ts\n\n\0def\x002026-10-11T07:00:00+03:00\0\0b\n",
         "git log",
       ),
-    ).toEqual([
+    ).toEqual<object[]>([
       {
         sha: "abc",
         ts: "2026-10-12T04:00:00.000Z",

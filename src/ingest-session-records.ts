@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SkillLoadRow } from "./ingest-skill-load";
+import { Timestamp } from "./timestamp";
 
 export const ROLES = ["user", "assistant"] as const;
 
@@ -7,10 +8,11 @@ export type Role = (typeof ROLES)[number];
 
 const nullableString = z.string().nullable();
 const nullableNumber = z.number().nullable();
+const nullableTime = Timestamp.nullable();
 
 export const SessionFacts = z
   .strictObject({
-    ts: nullableString,
+    ts: nullableTime,
     cwd: nullableString,
     project: nullableString,
     gitBranch: nullableString,
@@ -34,7 +36,7 @@ export const NO_FACTS: SessionFacts = {
 export const MessageRow = z
   .strictObject({
     id: z.string(),
-    ts: z.string(),
+    ts: Timestamp,
     role: z.enum(ROLES),
     model: nullableString,
     turnId: nullableString,
@@ -56,7 +58,7 @@ export type MessageRow = z.infer<typeof MessageRow>;
 export const UsageRow = z
   .strictObject({
     responseId: z.string(),
-    ts: z.string(),
+    ts: Timestamp,
     model: nullableString,
     inputTokens: z.number(),
     cacheReadTokens: z.number(),
@@ -71,8 +73,8 @@ export type UsageRow = z.infer<typeof UsageRow>;
 export const TurnRow = z
   .strictObject({
     turnId: z.string(),
-    tsStart: nullableString,
-    tsEnd: nullableString,
+    tsStart: nullableTime,
+    tsEnd: nullableTime,
     durationMs: nullableNumber,
     messageCount: nullableNumber,
     status: z.string(),
@@ -88,8 +90,8 @@ export const ToolCallRow = z
     messageId: nullableString,
     model: nullableString,
     attributionSkill: nullableString,
-    tsCall: nullableString,
-    tsResult: nullableString,
+    tsCall: nullableTime,
+    tsResult: nullableTime,
     toolName: nullableString,
     skillName: nullableString,
     filePath: nullableString,

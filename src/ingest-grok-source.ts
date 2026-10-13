@@ -12,7 +12,6 @@ const SummaryFile = z.looseObject({
   generated_title: z.string().nullish(),
   head_branch: z.string().nullish(),
   parent_session_id: z.string().nullish(),
-  created_at: z.string().nullish(),
   agent_name: z.string().nullish(),
 });
 type SummaryFile = z.infer<typeof SummaryFile>;
@@ -32,7 +31,7 @@ function summaryFacts(summary: SummaryFile | null): SessionFacts[] {
   const cwd = nonEmpty(summary.info?.cwd);
   return [
     {
-      ts: nonEmpty(summary.created_at),
+      ts: null,
       cwd,
       project: projectOf(cwd),
       gitBranch: nonEmpty(summary.head_branch),

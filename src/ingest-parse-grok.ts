@@ -8,6 +8,7 @@ import {
   type SessionFacts,
   type ToolCallRow,
 } from "./ingest-session-records";
+import { EpochMs, EpochSeconds } from "./timestamp";
 
 const GrokContent = z.looseObject({ type: z.string().optional(), text: z.string().optional() });
 type GrokContent = z.infer<typeof GrokContent>;
@@ -29,22 +30,16 @@ const GrokUpdate = z.looseObject({
 type GrokUpdate = z.infer<typeof GrokUpdate>;
 
 const GrokLine = z.looseObject({
-  timestamp: z.number().optional(),
+  timestamp: EpochSeconds.optional(),
   params: z
     .looseObject({
       update: GrokUpdate.optional(),
       _meta: z
-        .looseObject({ eventId: z.string().optional(), agentTimestampMs: z.number().optional() })
+        .looseObject({ eventId: z.string().optional(), agentTimestampMs: EpochMs.optional() })
         .optional(),
     })
     .optional(),
 });
-
-function iso(ms: number | undefined, seconds: number | undefined): string | null {
-  const value = ms ?? (seconds == null ? null : seconds * 1000);
-  if (value == null || !Number.isFinite(value)) return null;
-  return new Date(value).toISOString();
-}
 
 function textOf(content: GrokContent | unknown[] | null | undefined): string | null {
   if (!content || Array.isArray(content)) return null;
@@ -79,7 +74,7 @@ export function parseGrokChunk(lines: readonly string[], firstLineNumber: number
     }
     const update = line.params?.update;
     const kind = update?.sessionUpdate;
-    const ts = iso(line.params?._meta?.agentTimestampMs, line.timestamp);
+    const ts = line.params?._meta?.agentTimestampMs ?? line.timestamp ?? null;
     if (ts) session.push({ ...NO_FACTS, ts });
     if (!update || !kind || !ts) continue;
 

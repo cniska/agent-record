@@ -144,6 +144,26 @@ function seed(env: Env): string {
 }
 
 describe("grok sessions", () => {
+  test("takes the session's first time from its transcript", () => {
+    const env = scratchEnv(newRoot());
+    writeSession(
+      env,
+      PARENT,
+      [event({ sessionUpdate: "user_message_chunk", content: { type: "text", text: "hello" } }, "user-1")],
+      parentSummary({ created_at: "2023-11-14T21:00:00.000Z" }),
+    );
+    const db = openDb(dbPath(env));
+    try {
+      sync(db, env);
+      expect(db.prepare("SELECT ts_first, ts_last FROM session WHERE id = ?").get(PARENT)).toEqual({
+        ts_first: "2023-11-14T22:13:20.000Z",
+        ts_last: "2023-11-14T22:13:20.000Z",
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("keeps prompts and tool names, and drops thinking and tool results", () => {
     const env = scratchEnv(newRoot());
     const path = seed(env);

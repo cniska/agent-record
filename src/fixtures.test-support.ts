@@ -332,6 +332,10 @@ export function writeCodexRollout(env: Env, dir: "sessions" | "archived_sessions
   return path;
 }
 
+export function withTimestamp(line: unknown, timestamp: string): string {
+  return JSON.stringify({ ...z.record(z.string(), z.unknown()).parse(line), timestamp });
+}
+
 export function withoutTimestamp(line: unknown): string {
   const { timestamp: _, ...rest } = z.record(z.string(), z.unknown()).parse(line);
   return JSON.stringify(rest);
