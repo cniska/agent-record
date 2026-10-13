@@ -1,5 +1,5 @@
 import { unreachable } from "./assert";
-import { type CodedError, isRefusal } from "./coded-error";
+import { CodedError, isRefusal } from "./coded-error";
 import { readingRecord } from "./db-read";
 import { SCHEMA_VERSION } from "./db-schema";
 import { type AgentPlan, bootoutCommand, bootstrapCommand, planAgent } from "./ingest-launchd";
@@ -19,12 +19,11 @@ type Health = {
 
 type DoctorReport = { readonly checks: readonly Health[]; readonly failing: number };
 
-export type DoctorProbes = { readonly agentLoaded: () => boolean; readonly now: number };
+export type DoctorProbes = { readonly agentLoaded: (env: Env) => boolean; readonly now: number };
 
-function recordRefusal(env: Env): CodedError | null {
+function refusalOr<T>(probe: () => T): T | CodedError {
   try {
-    readingRecord(dbPath(env), () => null);
-    return null;
+    return probe();
   } catch (error) {
     if (!isRefusal(error)) throw error;
     return error;
@@ -33,7 +32,7 @@ function recordRefusal(env: Env): CodedError | null {
 
 function recordHealth(env: Env): Health {
   const name = "record";
-  const refusal = recordRefusal(env);
+  const refusal = refusalOr(() => readingRecord(dbPath(env), () => null));
   if (refusal !== null) return { name, state: "fail", detail: refusal.message, fix: refusal.resolve };
   return { name, state: "ok", detail: `schema version ${SCHEMA_VERSION}`, fix: null };
 }
@@ -90,8 +89,11 @@ function agentHealth(plan: AgentPlan, loaded: () => boolean): Health {
         detail: "the launchd agent runs a different checkout or Bun than this agent-record",
         fix: `agent-record agent install, then ${bootoutCommand()} and ${bootstrapCommand(plan.path)}`,
       };
-    case "current":
-      if (!loaded())
+    case "current": {
+      const answer = refusalOr(loaded);
+      if (answer instanceof CodedError)
+        return { name, state: "warn", detail: answer.message, fix: answer.resolve };
+      if (!answer)
         return {
           name,
           state: "warn",
@@ -99,6 +101,7 @@ function agentHealth(plan: AgentPlan, loaded: () => boolean): Health {
           fix: bootstrapCommand(plan.path),
         };
       return { name, state: "ok", detail: "the launchd agent is loaded", fix: null };
+    }
     default:
       return unreachable(plan.state);
   }
@@ -108,7 +111,7 @@ export function recordDoctor(env: Env, { agentLoaded, now }: DoctorProbes): Doct
   const checks = [
     recordHealth(env),
     syncHealth(readSyncStamp(env), now),
-    agentHealth(planAgent(env), agentLoaded),
+    agentHealth(planAgent(env), () => agentLoaded(env)),
   ];
   return { checks, failing: checks.filter(({ state }) => state === "fail").length };
 }

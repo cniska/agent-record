@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { invariant } from "./assert";
 import { copyBackup } from "./file-backup";
+import { refuseIngest } from "./ingest-contract";
 import { type Env, resolveHomeDir, stateDir } from "./paths";
 
 export const AGENT_LABEL = "dev.agentrecord.sync";
@@ -79,11 +80,16 @@ export function bootoutCommand(): string {
   return `launchctl bootout gui/$(id -u)/${AGENT_LABEL}`;
 }
 
-export function agentLoaded(): boolean {
+export function agentLoaded(env: Env = process.env): boolean {
   const uid = process.getuid?.();
   invariant(uid !== undefined, "launchd runs only where processes have a user id");
-  return Bun.spawnSync(["launchctl", "print", `gui/${uid}/${AGENT_LABEL}`], {
-    stdout: "ignore",
-    stderr: "ignore",
-  }).success;
+  const args = ["launchctl", "print", `gui/${uid}/${AGENT_LABEL}`];
+  try {
+    return Bun.spawnSync(args, { env, stdout: "ignore", stderr: "ignore" }).success;
+  } catch (error) {
+    throw refuseIngest("launchctl_unavailable", {
+      command: args.join(" "),
+      detail: error instanceof Error ? error.message : String(error),
+    });
+  }
 }

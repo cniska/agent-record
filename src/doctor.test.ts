@@ -7,7 +7,7 @@ import { openDb } from "./db";
 import { refuseRecord } from "./db-contract";
 import { recordDoctor } from "./doctor";
 import { runCli, scratchEnv } from "./fixtures.test-support";
-import { agentPlistPath, installAgent } from "./ingest-launchd";
+import { agentLoaded, agentPlistPath, installAgent } from "./ingest-launchd";
 import { sync } from "./ingest-sync";
 import { claudeProjectsDir, dbPath, type Env, syncStampPath } from "./paths";
 import { stampingOutcome, writeSyncStamp } from "./sync-stamp";
@@ -149,6 +149,18 @@ describe("agent-record doctor", () => {
       state: "ok",
       detail: "the launchd agent is loaded",
       fix: null,
+    });
+  });
+
+  test("warns that it cannot tell whether a written agent is loaded when launchctl cannot be started", () => {
+    const scratch = newEnv();
+    const env = { ...scratch, PATH: scratch.HOME };
+    installAgent(env);
+    expect(recordDoctor(env, { agentLoaded, now: NOW }).checks.find((c) => c.name === "agent")).toEqual({
+      name: "agent",
+      state: "warn",
+      detail: `launchctl print gui/${process.getuid?.()}/dev.agentrecord.sync could not start launchctl: Executable not found in $PATH: "launchctl"`,
+      fix: "put /bin, where macOS keeps launchctl, on PATH, then check with: launchctl version",
     });
   });
 
