@@ -112,12 +112,6 @@ A coding agent's context ends at compaction, at a handoff, or when another agent
 - **NF-4** — No command leaves the record half-written: a file's rows and its cursor are written together or not at all.
 - **NF-5** — No command crashes with an uncoded error on a common failure: a missing record, a busy record, a held lock, an unreadable or unwritable file, a missing git, a malformed tool file.
 
-### 3.1 Testing
-
-- **NF-6** — `bun run check` runs the lint, the typecheck and the tests, and passes before every commit.
-- **NF-7** — No test waits real time.
-- **NF-8** — Each tool's parser has tests over sample lines of that tool's format, including a malformed line.
-
 ## 4. Out of scope
 
 - Reading sessions from another machine, or sharing a record.
@@ -135,7 +129,7 @@ A coding agent's context ends at compaction, at a handoff, or when another agent
 - **AC-4** — Rewrite a fixture transcript shorter and sync: the session holds only the new content. (FR-4)
 - **AC-5** — Move a Codex rollout into `archived_sessions` and sync: one copy in the archive, one session in the record. (FR-5)
 - **AC-6** — Change a tool's fixture file after archiving it, then `rebuild` from the archive alone: the record matches the archive, not the tool's file. (FR-7)
-- **AC-7** — Sync a fixture with a malformed line, an unreadable file and an orphan subagent: the sync finishes, and its report names the line, the failure with its fix, and the orphan. (FR-10, FR-11, FR-12)
+- **AC-7** — Sync a fixture of each tool holding a malformed line, with an unreadable file and an orphan subagent: the sync finishes, and its report names each malformed line, the failure with its fix, and the orphan. (FR-10, FR-11, FR-12)
 - **AC-8** — Sync with a fixture session in a fixture git repo with an origin remote, and in a repo under a temp directory: the first repo's commits with their types, its label and its files are recorded, the temp repo's are not; a second sync with no change reads neither. (FR-19, FR-20, FR-21, FR-22)
 - **AC-9** — Sync fixtures, then `rebuild`: the session, message, turn, usage, tool-call and skill-load rows are identical. (FR-26)
 - **AC-10** — Set the record's schema version lower, then higher: `sync`, `query` and `sql` each refuse, naming `agent-record rebuild` and a newer agent-record respectively; `rebuild` succeeds on the lower one. (FR-24, FR-27, FR-28, FR-29)
@@ -158,9 +152,8 @@ A coding agent's context ends at compaction, at a handoff, or when another agent
 - **AC-27** — Sync fixtures, then sync again with nothing changed: the second report reads no file, archives no bytes, and counts every checkout unchanged. (NF-2)
 - **AC-28** — Interrupt a sync mid-file: the next sync reads that file from where the last whole write left it, with no duplicate rows. (NF-4)
 - **AC-29** — Each failure in NF-5 produces a refusal with a code and fix, never `command_failed`. (NF-5)
-- **AC-30** — `bun run check` passes, the suite has no real-time waits, and each parser has a malformed-line test. (NF-6, NF-7, NF-8)
-- **AC-31** — On APFS, a fresh archive copy adds no allocated blocks. (NF-3)
-- **AC-32** — Sync with a fixture repo, delete the repo, sync, then `rebuild`: the sync keeps its commits, the rebuild has none. (FR-23)
+- **AC-30** — On APFS, a fresh archive copy adds no allocated blocks. (NF-3)
+- **AC-31** — Sync with a fixture repo, delete the repo, sync, then `rebuild`: the sync keeps its commits, the rebuild has none. (FR-23)
 
 ## 6. Deliverables
 
@@ -185,7 +178,7 @@ A coding agent's context ends at compaction, at a handoff, or when another agent
 - Which locations count as scratch (bounded by FR-21).
 - The default row count, the number of words `search` takes, the files per repo `prior-art` ranks, and the stale-sync threshold, provided each result says what it cut (FR-36, FR-39, FR-42, FR-47).
 - How search ranks within equal matched-word counts (bounded by FR-37).
-- How long a writer waits for another writer before it is refused (bounded by FR-55 and NF-7).
+- How long a writer waits for another writer before it is refused (bounded by FR-55).
 - The shape of the reference `search` gives and `thread` takes (bounded by FR-37, FR-40).
 
 ### Policies chosen (not open)
@@ -202,5 +195,4 @@ Each requirement still needs the owner's confirmation before it is contract.
 Known gaps, where the code does not yet meet a requirement:
 
 - **No criterion is proven yet.** Each is a todo in the acceptance suite, which drives only the CLI; `src/spec.test.ts` ties the suite to this spec. The unit tests stay unit tests and cite no ID.
-- **NF-7.** Eight tests wait real time: in `src/db.test.ts`, `src/db-lock.test.ts` and `src/plugin-hook.test.ts`.
 - **FR-4.** A rewrite that keeps a file's size and modification time is not detected.

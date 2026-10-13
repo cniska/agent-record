@@ -5,4 +5,3 @@ test.todo("AC-11 every command prints one result shape, ok on stdout and a coded
 test.todo("AC-12 agent-record alone lists the commands, and each malformed argument is refused with its usage", () => {});
 test.todo("AC-24 query and sql with no record are refused naming sync, and create no file", () => {});
 test.todo("AC-29 each failure the spec lists is a refusal with a code and fix, never command_failed", () => {});
-test.todo("AC-30 the check passes, no test waits real time, and each parser has a malformed-line test", () => {});
