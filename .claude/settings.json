@@ -1,4 +1,15 @@
 {
+  "extraKnownMarketplaces": {
+    "cniska": {
+      "source": {
+        "source": "github",
+        "repo": "cniska/agent-skills"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "cniska-skills@cniska": true
+  },
   "hooks": {
     "SessionStart": [
       {
