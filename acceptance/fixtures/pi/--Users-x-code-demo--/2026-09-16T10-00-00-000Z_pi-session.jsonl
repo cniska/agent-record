@@ -1,0 +1,4 @@
+{"type":"session","version":3,"id":"pi-session","timestamp":"2026-09-16T10:01:00.000Z","cwd":"/Users/x/code/demo"}
+{"type":"message","id":"pi-session-u1","timestamp":"2026-09-16T10:02:00.000Z","message":{"role":"user","content":[{"type":"text","text":"add the parser"}]}}
+{"type":"message","id":"pi-session-a1","timestamp":"2026-09-16T10:03:00.000Z","message":{"role":"assistant","content":[{"type":"text","text":"Pushing."},{"type":"toolCall","id":"pi-session-call1","name":"bash","arguments":{"command":"git push origin main"}}],"model":"model-a","usage":{"input":900,"output":40,"cacheRead":100,"cacheWrite":7},"responseId":"pi-session-resp1"}}
+{"type":"message","id":"pi-session-r1","timestamp":"2026-09-16T10:04:00.000Z","message":{"role":"toolResult","toolCallId":"pi-session-call1","toolName":"bash","isError":false,"content":[]}}

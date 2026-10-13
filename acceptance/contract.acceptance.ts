@@ -6,8 +6,9 @@ import {
   type Home,
   okLine,
   QUERY_RESULT,
+  rebuild,
   refused,
-  removeHomes,
+  removeScratch,
   runCli,
   schemaVersion,
   scratchHome,
@@ -17,7 +18,7 @@ import {
   USAGE_ENTRY,
 } from "./cli";
 
-afterEach(removeHomes);
+afterEach(removeScratch);
 
 const USAGE = {
   sync: "agent-record sync",
@@ -53,7 +54,7 @@ test("AC-10 a record of an older schema version is refused by sync, query and sq
   setSchemaVersion(home, current - 1);
 
   expectVersionRefusedEverywhere(home, "agent-record rebuild");
-  succeeded(runCli(home, ["rebuild"]), "rebuild", z.unknown());
+  rebuild(home);
   expect(schemaVersion(home)).toBe(current);
   succeeded(runCli(home, ["sql", "select 1 as one"]), "sql", QUERY_RESULT);
 });

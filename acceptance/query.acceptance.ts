@@ -4,18 +4,19 @@ import {
   type Home,
   QUERY_RESULT,
   refused,
-  removeHomes,
+  removeScratch,
   runCli,
   scratchHome,
   succeeded,
   syncedHome,
   USAGE_ENTRY,
-  withClaudeFixtures,
+  withFixtures,
 } from "./cli";
 
-afterEach(removeHomes);
+afterEach(removeScratch);
 
-const syncedFixtureHome = (): Home => syncedHome(withClaudeFixtures(scratchHome()));
+const syncedFixtureHome = (): Home =>
+  syncedHome(withFixtures(scratchHome(), ["claude/-Users-x-code-demo/long-session.jsonl"]));
 
 test("AC-13 query list names every query with its usage and summary", () => {
   const result = succeeded(
