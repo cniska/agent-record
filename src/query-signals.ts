@@ -158,11 +158,12 @@ const falseStops = signalOf<Judgement>({
   name: "false-stops",
   value: "share of judged gate stops the work got past with nothing a gate checks changed",
   note:
-    "A stop is a denial, an agent's retry of the same denial counted once. A commit-gate stop is false when " +
-    "the same agent later committed in its repo with no review between; one carrying a fingerprint is upheld. " +
-    "A verdict-gate stop is never false: it is unfixed when the reviewer ended on the gate's allow. A stop " +
-    "with nothing after it in its session is pending. Overrides and auto-mode denials are not judged. The " +
-    "hook event log starts when the plugin first wrote it.",
+    "A stop is a gate denial, an agent's retry of the same denial counted once; an auto-mode denial is not " +
+    "one. A commit-gate stop is false when the same agent later committed in its repo with no review between; " +
+    "one carrying a fingerprint is upheld. A verdict-gate stop is never false: it is unfixed when the reviewer " +
+    "ended on the gate's allow. A stop with nothing after it in its session is pending. An owner override " +
+    "leaves no line, so its stop is judged by what the agent did next. The hook event log starts when the " +
+    "plugin first wrote it.",
   kinds: JUDGEMENTS,
   events: (timeline) => timeline.denials.map((denial) => event(denial, denial.kind)),
   rate: (count, events) => {

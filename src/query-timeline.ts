@@ -165,11 +165,11 @@ export function timelineOf(record: SignalRecord): Timeline {
   const hookLogged = (root: string, at: string): boolean =>
     firstHook !== null && sessions.get(root)?.tool === "claude" && ms(at) >= ms(firstHook);
 
-  const tasks: TaskOutcome[] = [...prompts.entries()].flatMap(([root, list]) =>
+  const keyedTasks = [...prompts.entries()].flatMap(([root, list]) =>
     list.map((prompt, index) => {
       const key = `${root}#${index}`;
       const last = lastOfTask.get(key) ?? null;
-      return {
+      const task: TaskOutcome = {
         at: prompt.at,
         sessionId: root,
         repo: last === null ? repoOfRoot(root) : last.repo,
@@ -179,13 +179,11 @@ export function timelineOf(record: SignalRecord): Timeline {
         lastCommitRun: last === null ? null : last.at,
         landedAt: last === null ? null : iso(onOrigin(last)),
       };
+      return { key, task };
     }),
   );
-  const hookLoggedTasks = new Set(
-    [...prompts.entries()].flatMap(([root, list]) =>
-      list.flatMap((prompt, index) => (hookLogged(root, prompt.at) ? [`${root}#${index}`] : [])),
-    ),
-  );
+  const tasks = keyedTasks.map(({ task }) => task);
+  const hookLoggedTasks = new Set(keyedTasks.filter(({ task }) => task.hookLogged).map(({ key }) => key));
 
   const commitRuns: CommitRun[] = commits.map((run) => ({
     at: run.at,

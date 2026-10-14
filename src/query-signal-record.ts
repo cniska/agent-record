@@ -1,12 +1,13 @@
 import type { Database } from "bun:sqlite";
 import { invariant, unreachable } from "./assert";
 import type { Decision, Gate, HookEvent, Verdict } from "./ingest-event-kinds";
+import type { Tool } from "./ingest-tools";
 import { AGENT_TAIL_CHARS, INTERRUPTED } from "./query-interrupt";
 
 export type SessionRow = {
   readonly id: string;
   readonly parentId: string | null;
-  readonly tool: string;
+  readonly tool: Tool;
   readonly project: string | null;
   readonly start: string | null;
   readonly isReviewer: boolean;
