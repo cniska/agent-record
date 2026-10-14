@@ -236,8 +236,7 @@ function resultTexts(content: unknown): string[] {
   return content.flatMap((b) => (typeof b?.text === "string" ? [b.text] : []));
 }
 
-function exitCodeOf(content: unknown, isError: boolean): number | null {
-  if (!isError) return null;
+function exitCodeOf(content: unknown): number | null {
   const code = resultTexts(content)[0]?.match(FAILED_COMMAND_HEAD)?.[1];
   return code === undefined ? null : Number(code);
 }
@@ -399,7 +398,7 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
               toolName: null,
               isError: block.isError,
               isInterrupted: r?.interrupted === true,
-              exitCode: exitCodeOf(block.content, block.isError),
+              exitCode: block.isError ? exitCodeOf(block.content) : null,
               durationMs: null,
               resultBytes: resultSize(block.content, r),
               srcLine,

@@ -36,12 +36,12 @@ function timed(line: GrokTimedLine, ctx: z.RefinementCtx): Timestamp {
   return z.NEVER;
 }
 
-const SHELL_OUTPUT = "Bash";
-
-const GrokRawOutput = z
-  .looseObject({ type: z.string().optional(), exit_code: z.number().int().optional() })
-  .nullish()
-  .catch(null);
+const GrokShellExitCode = z.union([
+  z
+    .looseObject({ type: z.literal("Bash"), exit_code: z.number().int() })
+    .transform((output) => output.exit_code),
+  z.unknown().transform(() => null),
+]);
 
 const GrokToolLine = z
   .looseObject({
@@ -53,7 +53,7 @@ const GrokToolLine = z
         rawInput: z.record(z.string(), z.unknown()).nullish(),
         locations: z.array(z.looseObject({ path: z.string().nullish() })).nullish(),
         status: z.string().nullish(),
-        rawOutput: GrokRawOutput,
+        rawOutput: GrokShellExitCode.optional(),
         _meta: z
           .looseObject({ "x.ai/tool": z.looseObject({ name: z.string().nullish() }).nullish() })
           .nullish(),
@@ -119,11 +119,6 @@ function toolNameOf(update: GrokToolUpdate): string | null {
   return nonEmpty(update._meta?.["x.ai/tool"]?.name);
 }
 
-function shellExitCodeOf(update: GrokToolUpdate): number | null {
-  const output = update.rawOutput;
-  return output?.type === SHELL_OUTPUT ? (output.exit_code ?? null) : null;
-}
-
 function toolRowsOf({ update, ts }: GrokToolLine, srcLine: number): ToolCallRow[] {
   const id = update.toolCallId;
   const toolName = toolNameOf(update);
@@ -156,7 +151,7 @@ function toolRowsOf({ update, ts }: GrokToolLine, srcLine: number): ToolCallRow[
       toolName: null,
       isError: failed ? true : null,
       isInterrupted: null,
-      exitCode: shellExitCodeOf(update),
+      exitCode: update.rawOutput ?? null,
       durationMs: null,
       resultBytes: null,
       srcLine,

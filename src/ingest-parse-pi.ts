@@ -27,7 +27,7 @@ const PiToolCall = z
     arguments: part.arguments,
   }));
 
-const PiUserPart = byKind(typeOf, { text: TextPart }, UnkeptPart);
+const PiTextPart = byKind(typeOf, { text: TextPart }, UnkeptPart);
 
 const PiAssistantPart = byKind(typeOf, { text: TextPart, toolCall: PiToolCall }, UnkeptPart);
 
@@ -42,7 +42,7 @@ const PiUserLine = z
   .looseObject({
     id: MessageId,
     timestamp: Timestamp,
-    message: z.looseObject({ content: z.array(PiUserPart).optional(), model: z.string().optional() }),
+    message: z.looseObject({ content: z.array(PiTextPart).optional(), model: z.string().optional() }),
   })
   .transform((line) => ({
     kind: "user" as const,
@@ -76,7 +76,7 @@ type PiAssistantLine = z.infer<typeof PiAssistantLine>;
 
 const FAILED_COMMAND_TAIL = /\nCommand exited with code (\d+)$/;
 
-function exitCodeOf(parts: readonly z.output<typeof PiUserPart>[]): number | null {
+function exitCodeOf(parts: readonly z.output<typeof PiTextPart>[]): number | null {
   const last = parts.at(-1);
   const code = last?.kind === "text" ? last.text?.match(FAILED_COMMAND_TAIL)?.[1] : undefined;
   return code === undefined ? null : Number(code);
@@ -89,7 +89,7 @@ const PiToolResultLine = z
       toolCallId: ToolCallId,
       toolName: z.string().optional(),
       isError: z.boolean().optional(),
-      content: z.array(PiUserPart).optional(),
+      content: z.array(PiTextPart).optional(),
       details: z.looseObject({ exitCode: z.number().int().optional() }).nullish(),
     }),
   })
