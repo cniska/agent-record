@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { AGENT_LABEL, agentPlist, agentPlistPath, installAgent } from "./ingest-launchd";
+import { AGENT_LABEL, agentPlist, agentPlistPath, installAgent } from "./agent-launchd";
 import type { Env } from "./paths";
 
 const roots: string[] = [];

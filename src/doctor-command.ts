@@ -1,7 +1,7 @@
+import { agentLoaded } from "./agent-launchd";
 import { type Command, Ran } from "./cli-contract";
 import { parseFlags } from "./cli-flags";
 import { recordDoctor } from "./doctor";
-import { agentLoaded } from "./ingest-launchd";
 
 export const doctorCommand: Command = {
   name: "doctor",

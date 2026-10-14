@@ -1,8 +1,8 @@
+import { type AgentPlan, bootoutCommand, bootstrapCommand, planAgent } from "./agent-launchd";
 import { unreachable } from "./assert";
 import { CodedError, isRefusal } from "./coded-error";
 import { readingRecord } from "./db-read";
 import { SCHEMA_VERSION } from "./db-schema";
-import { type AgentPlan, bootoutCommand, bootstrapCommand, planAgent } from "./ingest-launchd";
 import { dbPath, type Env } from "./paths";
 import { readSyncStamp, type SyncStamp } from "./sync-stamp";
 

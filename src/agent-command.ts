@@ -1,6 +1,6 @@
+import { bootoutCommand, bootstrapCommand, installAgent } from "./agent-launchd";
 import { type Command, Ran, refuseUsage } from "./cli-contract";
 import { parseArg } from "./cli-flags";
-import { bootoutCommand, bootstrapCommand, installAgent } from "./ingest-launchd";
 
 export const agentCommand: Command = {
   name: "agent",
