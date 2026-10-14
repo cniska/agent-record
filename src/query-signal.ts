@@ -2,17 +2,29 @@ import { type Cell, type Query, refuseQuery } from "./query-contract";
 import { described, repoShown, viewRecord } from "./query-signal-view";
 import { type Signal, type SignalEvent, signalNamed } from "./query-signals";
 
-const GROUPINGS = ["week", "repo", "route"] as const;
-
-type Grouping = (typeof GROUPINGS)[number];
-
-const isGrouping = (by: string): by is Grouping => GROUPINGS.some((grouping) => grouping === by);
-
-const COLUMNS: Readonly<Record<Grouping, readonly string[]>> = {
-  week: ["week"],
-  repo: ["week", "repo", "label"],
-  route: ["week", "route"],
+type Grouped = {
+  readonly columns: readonly string[];
+  readonly key: (event: SignalEvent, labels: ReadonlyMap<string, string>, home: string) => readonly Cell[];
 };
+
+const GROUPED_BY = {
+  week: { columns: ["week"], key: (event) => [weekOf(event.at)] },
+  repo: {
+    columns: ["week", "repo", "label"],
+    key: (event, labels, home) => [
+      weekOf(event.at),
+      repoShown(event.repo, home),
+      event.repo === null ? null : (labels.get(event.repo) ?? null),
+    ],
+  },
+  route: { columns: ["week", "route"], key: (event) => [weekOf(event.at), event.route] },
+} as const satisfies Readonly<Record<string, Grouped>>;
+
+type Grouping = keyof typeof GROUPED_BY;
+
+const GROUPINGS = Object.keys(GROUPED_BY);
+
+const isGrouping = (by: string): by is Grouping => Object.hasOwn(GROUPED_BY, by);
 
 const RATE_COLUMNS = ["value", "count", "of", "kinds"];
 
@@ -53,18 +65,9 @@ export const signal: Query<"by"> = {
     const by = groupingOf(ctx.flags.by);
     const { timeline, labels } = viewRecord(db);
     const events = chosen.events(timeline);
-    const keyOf = (event: SignalEvent): readonly Cell[] => {
-      const week = weekOf(event.at);
-      if (by === "repo") {
-        const label = event.repo === null ? null : (labels.get(event.repo) ?? null);
-        return [week, repoShown(event.repo, ctx.home), label];
-      }
-      if (by === "route") return [week, event.route];
-      return [week];
-    };
     const groups = new Map<string, { readonly key: readonly Cell[]; readonly events: SignalEvent[] }>();
     for (const event of events) {
-      const key = keyOf(event);
+      const key = GROUPED_BY[by].key(event, labels, ctx.home);
       const id = JSON.stringify(key);
       const group = groups.get(id);
       if (group === undefined) groups.set(id, { key, events: [event] });
@@ -80,7 +83,7 @@ export const signal: Query<"by"> = {
       .map(({ key, rate, kinds }) => [...key, rate.value, rate.count, rate.of, kinds]);
     const weeks = new Set(events.map((event) => weekOf(event.at))).size;
     return {
-      columns: [...COLUMNS[by], ...RATE_COLUMNS],
+      columns: [...GROUPED_BY[by].columns, ...RATE_COLUMNS],
       rows,
       denominator: `${described(chosen)}; ${events.length} events over ${weeks} weeks (Monday, UTC)`,
       note: chosen.note,
