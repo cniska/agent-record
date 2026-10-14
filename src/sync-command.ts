@@ -1,11 +1,25 @@
-import type { Command } from "./cli-contract";
+import type { Command, Runtime } from "./cli-contract";
 import { parseFlags } from "./cli-flags";
 import { withDb } from "./db";
 import { withLock } from "./db-lock";
-import { type SyncReport, sync } from "./ingest-sync";
+import { SCHEMA_VERSION } from "./db-schema";
+import { rebuild, type SyncReport, sync } from "./ingest-sync";
 import { type MirrorPass, mirrorArchive } from "./mirror";
 import { dbPath } from "./paths";
 import { stampingOutcome } from "./sync-stamp";
+
+type Rebuilt = { readonly from: number; readonly to: number; readonly unreadCheckouts: readonly string[] };
+
+type RecordSync = SyncReport & { readonly rebuilt: Rebuilt | null };
+
+function syncRecord(runtime: Runtime): RecordSync {
+  const { env } = runtime;
+  return withDb(dbPath(env), { ...runtime, admits: "older" }, (db, older) => {
+    if (older === null) return { ...sync(db, env), rebuilt: null };
+    const { unreadCheckouts, ...report } = rebuild(db, env);
+    return { ...report, rebuilt: { from: older, to: SCHEMA_VERSION, unreadCheckouts } };
+  });
+}
 
 export const syncCommand: Command = {
   name: "sync",
@@ -17,10 +31,10 @@ export const syncCommand: Command = {
     const { env, now } = runtime;
     const report = withLock(env, () =>
       stampingOutcome(runtime, () => {
-        let synced: SyncReport;
+        let synced: RecordSync;
         let mirrored: MirrorPass;
         try {
-          synced = withDb(dbPath(env), runtime, (db) => sync(db, env));
+          synced = syncRecord(runtime);
         } finally {
           mirrored = mirrorArchive(env, now());
         }

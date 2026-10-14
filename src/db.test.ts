@@ -245,7 +245,7 @@ describe("a record of another version", () => {
   test("is rebuilt when older, and read by the agent-record that wrote it when newer", () => {
     const older = refuseRecord("record_version", { found: 4, expected: 5 });
     const newer = refuseRecord("record_version", { found: 6, expected: 5 });
-    expect(older.resolve).toBe("agent-record rebuild");
+    expect(older.resolve).toBe("the next agent-record sync rebuilds it, or run agent-record rebuild");
     expect(newer.message).toBe(
       "the record is schema version 6, newer than the version 5 this agent-record reads",
     );
@@ -284,7 +284,7 @@ describe("opening a database an older schema wrote", () => {
   }
 
   test("opening for a rebuild leaves the old version in place", () => {
-    const db = openDb(stampedOld(), { forRebuild: true, heldRecordWaitMs: NO_WAIT_MS });
+    const db = openDb(stampedOld(), { admits: "any", heldRecordWaitMs: NO_WAIT_MS });
 
     expect(recordVersion(db)).toBe(SCHEMA_VERSION - 1);
     db.close();

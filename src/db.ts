@@ -1,7 +1,7 @@
 import { Database, type DatabaseOptions } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { invariant } from "./assert";
+import { invariant, unreachable } from "./assert";
 import { refuseRecord } from "./db-contract";
 import { sqliteCode } from "./db-error";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
@@ -12,11 +12,12 @@ export function recordVersion(db: Database): number {
   return row.user_version;
 }
 
+function holdsNoTables(db: Database): boolean {
+  return db.query<{ n: number }, []>("SELECT count(*) AS n FROM sqlite_master").get()?.n === 0;
+}
+
 export function isFresh(db: Database): boolean {
-  return (
-    recordVersion(db) === 0 &&
-    db.query<{ n: number }, []>("SELECT count(*) AS n FROM sqlite_master").get()?.n === 0
-  );
+  return recordVersion(db) === 0 && holdsNoTables(db);
 }
 
 export function refuseOtherVersion(db: Database): void {
@@ -51,17 +52,38 @@ export function openRecordFile(
   }
 }
 
-export type RecordOpening = HeldRecordWait & { readonly forRebuild?: boolean };
+type Admits = "current" | "older" | "any";
 
-export function openDb(path: string, opts: RecordOpening): Database {
+export type RecordOpening = HeldRecordWait & { readonly admits?: Admits };
+
+type OpenedRecord = { readonly db: Database; readonly older: number | null };
+
+function refusesVersion(admits: Admits, found: number): boolean {
+  switch (admits) {
+    case "current":
+      return found !== SCHEMA_VERSION;
+    case "older":
+      return found > SCHEMA_VERSION;
+    case "any":
+      return false;
+    default:
+      return unreachable(admits);
+  }
+}
+
+function openRecord(path: string, opts: RecordOpening): OpenedRecord {
+  const admits = opts.admits ?? "current";
   mkdirSync(dirname(path), { recursive: true });
   const db = openRecordFile(path, {
     create: true,
     heldRecordWaitMs: opts.heldRecordWaitMs,
   });
   try {
-    const fresh = isFresh(db);
-    if (!fresh && !opts.forRebuild) refuseOtherVersion(db);
+    const found = recordVersion(db);
+    const fresh = found === 0 && holdsNoTables(db);
+    if (!fresh && refusesVersion(admits, found))
+      throw refuseRecord("record_version", { found, expected: SCHEMA_VERSION });
+    const older = !fresh && found < SCHEMA_VERSION ? found : null;
     db.run("PRAGMA journal_mode = WAL");
     db.run("PRAGMA foreign_keys = ON");
     if (fresh) {
@@ -71,14 +93,18 @@ export function openDb(path: string, opts: RecordOpening): Database {
         db.run(`PRAGMA user_version = ${SCHEMA_VERSION}`);
       });
     }
-    if (opts.forRebuild) return db;
+    if (admits === "any" || older !== null) return { db, older };
     refuseOtherVersion(db);
     db.run(SCHEMA_SQL);
-    return db;
+    return { db, older };
   } catch (error) {
     db.close();
     throw error;
   }
+}
+
+export function openDb(path: string, opts: RecordOpening): Database {
+  return openRecord(path, opts).db;
 }
 
 export function writeTransaction<T>(db: Database, fn: () => T): T {
@@ -94,11 +120,15 @@ export function refusingBusy<T>(path: string, run: () => T): T {
   }
 }
 
-export function withDb<T>(path: string, opts: RecordOpening, use: (db: Database) => T): T {
+export function withDb<T>(
+  path: string,
+  opts: RecordOpening,
+  use: (db: Database, older: number | null) => T,
+): T {
   return refusingBusy(path, () => {
-    const db = openDb(path, opts);
+    const { db, older } = openRecord(path, opts);
     try {
-      return use(db);
+      return use(db, older);
     } finally {
       db.close();
     }

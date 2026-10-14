@@ -17,6 +17,7 @@ import {
   scratchHome,
   setSchemaVersion,
   succeeded,
+  sync,
   syncedHome,
   USAGE_ENTRY,
 } from "./cli";
@@ -41,8 +42,12 @@ const READERS = [
 
 const READERS_AND_WRITER = [{ command: "sync", args: ["sync"] }, ...READERS] as const;
 
-function expectVersionRefusedEverywhere(home: Home, resolve: string): void {
-  for (const { command, args } of READERS_AND_WRITER) {
+function expectVersionRefused(
+  home: Home,
+  commands: readonly { readonly command: string; readonly args: readonly string[] }[],
+  resolve: string,
+): void {
+  for (const { command, args } of commands) {
     const error = refused(runCli(home, args), command);
     expect({ command, code: error.code, resolve: error.resolve }).toEqual({
       command,
@@ -52,15 +57,20 @@ function expectVersionRefusedEverywhere(home: Home, resolve: string): void {
   }
 }
 
-test("AC-10 a record of an older schema version is refused by sync, query and sql naming rebuild, which succeeds on it", () => {
+test("AC-10 a record of an older schema version is refused by query and sql naming the next sync or rebuild, and sync and rebuild each rebuild it", () => {
   const home = syncedHome();
   const current = schemaVersion(home);
   setSchemaVersion(home, current - 1);
 
-  expectVersionRefusedEverywhere(home, "agent-record rebuild");
-  rebuild(home);
+  expectVersionRefused(home, READERS, "the next agent-record sync rebuilds it, or run agent-record rebuild");
+  expect(sync(home).rebuilt).toEqual({ from: current - 1, to: current, unreadCheckouts: [] });
   expect(schemaVersion(home)).toBe(current);
   succeeded(runCli(home, ["sql", "select 1 as one"]), "sql", QUERY_RESULT);
+  expect(sync(home).rebuilt).toBeNull();
+
+  setSchemaVersion(home, current - 1);
+  rebuild(home);
+  expect(schemaVersion(home)).toBe(current);
 });
 
 test("AC-10 a record of a newer schema version is refused by sync, query and sql naming a newer agent-record", () => {
@@ -68,7 +78,7 @@ test("AC-10 a record of a newer schema version is refused by sync, query and sql
   const newer = schemaVersion(home) + 1;
   setSchemaVersion(home, newer);
 
-  expectVersionRefusedEverywhere(home, `run an agent-record that reads schema version ${newer}`);
+  expectVersionRefused(home, READERS_AND_WRITER, `run an agent-record that reads schema version ${newer}`);
   expect(schemaVersion(home)).toBe(newer);
 });
 

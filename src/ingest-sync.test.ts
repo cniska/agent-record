@@ -82,7 +82,7 @@ describe("absorbing a schema change", () => {
     db.run(`PRAGMA user_version = ${SCHEMA_VERSION - 1}`);
     db.close();
 
-    const reopened = openDb(dbPath(env), { forRebuild: true, heldRecordWaitMs: NO_WAIT_MS });
+    const reopened = openDb(dbPath(env), { admits: "any", heldRecordWaitMs: NO_WAIT_MS });
     rebuild(reopened, env);
 
     expect(columnsOf(reopened, "tool_call")).toContain("file_path");

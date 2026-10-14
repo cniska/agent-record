@@ -62,7 +62,10 @@ describe("agent-record doctor", () => {
     const db = new Database(dbPath(env), { create: true });
     db.run("CREATE TABLE old (x TEXT)");
     db.close();
-    expect(check(env, "record")).toMatchObject({ state: "fail", fix: "agent-record rebuild" });
+    expect(check(env, "record")).toMatchObject({
+      state: "fail",
+      fix: "the next agent-record sync rebuilds it, or run agent-record rebuild",
+    });
   });
 
   test("passes a readable record", () => {

@@ -164,8 +164,8 @@ export function sync(home: Home, env: RunEnv = {}): SyncCommandResult {
   return succeeded(runCli(home, ["sync"], env), "sync", SYNC_COMMAND_RESULT);
 }
 
-export function rebuild(home: Home): SyncResult {
-  return succeeded(runCli(home, ["rebuild"]), "rebuild", SYNC_RESULT);
+export function rebuild(home: Home): RebuildResult {
+  return succeeded(runCli(home, ["rebuild"]), "rebuild", REBUILD_RESULT);
 }
 
 export function withLaunchctl(home: Home, agentLoaded: boolean): Home {
@@ -391,13 +391,16 @@ const SYNC_RESULT = z.strictObject({
   repoFiles: z.strictObject({ repos: COUNT, files: COUNT, unchanged: COUNT }),
 });
 
-type SyncResult = z.infer<typeof SYNC_RESULT>;
+const REBUILD_RESULT = SYNC_RESULT.extend({ unreadCheckouts: z.array(z.string()) });
+
+type RebuildResult = z.infer<typeof REBUILD_RESULT>;
 
 export const SYNC_COMMAND_RESULT = SYNC_RESULT.extend({
   mirror: z.discriminatedUnion("state", [
     z.strictObject({ state: z.literal("mirrored"), path: z.string(), files: COUNT, bytes: COUNT }),
     z.strictObject({ state: z.literal("unreachable"), path: z.string(), detail: z.string() }),
   ]),
+  rebuilt: z.strictObject({ from: COUNT, to: COUNT, unreadCheckouts: z.array(z.string()) }).nullable(),
 });
 
 type SyncCommandResult = z.infer<typeof SYNC_COMMAND_RESULT>;

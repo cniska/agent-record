@@ -138,7 +138,21 @@ function dropEveryTable(db: Database): void {
   for (const name of tablesWhere(db, "1")) db.run(`DROP TABLE "${name}"`);
 }
 
-export function rebuild(db: Database, env: Env): SyncReport {
+function recordedCheckouts(db: Database): readonly string[] {
+  const hasPath = db
+    .query<{ one: number }, []>("SELECT 1 AS one FROM pragma_table_info('checkout') WHERE name = 'path'")
+    .get();
+  if (hasPath === null) return [];
+  return db
+    .query<{ path: string }, []>("SELECT path FROM checkout ORDER BY path")
+    .all()
+    .map((row) => row.path);
+}
+
+export type RebuildReport = SyncReport & { unreadCheckouts: string[] };
+
+export function rebuild(db: Database, env: Env): RebuildReport {
+  const before = recordedCheckouts(db);
   db.run("PRAGMA foreign_keys = OFF");
   try {
     writeTransaction(db, () => {
@@ -150,5 +164,6 @@ export function rebuild(db: Database, env: Env): SyncReport {
   }
   const report = sync(db, env);
   writeTransaction(db, () => db.run(`PRAGMA user_version = ${SCHEMA_VERSION}`));
-  return report;
+  const read = new Set(recordedCheckouts(db));
+  return { ...report, unreadCheckouts: before.filter((path) => !read.has(path)) };
 }

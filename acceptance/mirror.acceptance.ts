@@ -201,7 +201,7 @@ test("AC-38 doctor passes a mirror made by the last sync and warns of one over a
   expect(mirrorCheck(home).check?.detail).toContain(home.mirror);
 });
 
-test("AC-39 a sync refused over the record's schema version still mirrors the archive", () => {
+test("AC-39 a sync refused over a newer schema version still mirrors the archive", () => {
   const home = withFixtures(scratchHome(), [CLAUDE]);
   expect(sync(home).mirror.state).toBe("unreachable");
   withICloudDrive(home);

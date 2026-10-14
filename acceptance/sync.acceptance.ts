@@ -5,6 +5,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   statfsSync,
@@ -26,10 +27,12 @@ import {
   removeScratch,
   rowsOf,
   runCli,
+  schemaVersion,
   scratchDirOutsideTemp,
   scratchHome,
   scratchRepo,
   scratchTempDir,
+  setSchemaVersion,
   sync,
   withFixtures,
   withICloudDrive,
@@ -393,6 +396,7 @@ test("AC-27 a sync with nothing changed reads no file, archives no bytes and fin
     git: { repos: 0, commits: 0, files: 0, unchanged: 1 },
     repoFiles: { repos: 0, files: 0, unchanged: 1 },
     mirror: { state: "mirrored", path: home.mirror, files: 0, bytes: 0 },
+    rebuilt: null,
   });
 });
 
@@ -408,6 +412,30 @@ test("AC-31 a sync keeps a deleted repo's commits and a rebuild has none", () =>
   expect(rowsOf(home, subjects)).toEqual(recorded);
   rebuild(home);
   expect(rowsOf(home, subjects)).toEqual([]);
+});
+
+test("AC-69 a rebuild, and a sync that rebuilds an older record, name each checkout whose history they could not read", () => {
+  const removed = homeWithRepo();
+  sync(removed.home);
+  const checkout = realpathSync(removed.repo);
+  rmSync(removed.repo, { recursive: true });
+  expect(rebuild(removed.home).unreadCheckouts).toEqual([checkout]);
+  expect(rebuild(removed.home).unreadCheckouts).toEqual([]);
+
+  const older = homeWithRepo();
+  sync(older.home);
+  const sessions = rowsOf(older.home, "select id from session order by id");
+  const olderCheckout = realpathSync(older.repo);
+  rmSync(older.repo, { recursive: true });
+  const current = schemaVersion(older.home);
+  setSchemaVersion(older.home, current - 1);
+  expect(sync(older.home).rebuilt).toEqual({
+    from: current - 1,
+    to: current,
+    unreadCheckouts: [olderCheckout],
+  });
+  expect(rowsOf(older.home, "select id from session order by id")).toEqual(sessions);
+  expect(rowsOf(older.home, "select count(*) from repo_commit")).toEqual([[0]]);
 });
 
 test("AC-22 a second sync is refused naming the lock holder, and a lock from an ended process is taken", () => {

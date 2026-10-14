@@ -57,8 +57,8 @@ The record is what agent workflows improve from. Its first use is search: an age
 ### 2.5 Schema version
 
 - **FR-27** — The record carries one schema version.
-- **FR-28** — Every command that reads or writes the record, except `rebuild`, refuses a record of another schema version.
-- **FR-29** — A refusal of an older record names `agent-record rebuild` as its fix; a refusal of a newer record names running an agent-record that reads that version.
+- **FR-28** — `sync` on a record of an older schema version rebuilds it (FR-24) under its lock and reports `rebuilt` with the version it was `from` and the one it is `to`; every other command that reads or writes the record, except `rebuild`, refuses a record of an older schema version, and every command but `rebuild` refuses a record of a newer one.
+- **FR-29** — A refusal of an older record names the next `agent-record sync`, which rebuilds it, or `agent-record rebuild` as its fix; a refusal of a newer record names running an agent-record that reads that version.
 
 ### 2.6 Commands and output
 
@@ -216,6 +216,7 @@ The steps of one task, for a coach to read instead of whole transcripts.
 - **FR-100** — `update` holds the lock `locks/update` while it checks. Under it, `update --staged` reads the last check again and returns `checked: false` when one began within the day; otherwise it records the check as begun before it reaches the network, so a failed or offline check counts as the day's attempt and concurrent commands check at most once a day.
 - **FR-101** — `agent-record update --rollback` removes the newest staged build and records its version as rejected, so no later check stages it again, and names `agent-record rebuild` as the next step; with nothing staged it refuses with `nothing_staged`. A checkout refuses `update` with `update_from_checkout`.
 - **FR-102** — The update check warns when a staged build is newer than the running one, when no check has run, when the last one failed, and when it began more than a day ago, naming offline as the likely cause, each with the fix `agent-record update`; it is `ok` when the last check found the running build current, and in a checkout or with `AGENT_RECORD_SKIP_UPDATE=1`.
+- **FR-103** — `rebuild`, and a `sync` that rebuilds an older record (FR-28), report as `unreadCheckouts` each checkout the record held before and no longer holds: a checkout no longer on disk is not read (FR-23), so its history and tracked files are lost, and a rebuild loses nothing else.
 
 ## 3. Non-functional requirements
 
@@ -249,7 +250,7 @@ The steps of one task, for a coach to read instead of whole transcripts.
 - **AC-7** — Sync a fixture of each tool holding a malformed line, with an unreadable file and an orphan subagent: the sync finishes, and its report names each malformed line, the failure with its fix, and the orphan. (FR-10, FR-11, FR-12)
 - **AC-8** — Sync with a fixture session in a fixture git repo with an origin remote, and in a repo under a temp directory: the first repo's commits with their types, its label and its files are recorded, the temp repo's are not; a second sync with no change reads neither. (FR-19, FR-20, FR-21, FR-22)
 - **AC-9** — Sync fixtures, then `rebuild`: the session, message, turn, usage, tool-call, git-run and skill-load rows are identical. (FR-26)
-- **AC-10** — Set the record's schema version lower, then higher: `sync`, `query` and `sql` each refuse, naming `agent-record rebuild` and a newer agent-record respectively; `rebuild` succeeds on the lower one. (FR-24, FR-27, FR-28, FR-29)
+- **AC-10** — Set the record's schema version lower: `query` and `sql` each refuse, naming the next sync or `agent-record rebuild`, `sync` rebuilds it and reports `rebuilt` from the lower version to the current one, and `rebuild` succeeds on it too. Set it higher: `sync`, `query` and `sql` each refuse, naming a newer agent-record. (FR-24, FR-27, FR-28, FR-29)
 - **AC-11** — Run each command once successfully and once with bad input, and `doctor` with a failing check: the successful runs and `doctor` print `ok: true` on stdout, `doctor` exiting 1; the bad input prints `ok: false` on stderr with exit 1, and the error carries kind, code, message, meta and resolve. (FR-30, FR-31)
 - **AC-12** — Run `agent-record` alone, an unknown command, and each malformed argument form: the listing and each refusal with its usage. (FR-32, FR-33)
 - **AC-13** — `query list`, an unknown query, `--rows 0`, and a query with more rows than the default: listing, refusals, and the `more` note. (FR-34, FR-35, FR-36)
@@ -278,7 +279,7 @@ The steps of one task, for a coach to read instead of whole transcripts.
 - **AC-36** — Sync with a mirror copy that cannot be written: the sync succeeds, the other files are mirrored, its result lists the failure with its fix, and `doctor` warns that the archive was never mirrored whole; fix the copy and sync: `doctor` passes the mirror. (FR-65, FR-66, FR-68)
 - **AC-37** — Plant a session in the mirror that the archive lacks, then `rebuild`: the record does not hold it. (FR-67)
 - **AC-38** — `doctor` after a sync that mirrored the archive, and with a mirror time over a day old: the mirror check passes, then warns, naming the mirror folder. (FR-45, FR-68)
-- **AC-39** — Sync with an iCloud Drive folder and a record of another schema version: the sync is refused, and the archive is mirrored. (FR-69)
+- **AC-39** — Sync with an iCloud Drive folder and a record of a newer schema version: the sync is refused, and the archive is mirrored. (FR-69)
 - **AC-40** — Sync a session in which the owner opens a task, answers a question, pushes back, says go ahead, interrupts, rejects a permission and asks a new task, with a subagent: `signal owner-interrupts` counts one of each cause over two tasks and nothing from the subagent, and `signal-events owner-interrupts` lists them. (FR-70, FR-75)
 - **AC-41** — Sync sessions in a fixture repo where one task commits and pushes, one commits after a `cd` into the repo and is pushed later from another session, and one never pushes: `signal time-to-land` gives the median minutes of the two landed tasks and one task not landed. (FR-71)
 - **AC-42** — Sync a session with a commit run pushed within the hour, one pushed after it, and a last commit run never pushed: `signal stranded-work` counts two stranded commit runs of three, and one session ended unpushed. (FR-72)
@@ -308,6 +309,7 @@ The steps of one task, for a coach to read instead of whole transcripts.
 - **AC-66** — Run `update` against a release whose checksum is wrong, and one whose build prints another version: each is refused with `update_failed` and nothing staged, and `doctor` warns of the failed check. (FR-97, FR-102)
 - **AC-67** — In a release whose last update check is two days old, run `sync` and a `doctor` with `AGENT_RECORD_SKIP_UPDATE=1`, then two `doctor`s at once, then another: the first two start no check; the pair stage the newer release with one request to the release server; the last starts none. (FR-99, FR-100)
 - **AC-68** — Stage a release with `update`, roll it back, then run `update` and roll back again: the staged build is removed and its version rejected, `--version` runs the installed build, the next `update` stages nothing and downloads nothing, and the second rollback is refused with `nothing_staged`. (FR-101)
+- **AC-69** — Sync a fixture repo, delete it, and `rebuild` twice; then, in another home, sync a fixture repo, delete it, lower the schema version and sync: the first rebuild names the deleted checkout and the second none, and the sync reports `rebuilt` naming it, keeps every session, and holds no commits. (FR-28, FR-103)
 
 ## 6. Deliverables
 

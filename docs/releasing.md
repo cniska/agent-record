@@ -28,7 +28,7 @@ Step 3 comes before the first tag. Steps 1 and 2 need the first release's files,
 
 1. On a clean `main`, run `scripts/release.sh patch|minor|major`. It bumps `package.json`, refuses a version the release check rejects, runs `bun run check`, commits `chore: release vX.Y.Z` and tags it.
 2. Push `main`, then the tag, as it prints.
-3. The release body is GitHub's generated notes. A release that bumps the record's schema version says so in its first line.
+3. The release body is GitHub's generated notes. A release that bumps the record's schema version says so in its first line: the first `sync` after it rebuilds the record from the archive, which takes minutes, and queries refuse the record until then.
 
 The release check, `scripts/release-check.ts`, runs on every tag in the workflow too: the tag must be `v` and the `package.json` version, newer than the previous tag, and while on 0.x a release whose `SCHEMA_VERSION` differs from the previous tag's must bump the minor version, not only the patch.
 
