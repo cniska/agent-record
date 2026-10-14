@@ -549,6 +549,35 @@ describe("costing each reviewer run by its preloaded skills' versions", () => {
   });
 });
 
+describe("counting the owner's asks for another model's read per task", () => {
+  const said = (at: string, text: string) => ({ sessionId: "s", at, text, agentBefore: TOLD });
+  const record = recordOf({
+    sessions: [session("s", "2026-10-14T09:00:00.000Z")],
+    ownerMessages: [
+      { sessionId: "s", at: "2026-10-14T09:00:00.000Z", text: "add the parser", agentBefore: null },
+      said("2026-10-14T09:10:00.000Z", "ask fable to design this"),
+      said("2026-10-14T09:20:00.000Z", "what does fable think?"),
+      said("2026-10-14T09:30:00.000Z", "what did fable's review say"),
+      said("2026-10-14T09:40:00.000Z", "get a second opinion on this"),
+      said("2026-10-14T09:50:00.000Z", "# Handoff\n\nAsk fable to plan it."),
+      said("2026-10-14T10:00:00.000Z", '<pasted_content id="1">ask fable</pasted_content id="1">\nship it'),
+      said("2026-10-14T10:10:00.000Z", "<command-name>/fable</command-name> ask fable"),
+    ],
+  });
+
+  test("counts an ask by its verb, Fable as the subject, Fable's view or the phrase, not a quote or a paste", () => {
+    expect(eventsOf("second-read-asks", record).flatMap((e) => (e.kind === "ask" ? [e.text] : []))).toEqual([
+      "ask fable to design this",
+      "what does fable think?",
+      "get a second opinion on this",
+    ]);
+  });
+
+  test("divides the asks by the tasks of the sessions the owner typed in", () => {
+    expect(rateOf("second-read-asks", record)).toEqual({ value: 0.43, count: 3, of: 7 });
+  });
+});
+
 test("names every signal once", () => {
   const names = SIGNALS.map((s) => s.name);
   expect(new Set(names).size).toBe(names.length);

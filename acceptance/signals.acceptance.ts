@@ -261,7 +261,7 @@ test("AC-44 signal splits each week by repo or route, newest first, and refuses 
     code: "unknown_signal",
     resolve:
       "one of: owner-interrupts, time-to-land, stranded-work, review-loops, false-stops, review-returns, blocks, " +
-      "skill-usage, lost-context, escaped-defects, review-cost",
+      "skill-usage, lost-context, escaped-defects, review-cost, second-read-asks",
   });
   const grouping = refused(runCli(home, ["query", "signal", "stranded-work", "--by", "day"]), "query");
   expect({ code: grouping.code, resolve: grouping.resolve }).toEqual({
@@ -307,6 +307,7 @@ test("AC-45 before-after compares every signal on either side of a commit, from 
     "lost-context",
     "escaped-defects",
     "review-cost",
+    "second-read-asks",
   ]);
   expect(around.denominator).toBe(
     `commit ${sha} at 2026-09-18T00:00:00.000Z; before 2026-09-04T00:00:00.000Z to 2026-09-18T00:00:00.000Z, ` +
@@ -630,5 +631,31 @@ test("AC-56 review-cost gives each reviewer run's tokens and minutes, split by i
   rebuild(home);
   expect(counted()).toEqual([
     ["2026-09-14", 1000, 3, 3, "reviewer run 3; median input 8000, median minutes 2"],
+  ]);
+});
+
+test("AC-57 second-read-asks counts the owner's asks for another model's read per task, not a quote or a paste", () => {
+  const home = synced([
+    {
+      id: "asked",
+      cwd: "/Users/x/code/demo",
+      steps: [
+        { owner: "add the parser", at: "2026-09-16T09:00:00Z" },
+        { agent: "Here is a design.", at: "2026-09-16T09:01:00Z" },
+        { owner: "ask fable to validate the design", at: "2026-09-16T09:02:00Z" },
+        { agent: "Fable agreed.", at: "2026-09-16T09:03:00Z" },
+        { owner: "what did fable's review say", at: "2026-09-16T09:04:00Z" },
+        { agent: "It found nothing.", at: "2026-09-16T09:05:00Z" },
+        { owner: "# Handoff\n\nAsk fable to plan the printer.", at: "2026-09-16T09:06:00Z" },
+      ],
+    },
+  ]);
+
+  expect(query(home, ["signal", "second-read-asks"]).rows).toEqual([
+    ["2026-09-14", 0.25, 1, 4, "task 4, ask 1"],
+  ]);
+  const events = query(home, ["signal-events", "second-read-asks"]).rows;
+  expect(events.flatMap(([at, kind, , , , , text]) => (kind === "ask" ? [[at, text]] : []))).toEqual([
+    ["2026-09-16T09:02:00.000Z", "ask fable to validate the design"],
   ]);
 });

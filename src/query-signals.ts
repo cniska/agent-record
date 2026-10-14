@@ -352,6 +352,21 @@ const reviewCost = signalOf({
   },
 });
 
+const secondReadAsks = signalOf({
+  name: "second-read-asks",
+  value: "asks for another model's read per task the owner typed in",
+  note:
+    "An ask is an owner message, pasted blocks and a pasted Markdown document aside, that asks for Fable, a " +
+    "second opinion, a second read or a stronger model: an ask, have, get or similar verb before Fable, Fable " +
+    "followed by to, should, agrees, design, plan, review or similar, what Fable thinks, or the phrase itself.",
+  kinds: ["task", "ask"] as const,
+  events: (timeline) => [
+    ...timeline.secondReadAsks.map((ask) => event(ask, "ask", null, ask.text)),
+    ...timeline.tasks.filter((task) => task.ownerTyped).map((task) => event(task, "task")),
+  ],
+  rate: (count) => ({ value: ratio(count("ask"), count("task")), count: count("ask"), of: count("task") }),
+});
+
 export const SIGNALS: readonly Signal[] = [
   ownerInterrupts,
   timeToLand,
@@ -364,6 +379,7 @@ export const SIGNALS: readonly Signal[] = [
   lostContext,
   escapedDefects,
   reviewCost,
+  secondReadAsks,
 ];
 
 export function signalNamed(name: string): Signal {

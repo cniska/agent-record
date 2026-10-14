@@ -12,6 +12,7 @@ import {
 } from "./query-hook-timeline";
 import { type Cause, classify } from "./query-interrupt";
 import { type Reread, rereadsAfterCompactions } from "./query-lost-context";
+import { asksSecondRead } from "./query-second-read";
 import type { CheckoutRow, GitRunRow, HookRow, SessionRow, SignalRecord } from "./query-signal-record";
 import { EpochMs } from "./timestamp";
 
@@ -30,6 +31,8 @@ export type Placed = {
 };
 
 type Interrupt = Placed & { readonly cause: Cause; readonly text: string | null };
+
+type Ask = Placed & { readonly text: string };
 
 type TaskOutcome = Placed & {
   readonly ownerTyped: boolean;
@@ -72,6 +75,7 @@ export type SkillLoaded = Placed & {
 
 export type Timeline = {
   readonly interrupts: readonly Interrupt[];
+  readonly secondReadAsks: readonly Ask[];
   readonly tasks: readonly TaskOutcome[];
   readonly commitRuns: readonly CommitRun[];
   readonly reviewerRuns: readonly ReviewerRun[];
@@ -201,6 +205,21 @@ export function timelineOf(record: SignalRecord): Timeline {
     return { ...said, sessionId: root, repo: repoOfRoot(root), ...inTask(root, ms(said.at)) };
   });
 
+  const secondReadAsks: Ask[] = record.ownerMessages.flatMap((message) => {
+    if (classify(message.text, message.agentBefore).kind === "command" || !asksSecondRead(message.text))
+      return [];
+    const root = rootOf(message.sessionId);
+    return [
+      {
+        at: message.at,
+        sessionId: root,
+        repo: repoOfRoot(root),
+        ...inTask(root, ms(message.at)),
+        text: message.text,
+      },
+    ];
+  });
+
   const firstHook = record.hookEvents[0]?.at ?? null;
   const hookLogged = (root: string, at: string): boolean =>
     firstHook !== null && sessions.get(root)?.tool === "claude" && ms(at) >= ms(firstHook);
@@ -319,6 +338,7 @@ export function timelineOf(record: SignalRecord): Timeline {
 
   return {
     interrupts,
+    secondReadAsks,
     tasks,
     commitRuns,
     reviewerRuns,
