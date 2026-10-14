@@ -42,7 +42,7 @@ type Kinded<Kind extends string> = Placed & { readonly kind: Kind };
 
 export type SkillLoaded = Placed & {
   readonly skill: string;
-  readonly sha256: string | null;
+  readonly bodySha256: string | null;
   readonly install: string | null;
 };
 
@@ -234,7 +234,7 @@ export function timelineOf(record: SignalRecord): Timeline {
       repo: repoOfRoot(root),
       ...inTask(root, ms(load.at)),
       skill: load.skill,
-      sha256: load.sha256,
+      bodySha256: load.bodySha256,
       install: load.install,
     };
   });

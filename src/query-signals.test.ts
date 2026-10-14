@@ -335,9 +335,15 @@ describe("counting skill loads per task by version", () => {
       { sessionId: "s", at: "2026-10-14T09:30:00.000Z", text: "now add the printer", agentBefore: TOLD },
     ],
     skillLoads: [
-      { sessionId: "s", at: "2026-10-14T09:01:00.000Z", skill: "plan", sha256: V1, install: "41c40cc68eb7" },
-      { sessionId: "sub", at: "2026-10-14T09:06:00.000Z", skill: "plan", sha256: V2, install: null },
-      { sessionId: "s", at: "2026-10-14T09:31:00.000Z", skill: "build", sha256: null, install: null },
+      {
+        sessionId: "s",
+        at: "2026-10-14T09:01:00.000Z",
+        skill: "plan",
+        bodySha256: V1,
+        install: "41c40cc68eb7",
+      },
+      { sessionId: "sub", at: "2026-10-14T09:06:00.000Z", skill: "plan", bodySha256: V2, install: null },
+      { sessionId: "s", at: "2026-10-14T09:31:00.000Z", skill: "build", bodySha256: null, install: null },
     ],
   });
 

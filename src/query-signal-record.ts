@@ -30,7 +30,7 @@ export type CheckoutRow = { readonly path: string; readonly repo: string };
 
 type LoadRow = TimedRow & {
   readonly skill: string;
-  readonly sha256: string | null;
+  readonly bodySha256: string | null;
   readonly install: string | null;
 };
 
@@ -173,7 +173,7 @@ export function readSignalRecord(db: Database): SignalRecord {
     .map(hookRowOf);
   const skillLoads = db
     .query<LoadRow, []>(
-      `SELECT session_id AS sessionId, ts AS at, skill_name AS skill, body_sha256 AS sha256, install
+      `SELECT session_id AS sessionId, ts AS at, skill_name AS skill, body_sha256 AS bodySha256, install
        FROM skill_load ORDER BY ts`,
     )
     .all();

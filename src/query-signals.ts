@@ -44,7 +44,7 @@ const HASH_SHOWN = 8;
 const UNKNOWN_PART = "-";
 
 export const versionOf = (load: SkillLoaded): string =>
-  `${load.sha256?.slice(0, HASH_SHOWN) ?? UNKNOWN_PART}/${load.install ?? UNKNOWN_PART}`;
+  `${load.bodySha256?.slice(0, HASH_SHOWN) ?? UNKNOWN_PART}/${load.install ?? UNKNOWN_PART}`;
 
 function signalOf<Kind extends string>(definition: Definition<Kind>): Signal {
   return {
