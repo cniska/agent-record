@@ -28,7 +28,7 @@ type RouteReadRow = TimedRow & { readonly path: string };
 
 export type CheckoutRow = { readonly path: string; readonly repo: string };
 
-export type SkillLoadRow = TimedRow & {
+type LoadRow = TimedRow & {
   readonly skill: string;
   readonly sha256: string | null;
   readonly install: string | null;
@@ -101,7 +101,7 @@ export type SignalRecord = {
   readonly gitRuns: readonly GitRunRow[];
   readonly routeReads: readonly RouteReadRow[];
   readonly hookEvents: readonly HookRow[];
-  readonly skillLoads: readonly SkillLoadRow[];
+  readonly skillLoads: readonly LoadRow[];
   readonly checkouts: readonly CheckoutRow[];
   readonly labels: ReadonlyMap<string, string>;
   readonly newest: string | null;
@@ -172,7 +172,7 @@ export function readSignalRecord(db: Database): SignalRecord {
     .all()
     .map(hookRowOf);
   const skillLoads = db
-    .query<SkillLoadRow, []>(
+    .query<LoadRow, []>(
       `SELECT session_id AS sessionId, ts AS at, skill_name AS skill, body_sha256 AS sha256, install
        FROM skill_load ORDER BY ts`,
     )
