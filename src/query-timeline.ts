@@ -127,16 +127,9 @@ function promptsByRoot(record: SignalRecord): {
   readonly ownerTyped: ReadonlySet<string>;
   readonly pending: readonly Pending[];
 } {
-  const prompts = new Map<string, Prompt[]>();
-  const add = (root: string, at: string) => {
-    const prompt = { at, ms: ms(at) };
-    const known = prompts.get(root);
-    if (known === undefined) prompts.set(root, [prompt]);
-    else known.push(prompt);
-  };
-  for (const session of record.sessions) {
-    if (session.parentId === null && session.start !== null) add(session.id, session.start);
-  }
+  const starts: { readonly root: string; readonly at: string }[] = record.sessions.flatMap((session) =>
+    session.parentId === null && session.start !== null ? [{ root: session.id, at: session.start }] : [],
+  );
   const ownerTyped = new Set<string>();
   const pending: Pending[] = [];
   for (const message of record.ownerMessages) {
@@ -144,10 +137,15 @@ function promptsByRoot(record: SignalRecord): {
     if (said.kind === "command") continue;
     ownerTyped.add(message.sessionId);
     if (said.kind === "interrupt") pending.push({ ...message, cause: said.cause });
-    else if (message.agentBefore !== null) add(message.sessionId, message.at);
+    else if (message.agentBefore !== null) starts.push({ root: message.sessionId, at: message.at });
   }
   for (const rejection of record.rejections) pending.push({ ...rejection, cause: "permission", text: null });
-  for (const list of prompts.values()) list.sort((a, b) => a.ms - b.ms);
+  const prompts = new Map(
+    [...Map.groupBy(starts, (start) => start.root)].map(([root, list]) => [
+      root,
+      list.map(({ at }) => ({ at, ms: ms(at) })).sort((a, b) => a.ms - b.ms),
+    ]),
+  );
   return { prompts, ownerTyped, pending };
 }
 
@@ -160,14 +158,11 @@ function taskIndex(prompts: readonly Prompt[], at: number): number {
 }
 
 function pushesByRepo(runs: readonly Run[]): (run: Run) => number | null {
-  const pushes = new Map<string, number[]>();
-  for (const run of runs) {
-    if (run.subcommand !== "push") continue;
-    const known = pushes.get(run.repo);
-    if (known === undefined) pushes.set(run.repo, [run.ms]);
-    else known.push(run.ms);
-  }
-  return (run) => pushes.get(run.repo)?.find((push) => push >= run.ms) ?? null;
+  const pushes = Map.groupBy(
+    runs.filter((run) => run.subcommand === "push"),
+    (run) => run.repo,
+  );
+  return (run) => pushes.get(run.repo)?.find((push) => push.ms >= run.ms)?.ms ?? null;
 }
 
 export function timelineOf(record: SignalRecord): Timeline {
