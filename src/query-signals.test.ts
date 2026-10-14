@@ -14,7 +14,7 @@ const session = (id: string, start: string, more: Partial<SessionRow> = {}): Ses
   project: REPO,
   start,
   end: null,
-  isReviewer: false,
+  agentType: null,
   ...more,
 });
 
@@ -35,7 +35,8 @@ const recordOf = (more: Partial<SignalRecord>): SignalRecord => ({
   compactedSessionReads: [],
   commits: [],
   commitFiles: [],
-  sessionSpend: [],
+  responses: [],
+  subagentReturns: [],
   hookEvents: [],
   skillLoads: [],
   checkouts: [{ path: REPO, repo: REPO }],
@@ -44,11 +45,18 @@ const recordOf = (more: Partial<SignalRecord>): SignalRecord => ({
   ...more,
 });
 
-const eventsOf = (name: string, record: SignalRecord) => signalNamed(name).events(timelineOf(record));
+const measuredOf = (name: string, record: SignalRecord) => signalNamed(name).measure(timelineOf(record));
+
+const eventsOf = (name: string, record: SignalRecord) => measuredOf(name, record).events;
+
+const detailOf = (name: string, record: SignalRecord) => {
+  const measured = measuredOf(name, record);
+  return measured.detail(measured.events);
+};
 
 const rateOf = (name: string, record: SignalRecord) => {
-  const signal = signalNamed(name);
-  return signal.rate(signal.events(timelineOf(record)));
+  const measured = measuredOf(name, record);
+  return measured.rate(measured.events);
 };
 
 describe("counting the owner's interrupts per task", () => {
@@ -174,8 +182,8 @@ describe("counting reviewer runs per commit run", () => {
     const record = recordOf({
       sessions: [
         session("a", "2026-10-14T09:00:00.000Z"),
-        session("r1", "2026-10-14T09:05:00.000Z", { parentId: "a", isReviewer: true }),
-        session("r2", "2026-10-14T09:15:00.000Z", { parentId: "a", isReviewer: true }),
+        session("r1", "2026-10-14T09:05:00.000Z", { parentId: "a", agentType: "cniska-skills:reviewer" }),
+        session("r2", "2026-10-14T09:15:00.000Z", { parentId: "a", agentType: "cniska-skills:reviewer" }),
       ],
       gitRuns: [run("a", "2026-10-14T09:20:00.000Z", "commit")],
     });
@@ -487,64 +495,71 @@ describe("counting fix commits that point back at an earlier accepted commit", (
   });
 });
 
-describe("costing each reviewer run by its preloaded skills' versions", () => {
-  const preload = (sessionId: string, skill: string, bodySha256: string | null) => ({
+describe("costing each step of every loop by its tokens and minutes", () => {
+  const load = (sessionId: string, minute: number, skill: string, digit: string, preloaded = false) => ({
     sessionId,
-    at: "2026-10-14T09:05:01.000Z",
+    at: timed(minute),
     skill,
-    bodySha256,
+    bodySha256: digit.repeat(12),
     install: null,
-    preloaded: true,
+    preloaded,
+  });
+  const spent = (sessionId: string, minute: number, output: number, input: number) => ({
+    sessionId,
+    at: timed(minute),
+    output,
+    input,
   });
   const record = recordOf({
     sessions: [
-      session("a", "2026-10-14T09:00:00.000Z"),
-      session("r1", "2026-10-14T09:05:00.000Z", {
-        parentId: "a",
-        isReviewer: true,
-        end: "2026-10-14T09:05:30.000Z",
-      }),
-      session("r2", "2026-10-14T09:10:00.000Z", {
-        parentId: "a",
-        isReviewer: true,
-        end: "2026-10-14T09:12:00.000Z",
-      }),
-      session("r3", "2026-10-14T09:20:00.000Z", {
-        parentId: "a",
-        isReviewer: true,
-        end: "2026-10-14T09:21:00.000Z",
-      }),
-      session("e1", "2026-10-14T09:25:00.000Z", { parentId: "a", end: "2026-10-14T09:26:00.000Z" }),
+      session("a", timed(0)),
+      session("w", timed(10), { parentId: "a", agentType: "general-purpose" }),
+      session("r", timed(20), { parentId: "a", agentType: "cniska-skills:reviewer" }),
+      session("e", timed(25), { parentId: "a", agentType: "Explore" }),
     ],
+    ownerMessages: [
+      { sessionId: "a", at: timed(0), text: "add the parser", agentBefore: null },
+      { sessionId: "a", at: timed(40), text: "now add the printer", agentBefore: TOLD },
+    ],
+    subagentReturns: [{ sessionId: "a", at: timed(30) }],
     skillLoads: [
-      preload("r1", "principles", "bbbbbbbbbbbb"),
-      preload("r1", "design-review", "aaaaaaaaaaaa"),
-      preload("r2", "design-review", "cccccccccccc"),
-      { ...preload("r3", "design-review", "aaaaaaaaaaaa"), preloaded: false },
+      load("a", 0, "coordinate", "a"),
+      load("w", 10, "task", "b"),
+      load("w", 12, "build", "c"),
+      load("r", 20, "design-review", "d", true),
     ],
-    sessionSpend: [
-      { sessionId: "r1", output: 1000, input: 90000 },
-      { sessionId: "r2", output: 3000, input: 150000 },
+    responses: [
+      spent("a", 1, 10, 1000),
+      spent("a", 31, 10, 2000),
+      spent("a", 45, 10, 3000),
+      spent("w", 11, 5, 500),
+      spent("w", 13, 5, 600),
+      spent("w", 14, 5, 700),
+      spent("r", 22, 20, 800),
+      spent("e", 26, 1, 100),
+    ],
+    hookEvents: [allow(timed(35))],
+    commits: [
+      { sha: "1".repeat(40), repo: REPO, at: timed(36), subject: "feat: add the parser", kind: "feat" },
     ],
   });
 
-  test("names each run's output, input, minutes and version", () => {
-    expect(eventsOf("review-cost", record).map((e) => [e.kind, e.minutes, e.version, e.text])).toEqual([
-      [
-        "reviewer run",
-        0.5,
-        "design-review aaaaaaaa, principles bbbbbbbb",
-        "output 1000, input 90000, design-review aaaaaaaa, principles bbbbbbbb",
-      ],
-      ["reviewer run", 2, "design-review cccccccc", "output 3000, input 150000, design-review cccccccc"],
-      ["no usage", 1, null, null],
+  test("names each stretch by its kind, a worker's by its last skill, timed from the owner or a subagent's return", () => {
+    expect(eventsOf("step-cost", record).map((e) => [e.at, e.kind, e.minutes, e.version, e.text])).toEqual([
+      [timed(1), "coordinator", 2, "coordinate aaaaaaaa", "output 20, input 3000, coordinate aaaaaaaa"],
+      [timed(45), "coordinator", 5, "coordinate aaaaaaaa", "output 10, input 3000, coordinate aaaaaaaa"],
+      [timed(11), "worker task", 1, "task bbbbbbbb", "output 5, input 500, task bbbbbbbb"],
+      [timed(13), "worker build", 3, "build cccccccc", "output 10, input 1300, build cccccccc"],
+      [timed(22), "reviewer", 2, "design-review dddddddd", "output 20, input 800, design-review dddddddd"],
+      [timed(26), "other", 1, "Explore", "output 1, input 100, Explore"],
     ]);
   });
 
-  test("gives the median output tokens of the runs with usage, over every run", () => {
-    expect(rateOf("review-cost", record)).toEqual({ value: 2000, count: 2, of: 3 });
-    expect(signalNamed("review-cost").detail(eventsOf("review-cost", record))).toBe(
-      "median input 120000, median minutes 1.3",
+  test("divides the input by the accepted commits of the tasks the steps ran in", () => {
+    expect(rateOf("step-cost", record)).toEqual({ value: 8700, count: 8700, of: 1 });
+    expect(detailOf("step-cost", record)).toBe(
+      "per accepted commit output 66, minutes 14; per task over 2 tasks input 4350, output 33, minutes 7; " +
+        "most input per accepted commit: coordinator 6000, worker build 1300, reviewer 800, worker task 500, other 100",
     );
   });
 });

@@ -1,13 +1,12 @@
 import { countFlag, timeFlag } from "./query";
 import { type Query, refuseQuery } from "./query-contract";
 import { scoped, skillScope, viewRecord } from "./query-signal-view";
-import { SIGNALS, versionOf } from "./query-signals";
+import { SIGNALS } from "./query-signals";
+import { versionOf } from "./query-skill-version";
 import type { Placed, SkillLoaded } from "./query-timeline";
-import { EpochMs } from "./timestamp";
+import { DAY_MS, EpochMs } from "./timestamp";
 
 const DEFAULT_DAYS = 14;
-
-const DAY_MS = 86_400_000;
 
 type Found = { readonly sha: string; readonly ts: string };
 
@@ -66,9 +65,10 @@ export const beforeAfter: Query<"days" | "from" | "skill"> = {
     const start = from === null ? at : Date.parse(from);
     const end = Math.max(start, Math.min(start + span, newest + 1));
     const rows = SIGNALS.map((chosen) => {
-      const events = scoped(scope, chosen.events(timeline));
-      const before = chosen.rate(within(events, at - span, at));
-      const after = chosen.rate(within(events, start, end));
+      const measured = chosen.measure(timeline);
+      const events = scoped(scope, measured.events);
+      const before = measured.rate(within(events, at - span, at));
+      const after = measured.rate(within(events, start, end));
       return [
         chosen.name,
         chosen.value,

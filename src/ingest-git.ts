@@ -10,7 +10,7 @@ import { skippingGoneCheckouts } from "./ingest-checkout-failure";
 import type { Failure } from "./ingest-contract";
 import { type Commit, readCommits } from "./ingest-git-source";
 import { isScratchRepo } from "./ingest-scratch";
-import { Timestamp, timestampMinus } from "./timestamp";
+import { DAY_MS, Timestamp, timestampMinus } from "./timestamp";
 
 export type GitReport = { repos: number; commits: number; files: number; unchanged: number };
 
@@ -77,7 +77,7 @@ export function ingestCommits(db: Database, checkouts: readonly Checkout[], fail
   const readHead = (path: string, repo: string, head: string): boolean => {
     let read: { label: string | null; commits: Commit[] };
     const newest = newestCommitTime(repo);
-    const since = newest === null ? null : timestampMinus(newest, OVERLAP_DAYS * 86_400_000);
+    const since = newest === null ? null : timestampMinus(newest, OVERLAP_DAYS * DAY_MS);
     try {
       read = { label: originLabel(repo), commits: readCommits(path, head, since) };
     } catch (error) {

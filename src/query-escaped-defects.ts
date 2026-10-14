@@ -1,6 +1,7 @@
 import { dirname } from "node:path";
 import { isCommitAllow } from "./query-hook-timeline";
 import type { CommitFileRow, CommitRow, GateRow, HookRow } from "./query-signal-record";
+import { DAY_MS, MINUTE_MS } from "./timestamp";
 
 export const ESCAPE_CAUSES = ["names commit", "shared file"] as const;
 
@@ -14,9 +15,7 @@ export const GATE_REACH_MINUTES = 15;
 
 export const ESCAPE_REACH_DAYS = 2;
 
-const GATE_REACH_MS = GATE_REACH_MINUTES * 60_000;
-
-const DAY_MS = 86_400_000;
+const GATE_REACH_MS = GATE_REACH_MINUTES * MINUTE_MS;
 
 const FIX = "fix";
 

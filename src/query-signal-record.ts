@@ -12,7 +12,7 @@ export type SessionRow = {
   readonly project: string | null;
   readonly start: string | null;
   readonly end: string | null;
-  readonly isReviewer: boolean;
+  readonly agentType: string | null;
 };
 
 type OwnerMessageRow = {
@@ -40,14 +40,14 @@ export type CommitRow = {
 
 export type CommitFileRow = { readonly sha: string; readonly path: string };
 
-type LoadRow = TimedRow & {
+export type LoadRow = TimedRow & {
   readonly skill: string;
   readonly bodySha256: string | null;
   readonly install: string | null;
   readonly preloaded: boolean;
 };
 
-export type SpentRow = { readonly sessionId: string; readonly output: number; readonly input: number };
+export type ResponseRow = TimedRow & { readonly output: number; readonly input: number };
 
 type HookColumns = {
   readonly at: string;
@@ -121,7 +121,8 @@ export type SignalRecord = {
   readonly compactedSessionReads: readonly ReadRow[];
   readonly hookEvents: readonly HookRow[];
   readonly skillLoads: readonly LoadRow[];
-  readonly sessionSpend: readonly SpentRow[];
+  readonly responses: readonly ResponseRow[];
+  readonly subagentReturns: readonly TimedRow[];
   readonly checkouts: readonly CheckoutRow[];
   readonly commits: readonly CommitRow[];
   readonly commitFiles: readonly CommitFileRow[];
@@ -151,19 +152,17 @@ const AGENT_BEFORE = `(SELECT substr(a.text, -${AGENT_TAIL_CHARS}) FROM message 
 const SUCCEEDED = `c.ts_result IS NOT NULL AND coalesce(c.is_error, 0) = 0
   AND coalesce(c.is_interrupted, 0) = 0 AND coalesce(c.exit_code, 0) = 0`;
 
-const REVIEWER = "%reviewer%";
-
 const PRELOAD = "preload";
+
+const SUBAGENT_TOOL = "Agent";
 
 export function readSignalRecord(db: Database): SignalRecord {
   const sessions = db
-    .query<Omit<SessionRow, "isReviewer"> & { readonly isReviewer: number }, [string]>(
-      `SELECT id, parent_id AS parentId, tool, project, ts_first AS start, ts_last AS end,
-              (parent_id IS NOT NULL AND agent_type LIKE ?) AS isReviewer
+    .query<SessionRow, []>(
+      `SELECT id, parent_id AS parentId, tool, project, ts_first AS start, ts_last AS end, agent_type AS agentType
        FROM session`,
     )
-    .all(REVIEWER)
-    .map((session) => ({ ...session, isReviewer: session.isReviewer === 1 }));
+    .all();
   const ownerMessages = db
     .query<OwnerMessageRow, []>(
       `SELECT m.session_id AS sessionId, m.ts AS at, m.text, ${AGENT_BEFORE} AS agentBefore
@@ -216,13 +215,19 @@ export function readSignalRecord(db: Database): SignalRecord {
     )
     .all(PRELOAD)
     .map((load) => ({ ...load, preloaded: load.preloaded === 1 }));
-  const sessionSpend = db
-    .query<SpentRow, []>(
-      `SELECT session_id AS sessionId, sum(output_tokens) AS output,
-              sum(input_tokens + cache_read_tokens + cache_write_tokens) AS input
-       FROM usage GROUP BY session_id`,
+  const responses = db
+    .query<ResponseRow, []>(
+      `SELECT session_id AS sessionId, ts AS at, output_tokens AS output,
+              input_tokens + cache_read_tokens + cache_write_tokens AS input
+       FROM usage ORDER BY session_id, ts, response_id`,
     )
     .all();
+  const subagentReturns = db
+    .query<TimedRow, [string]>(
+      `SELECT session_id AS sessionId, ts_result AS at FROM tool_call
+       WHERE tool_name = ? AND ts_result IS NOT NULL ORDER BY ts_result`,
+    )
+    .all(SUBAGENT_TOOL);
   const checkouts = db.query<CheckoutRow, []>("SELECT path, repo FROM checkout").all();
   const commits = db
     .query<CommitRow, []>("SELECT sha, repo, ts AS at, subject, kind FROM repo_commit ORDER BY ts, sha")
@@ -256,7 +261,8 @@ export function readSignalRecord(db: Database): SignalRecord {
     compactedSessionReads,
     hookEvents,
     skillLoads,
-    sessionSpend,
+    responses,
+    subagentReturns,
     checkouts,
     commits,
     commitFiles,

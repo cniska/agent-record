@@ -10,8 +10,8 @@ import type { Env } from "./env";
 import { type MirrorState, readMirror } from "./mirror";
 import { dbPath } from "./paths";
 import { readSyncStamp, type SyncStamp } from "./sync-stamp";
+import { HOUR_MS } from "./timestamp";
 
-const HOUR_MS = 3_600_000;
 const SYNC_STOPPED_AFTER_MS = 24 * HOUR_MS;
 const MIRROR_STALE_AFTER_MS = 24 * HOUR_MS;
 const SYNC = "agent-record sync";

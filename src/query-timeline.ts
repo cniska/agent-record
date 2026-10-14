@@ -14,6 +14,7 @@ import { type Cause, classify } from "./query-interrupt";
 import { type Reread, rereadsAfterCompactions } from "./query-lost-context";
 import { asksSecondRead } from "./query-second-read";
 import type { CheckoutRow, GitRunRow, HookRow, SessionRow, SignalRecord } from "./query-signal-record";
+import { namedKind, type Stretch, stepStretches } from "./query-step-cost";
 import { EpochMs } from "./timestamp";
 
 const NO_ROUTE = "none";
@@ -57,15 +58,7 @@ type Escaped = Placed & {
   readonly earlierAt: string;
 };
 
-export type Spent = { readonly output: number; readonly input: number };
-
-export type Preload = { readonly skill: string; readonly bodySha256: string | null };
-
-type ReviewerRun = Placed & {
-  readonly end: string | null;
-  readonly spent: Spent | null;
-  readonly preloads: readonly Preload[];
-};
+type StepSpent = Placed & Omit<Stretch, "sessionId" | "at">;
 
 export type SkillLoaded = Placed & {
   readonly skill: string;
@@ -78,7 +71,8 @@ export type Timeline = {
   readonly secondReadAsks: readonly Ask[];
   readonly tasks: readonly TaskOutcome[];
   readonly commitRuns: readonly CommitRun[];
-  readonly reviewerRuns: readonly ReviewerRun[];
+  readonly reviewerRuns: readonly Placed[];
+  readonly steps: readonly StepSpent[];
   readonly denials: readonly Kinded<Judged["kind"]>[];
   readonly reviews: readonly Kinded<Reviewed["kind"]>[];
   readonly blocks: readonly Kinded<Blocked["kind"]>[];
@@ -254,30 +248,20 @@ export function timelineOf(record: SignalRecord): Timeline {
     lastOfSession: lastOfRoot.get(run.root) === run,
   }));
 
-  const spentBySession = new Map(
-    record.sessionSpend.map(({ sessionId, output, input }) => [sessionId, { output, input }]),
-  );
-  const preloadsBySession = Map.groupBy(
-    record.skillLoads.filter((load) => load.preloaded),
-    (load) => load.sessionId,
-  );
-  const reviewerRuns: ReviewerRun[] = record.sessions.flatMap((session) => {
-    if (!session.isReviewer || session.start === null) return [];
+  const reviewerRuns: Placed[] = record.sessions.flatMap((session) => {
+    if (namedKind(session) !== "reviewer" || session.start === null) return [];
     const root = rootOf(session.id);
     return [
-      {
-        at: session.start,
-        sessionId: root,
-        repo: repoOfRoot(root),
-        ...inTask(root, ms(session.start)),
-        end: session.end,
-        spent: spentBySession.get(session.id) ?? null,
-        preloads: (preloadsBySession.get(session.id) ?? []).map(({ skill, bodySha256 }) => ({
-          skill,
-          bodySha256,
-        })),
-      },
+      { at: session.start, sessionId: root, repo: repoOfRoot(root), ...inTask(root, ms(session.start)) },
     ];
+  });
+
+  const steps: StepSpent[] = stepStretches(record.sessions, record.responses, record.skillLoads, {
+    ownerMessages: record.ownerMessages,
+    subagentReturns: record.subagentReturns,
+  }).map(({ sessionId, at, ...stretch }) => {
+    const root = rootOf(sessionId);
+    return { at, sessionId: root, repo: repoOfRoot(root), ...inTask(root, ms(at)), ...stretch };
   });
 
   const skillLoads: SkillLoaded[] = record.skillLoads.map((load) => {
@@ -342,6 +326,7 @@ export function timelineOf(record: SignalRecord): Timeline {
     tasks,
     commitRuns,
     reviewerRuns,
+    steps,
     denials: judgeDenials(record.hookEvents).map(placeHook),
     reviews: reviewRounds(record.hookEvents).map(placeHook),
     blocks: blocksOf(record.hookEvents)

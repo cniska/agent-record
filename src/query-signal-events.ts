@@ -17,7 +17,7 @@ export const signalEvents: Query = {
   flags: [],
   run: (db, ctx) => {
     const chosen = signalNamed(ctx.arg);
-    const events = newestFirst(chosen.events(viewRecord(db).timeline));
+    const events = newestFirst(chosen.measure(viewRecord(db).timeline).events);
     return {
       columns: ["at", "kind", "repo", "route", "minutes", "session", "text"],
       rows: events.map((event) => [

@@ -67,7 +67,8 @@ export const signal: Query<"by" | "skill"> = {
     const by = groupingOf(ctx.flags.by);
     const { timeline, labels } = viewRecord(db);
     const scope = skillScope(timeline, ctx.flags.skill);
-    const events = scoped(scope, chosen.events(timeline));
+    const measured = chosen.measure(timeline);
+    const events = scoped(scope, measured.events);
     const groups = new Map<string, { readonly key: readonly Cell[]; readonly events: SignalEvent[] }>();
     for (const event of events) {
       const key = GROUPED_BY[by].key(event, labels, ctx.home);
@@ -79,8 +80,10 @@ export const signal: Query<"by" | "skill"> = {
     const rows = [...groups.values()]
       .map(({ key, events: grouped }) => ({
         key,
-        rate: chosen.rate(grouped),
-        kinds: [kindsOf(chosen, grouped), chosen.detail(grouped)].filter((part) => part !== null).join("; "),
+        rate: measured.rate(grouped),
+        kinds: [kindsOf(chosen, grouped), measured.detail(grouped)]
+          .filter((part) => part !== null)
+          .join("; "),
       }))
       .sort((a, b) => String(b.key[0]).localeCompare(String(a.key[0])) || b.rate.of - a.rate.of)
       .map(({ key, rate, kinds }) => [...key, rate.value, rate.count, rate.of, kinds]);

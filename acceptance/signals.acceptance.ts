@@ -261,7 +261,7 @@ test("AC-44 signal splits each week by repo or route, newest first, and refuses 
     code: "unknown_signal",
     resolve:
       "one of: owner-interrupts, time-to-land, stranded-work, review-loops, false-stops, review-returns, blocks, " +
-      "skill-usage, lost-context, escaped-defects, review-cost, second-read-asks",
+      "skill-usage, lost-context, escaped-defects, step-cost, second-read-asks",
   });
   const grouping = refused(runCli(home, ["query", "signal", "stranded-work", "--by", "day"]), "query");
   expect({ code: grouping.code, resolve: grouping.resolve }).toEqual({
@@ -306,7 +306,7 @@ test("AC-45 before-after compares every signal on either side of a commit, from 
     "skill-usage",
     "lost-context",
     "escaped-defects",
-    "review-cost",
+    "step-cost",
     "second-read-asks",
   ]);
   expect(around.denominator).toBe(
@@ -576,62 +576,107 @@ test("AC-55 escaped-defects counts the fixes that share a file with, or name, an
   expect(counted()).toEqual([["2026-09-14", 0.5, 2, 4, "accepted commit 4, names commit 1, shared file 1"]]);
 });
 
-test("AC-56 review-cost gives each reviewer run's tokens and minutes, split by its preloaded versions", () => {
+test("AC-56 step-cost gives each step's tokens and minutes per accepted commit, split by version", () => {
   const cache = (name: string) => `/Users/x/.claude/plugins/cache/m/acme/aaa/skills/${name}`;
-  const spent = (output: number, input: number) => ({
-    input_tokens: input,
-    cache_read_input_tokens: input * 2,
-    cache_creation_input_tokens: input,
-    output_tokens: output,
+  const at = (minute: number) => `2026-09-16T09:${String(minute).padStart(2, "0")}:00Z`;
+  const spent = (input: number) => ({
+    input_tokens: input / 4,
+    cache_read_input_tokens: input / 2,
+    cache_creation_input_tokens: input / 4,
+    output_tokens: input / 100,
   });
-  const reviewer = (id: string, minute: number, body: string, output: number, input: number) => ({
-    id,
-    agentType: "acme:reviewer",
-    steps: [
-      { owner: "review the change", at: `2026-09-16T09:${minute}:00Z` },
-      { preload: "acme:review", at: `2026-09-16T09:${minute}:01Z`, dir: cache("review"), body },
-      { agent: "Looking.", at: `2026-09-16T09:${minute + 1}:00Z`, usage: spent(output / 2, input / 2) },
-      {
-        agent: "Verdict: accept",
-        at: `2026-09-16T09:${minute + 2}:00Z`,
-        usage: spent(output / 2, input / 2),
-      },
-    ],
+  const loaded = (skill: string, minute: number): Step => ({
+    skill: `acme:${skill}`,
+    at: at(minute),
+    dir: cache(skill),
+    body: `# ${skill}\n\nDo the ${skill} step.`,
   });
-  const home = synced([
+  const answered = (minute: number, input: number): Step => ({
+    agent: "Done.",
+    at: at(minute),
+    usage: spent(input),
+  });
+  const repo = scratchRepo(join(scratchDirOutsideTemp(), "app"), ORIGIN, [
+    { subject: "start", file: "f0.txt", at: "2026-09-01T00:00:00Z" },
+    { subject: "feat: add the parser", file: "src/parser.ts", at: at(40) },
+  ]);
+  const home = withClaudeSessions(scratchHome(), [
     {
-      id: "build",
-      cwd: "/Users/x/code/demo",
-      steps: [{ owner: "add the parser", at: "2026-09-16T09:00:00Z" }],
+      id: "lead",
+      cwd: repo,
+      steps: [{ owner: "add the parser", at: at(0) }, loaded("coordinate", 1), answered(2, 4000)],
       subagents: [
-        reviewer("r1", 10, "# Review\n\nJudge the change.", 1000, 1000),
-        reviewer("r2", 20, "# Review\n\nJudge the change.", 3000, 3000),
-        reviewer("r3", 30, "# Review\n\nJudge the change, briefly.", 500, 2000),
+        {
+          id: "w1",
+          agentType: "general-purpose",
+          steps: [
+            { owner: "build the parser", at: at(10) },
+            loaded("task", 11),
+            answered(12, 1000),
+            loaded("build", 13),
+            answered(15, 2000),
+          ],
+        },
+        {
+          id: "r1",
+          agentType: "acme:reviewer",
+          steps: [
+            { owner: "review the change", at: at(20) },
+            {
+              preload: "acme:review",
+              at: at(20),
+              dir: cache("review"),
+              body: "# Review\n\nJudge the change.",
+            },
+            answered(23, 800),
+          ],
+        },
+        {
+          id: "e1",
+          agentType: "Explore",
+          steps: [{ owner: "find the parser", at: at(25) }, answered(26, 400)],
+        },
       ],
     },
   ]);
+  withEventLog(home, "lead", [gate(`2026-09-16T09:39:30Z`, { decision: "allow", reason: "accepted", repo })]);
+  sync(home);
 
-  const counted = () => query(home, ["signal", "review-cost"]).rows;
-  expect(counted()).toEqual([
-    ["2026-09-14", 1000, 3, 3, "reviewer run 3; median input 8000, median minutes 2"],
-  ]);
-  const byVersion = query(home, ["signal", "review-cost", "--by", "version"]);
+  const counted = () => query(home, ["signal", "step-cost"]).rows;
+  const weekly = [
+    [
+      "2026-09-14",
+      8200,
+      8200,
+      1,
+      "coordinator 1, other 1, reviewer 1, worker task 1, worker build 1; " +
+        "per accepted commit output 82, minutes 11; per task over 1 tasks input 8200, output 82, minutes 11; " +
+        "most input per accepted commit: coordinator 4000, worker build 2000, worker task 1000, reviewer 800, other 400",
+    ],
+  ];
+  expect(counted()).toEqual(weekly);
+  const byVersion = query(home, ["signal", "step-cost", "--by", "version"]);
   expect(byVersion.columns).toEqual(["week", "version", "value", "count", "of", "kinds"]);
-  expect(byVersion.rows).toEqual([
-    ["2026-09-14", "review 43e4e411", 2000, 2, 2, "reviewer run 2; median input 8000, median minutes 2"],
-    ["2026-09-14", "review c016c828", 500, 1, 1, "reviewer run 1; median input 8000, median minutes 2"],
+  expect(
+    byVersion.rows.map(([week, version, value, count, of]) => [week, version, value, count, of]),
+  ).toEqual([
+    ["2026-09-14", "coordinate c659bb76", 4000, 4000, 1],
+    ["2026-09-14", "Explore", 400, 400, 1],
+    ["2026-09-14", "review 43e4e411", 800, 800, 1],
+    ["2026-09-14", "task 464b6516", 1000, 1000, 1],
+    ["2026-09-14", "build 115254a5", 2000, 2000, 1],
   ]);
-  const events = query(home, ["signal-events", "review-cost"]).rows;
-  expect(events.map(([at, kind, , , minutes, , text]) => [at, kind, minutes, text])).toEqual([
-    ["2026-09-16T09:30:00.000Z", "reviewer run", 2, "output 500, input 8000, review c016c828"],
-    ["2026-09-16T09:20:00.000Z", "reviewer run", 2, "output 3000, input 12000, review 43e4e411"],
-    ["2026-09-16T09:10:00.000Z", "reviewer run", 2, "output 1000, input 4000, review 43e4e411"],
+  const events = query(home, ["signal-events", "step-cost"]).rows;
+  expect(events.map(([when, kind, , , minutes, , text]) => [when, kind, minutes, text])).toEqual([
+    ["2026-09-16T09:26:00.000Z", "other", 1, "output 4, input 400, Explore"],
+    ["2026-09-16T09:23:00.000Z", "reviewer", 3, "output 8, input 800, review 43e4e411"],
+    ["2026-09-16T09:15:00.000Z", "worker build", 3, "output 20, input 2000, build 115254a5"],
+    ["2026-09-16T09:12:00.000Z", "worker task", 2, "output 10, input 1000, task 464b6516"],
+    ["2026-09-16T09:02:00.000Z", "coordinator", 2, "output 40, input 4000, coordinate c659bb76"],
   ]);
 
   rebuild(home);
-  expect(counted()).toEqual([
-    ["2026-09-14", 1000, 3, 3, "reviewer run 3; median input 8000, median minutes 2"],
-  ]);
+  expect(counted()).toEqual(weekly);
 });
 
 test("AC-57 second-read-asks counts the owner's asks for another model's read per task, not a quote or a paste", () => {

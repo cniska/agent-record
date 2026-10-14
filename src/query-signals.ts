@@ -9,55 +9,68 @@ import {
   REVIEW_KINDS,
 } from "./query-hook-timeline";
 import { CAUSES } from "./query-interrupt";
-import type { Placed, Preload, SkillLoaded, Spent, Timeline } from "./query-timeline";
+import { HASH_SHOWN, UNKNOWN_PART, versionOf } from "./query-skill-version";
+import type { Placed, Timeline } from "./query-timeline";
+import { HOUR_MS, MINUTE_MS } from "./timestamp";
 
 export type SignalEvent<Kind extends string = string> = Placed & {
   readonly kind: Kind;
   readonly minutes: number | null;
   readonly text: string | null;
   readonly version: string | null;
-  readonly spent: Spent | null;
 };
 
 type Rate = { readonly value: number | null; readonly count: number; readonly of: number };
+
+type Measured = {
+  readonly events: readonly SignalEvent[];
+  readonly rate: (subset: readonly SignalEvent[]) => Rate;
+  readonly detail: (subset: readonly SignalEvent[]) => string | null;
+};
 
 export type Signal = {
   readonly name: string;
   readonly value: string;
   readonly note: string;
   readonly kinds: readonly string[];
-  readonly events: (timeline: Timeline) => readonly SignalEvent[];
-  readonly rate: (events: readonly SignalEvent[]) => Rate;
-  readonly detail: (events: readonly SignalEvent[]) => string | null;
+  readonly measure: (timeline: Timeline) => Measured;
 };
 
-type Definition<Kind extends string> = Omit<Signal, "kinds" | "events" | "rate" | "detail"> & {
-  readonly detail?: Signal["detail"];
+type Definition<Kind extends string, Details extends object> = Omit<Signal, "kinds" | "measure"> & {
   readonly kinds: readonly Kind[];
-  readonly events: (timeline: Timeline) => readonly SignalEvent<NoInfer<Kind>>[];
-  readonly rate: (count: (kind: NoInfer<Kind>) => number, events: readonly SignalEvent[]) => Rate;
+  readonly events: (timeline: Timeline) => readonly (SignalEvent<NoInfer<Kind>> & NoInfer<Details>)[];
+  readonly rate: (
+    count: (kind: NoInfer<Kind>) => number,
+    events: readonly (SignalEvent & NoInfer<Details>)[],
+  ) => Rate;
+  readonly detail?: (events: readonly (SignalEvent & NoInfer<Details>)[]) => string | null;
 };
-
-const HOUR_MS = 3_600_000;
-
-const MINUTE_MS = 60_000;
 
 const RATE_DECIMALS = 100;
 
-const HASH_SHOWN = 8;
-
-const UNKNOWN_PART = "-";
-
 const SHA_SHOWN = 8;
 
-export const versionOf = (load: SkillLoaded): string =>
-  `${load.bodySha256?.slice(0, HASH_SHOWN) ?? UNKNOWN_PART}/${load.install ?? UNKNOWN_PART}`;
-
-function signalOf<Kind extends string>(definition: Definition<Kind>): Signal {
+function signalOf<Kind extends string, Details extends object = Record<never, never>>(
+  definition: Definition<Kind, Details>,
+): Signal {
+  const { events: eventsOf, rate, detail, ...described } = definition;
   return {
-    ...definition,
-    rate: (events) => definition.rate((kind) => events.filter((event) => event.kind === kind).length, events),
-    detail: definition.detail ?? (() => null),
+    ...described,
+    measure: (timeline) => {
+      const events = eventsOf(timeline);
+      const kept = (subset: readonly SignalEvent[]) => {
+        const members = new Set<SignalEvent>(subset);
+        return events.filter((event) => members.has(event));
+      };
+      return {
+        events,
+        rate: (subset) => {
+          const picked = kept(subset);
+          return rate((kind) => picked.filter((event) => event.kind === kind).length, picked);
+        },
+        detail: (subset) => (detail === undefined ? null : detail(kept(subset))),
+      };
+    },
   };
 }
 
@@ -92,7 +105,6 @@ function event<Kind extends string>(
     minutes,
     text,
     version: null,
-    spent: null,
   };
 }
 
@@ -298,57 +310,79 @@ const escapedDefects = signalOf({
 
 const TENTHS = 10;
 
-const minutesToTenths = (from: string, to: string): number =>
-  Math.round(((Date.parse(to) - Date.parse(from)) / MINUTE_MS) * TENTHS) / TENTHS;
+const STEPS_SHOWN = 5;
 
-const preloadVersion = (preloads: readonly Preload[]): string | null =>
-  preloads.length === 0
-    ? null
-    : [
-        ...new Set(
-          preloads.map(
-            ({ skill, bodySha256 }) => `${skill} ${bodySha256?.slice(0, HASH_SHOWN) ?? UNKNOWN_PART}`,
-          ),
-        ),
-      ]
-        .sort()
-        .join(", ");
+const tenths = (value: number): number => Math.round(value * TENTHS) / TENTHS;
 
-const NO_USAGE = "no usage";
+const perCommit = (total: number, of: number): number | null => (of === 0 ? null : Math.round(total / of));
 
-const reviewCost = signalOf({
-  name: "review-cost",
-  value: "median output tokens per reviewer run",
-  note:
-    "A run's input is its input tokens with cache reads and writes, summed over its responses, and its minutes " +
-    "run from its first line to its last. Its version is the skills it preloaded, each named with the first " +
-    `${HASH_SHOWN} characters of its body's hash. A run with no usage recorded counts only in of.`,
-  kinds: ["reviewer run", NO_USAGE],
-  events: (timeline) =>
-    timeline.reviewerRuns.map((run) => {
-      const version = preloadVersion(run.preloads);
-      const minutes = run.end === null ? null : minutesToTenths(run.at, run.end);
-      const text =
-        run.spent === null
-          ? version
-          : `output ${run.spent.output}, input ${run.spent.input}, ${version ?? UNKNOWN_PART}`;
-      return {
-        ...event(run, run.spent === null ? NO_USAGE : "reviewer run", minutes, text),
-        version,
-        spent: run.spent,
-      };
+type StepSpend = { readonly output: number; readonly input: number; readonly accepted: number };
+
+type StepEvent = SignalEvent & StepSpend;
+
+const acceptedOf = (events: readonly StepEvent[]): number =>
+  [...new Map(events.map((e) => [e.task, e.accepted])).values()].reduce((sum, n) => sum + n, 0);
+
+const summed = (events: readonly StepEvent[]) =>
+  events.reduce(
+    (sum, e) => ({
+      output: sum.output + e.output,
+      input: sum.input + e.input,
+      minutes: sum.minutes + (e.minutes ?? 0),
     }),
-  rate: (count, events) => ({
-    value: median(events.flatMap(({ spent }) => (spent === null ? [] : [spent.output]))),
-    count: count("reviewer run"),
-    of: events.length,
-  }),
+    { output: 0, input: 0, minutes: 0 },
+  );
+
+const stepCost = signalOf<string, StepSpend>({
+  name: "step-cost",
+  value: "input tokens with cache reads and writes per accepted commit, over every step of every loop",
+  note:
+    "A step is an agent kind: a reviewer, coach or researcher by its agent type; a coordinator, a session that " +
+    "loaded coordinate; a worker, one that loaded task, split by the skill it loaded last; other, the rest. " +
+    "Each response costs its output and its input with cache reads and writes, and its minutes since the later " +
+    "of the session's previous response, its start, the owner's last message and a subagent's last return " +
+    "there, so a wait on the owner or a subagent counts in neither. An event is a stretch of one session's " +
+    "responses on one step. Steps in one task share its accepted commits, those escaped-defects counts. " +
+    "Subagent transcripts record too little output, so input is the value.",
+  kinds: [],
+  events: (timeline) => {
+    const accepted = new Map<string, number>();
+    for (const commit of timeline.acceptedCommits)
+      accepted.set(commit.task, (accepted.get(commit.task) ?? 0) + 1);
+    return timeline.steps.map((step) => ({
+      ...event(
+        step,
+        step.step,
+        tenths(step.minutes),
+        `output ${step.output}, input ${step.input}, ${step.version ?? UNKNOWN_PART}`,
+      ),
+      version: step.version,
+      output: step.output,
+      input: step.input,
+      accepted: accepted.get(step.task) ?? 0,
+    }));
+  },
+  rate: (_count, events) => {
+    const of = acceptedOf(events);
+    const input = summed(events).input;
+    return { value: perCommit(input, of), count: input, of };
+  },
   detail: (events) => {
-    const spent = events.filter((e) => e.spent !== null);
-    if (spent.length === 0) return null;
-    const input = median(spent.flatMap((e) => (e.spent === null ? [] : [e.spent.input])));
-    const tenths = median(spent.flatMap((e) => (e.minutes === null ? [] : [Math.round(e.minutes * TENTHS)])));
-    return `median input ${input}, median minutes ${tenths === null ? null : tenths / TENTHS}`;
+    if (events.length === 0) return null;
+    const of = acceptedOf(events);
+    const total = summed(events);
+    const tasks = new Set(events.map((e) => e.task)).size;
+    const steps = [...Map.groupBy(events, (e) => e.kind)]
+      .map(([step, list]) => ({ step, input: summed(list).input }))
+      .sort((a, b) => b.input - a.input)
+      .slice(0, STEPS_SHOWN)
+      .map(({ step, input }) => `${step} ${perCommit(input, of)}`)
+      .join(", ");
+    return (
+      `per accepted commit output ${perCommit(total.output, of)}, minutes ${of === 0 ? null : tenths(total.minutes / of)}; ` +
+      `per task over ${tasks} tasks input ${Math.round(total.input / tasks)}, output ${Math.round(total.output / tasks)}, ` +
+      `minutes ${tenths(total.minutes / tasks)}; most input per accepted commit: ${steps}`
+    );
   },
 });
 
@@ -378,7 +412,7 @@ export const SIGNALS: readonly Signal[] = [
   skillUsage,
   lostContext,
   escapedDefects,
-  reviewCost,
+  stepCost,
   secondReadAsks,
 ];
 
