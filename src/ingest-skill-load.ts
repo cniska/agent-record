@@ -3,7 +3,7 @@ import { z } from "zod";
 import { MessageId, ToolCallId } from "./ingest-ids";
 import { Timestamp } from "./timestamp";
 
-export const HOWS = ["model", "user", "read"] as const;
+export const HOWS = ["model", "user", "read", "preload"] as const;
 
 export type How = (typeof HOWS)[number];
 
@@ -11,6 +11,7 @@ const SkillBodyFields = z.strictObject({
   bodyChars: z.number(),
   bodySha256: z.string(),
   skillPath: z.string(),
+  install: z.string().nullable(),
 });
 type SkillBodyFields = Readonly<z.infer<typeof SkillBodyFields>>;
 
@@ -31,12 +32,21 @@ export const SkillLoadRow = z.discriminatedUnion("kind", [
     parentUuid: MessageId,
     skillName: z.string(),
   }).readonly(),
+  SkillBodyFields.extend({
+    kind: z.literal("preload"),
+    messageId: MessageId,
+    ts: Timestamp,
+    skillName: z.string(),
+  }).readonly(),
 ]);
 export type SkillLoadRow = z.infer<typeof SkillLoadRow>;
 
 const BODY_PREFIX = "Base directory for this skill:";
 const COMMAND_NAME = /<command-name>\/?([a-z0-9][a-z0-9-]*(?::[a-z0-9][a-z0-9-]*)?)<\/command-name>/i;
 const SKILL_FILE = /(?:^|[\s"'/])skills\/([a-z0-9][a-z0-9-]*)\/SKILL\.md/i;
+
+const PLUGIN_INSTALL = /\/plugins\/cache\/[^/]+\/[^/]+\/([^/]+)\/skills\/[^/]+\/?$/;
+const QUALIFIER = ":";
 
 const APPENDED_ARGUMENTS = "\n\nARGUMENTS: ";
 const EDGE_NEWLINES = /^\n+|\n+$/g;
@@ -50,6 +60,11 @@ function withoutAppendedArguments(body: string): string {
   return at === -1 ? body : body.slice(0, at);
 }
 
+export const bareSkillName = (name: string): string => name.slice(name.indexOf(QUALIFIER) + 1);
+
+export const BARE_SKILL_NAME_SQL = (column: string): string =>
+  `substr(${column}, instr(${column}, '${QUALIFIER}') + 1)`;
+
 export function parseSkillBody(text: string): ({ readonly name: string } & SkillBodyFields) | null {
   if (!text.startsWith(BODY_PREFIX)) return null;
   const newline = text.indexOf("\n");
@@ -59,7 +74,17 @@ export function parseSkillBody(text: string): ({ readonly name: string } & Skill
   if (!name) return null;
   const body =
     newline === -1 ? "" : withoutAppendedArguments(text.slice(newline + 1)).replace(EDGE_NEWLINES, "");
-  return { name, skillPath: path, bodyChars: body.length, bodySha256: sha256(body) };
+  const install = PLUGIN_INSTALL.exec(path)?.[1] ?? null;
+  return { name, skillPath: path, bodyChars: body.length, bodySha256: sha256(body), install };
+}
+
+export function preloadOf(texts: readonly string[]): ({ readonly name: string } & SkillBodyFields) | null {
+  const [command, text] = texts;
+  if (command === undefined || text === undefined) return null;
+  const named = skillFromCommand(command);
+  const body = parseSkillBody(text);
+  if (named === null || body === null) return null;
+  return { ...body, name: bareSkillName(named) };
 }
 
 export function skillFromCommand(text: string): string | null {

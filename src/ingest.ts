@@ -8,7 +8,7 @@ import type { SessionId, ToolCallId } from "./ingest-ids";
 import { type ReadResult, readNewLines } from "./ingest-read-new";
 import { advance, type Position } from "./ingest-read-plan";
 import type { ChunkParser, ParsedChunk, SessionFacts, ToolCallRow } from "./ingest-session-records";
-import type { SkillLoadRow } from "./ingest-skill-load";
+import { BARE_SKILL_NAME_SQL, type SkillLoadRow } from "./ingest-skill-load";
 import type { Kind, Tool } from "./ingest-tools";
 import type { Timestamp } from "./timestamp";
 import { projectOf, worktreeOf } from "./worktree";
@@ -228,6 +228,7 @@ export function createIngester(db: Database, home: string) {
        body_chars  = coalesce(excluded.body_chars, skill_load.body_chars),
        body_sha256 = coalesce(excluded.body_sha256, skill_load.body_sha256),
        skill_path  = coalesce(excluded.skill_path, skill_load.skill_path),
+       install     = coalesce(excluded.install, skill_load.install),
        model       = coalesce(excluded.model, skill_load.model)`;
   const insertSkillLoad = db.prepare(
     `INSERT INTO skill_load (session_id, tool_call_id, ts, model, skill_name, how)
@@ -236,22 +237,27 @@ export function createIngester(db: Database, home: string) {
   );
   const insertTypedSkillBody = db.prepare(
     `INSERT INTO skill_load (session_id, message_id, ts, model, skill_name, how,
-       body_chars, body_sha256, skill_path)
-     SELECT $sessionId, id, ts, model,
-       CASE WHEN slash_command = $skillName OR slash_command LIKE '%:' || $skillName
-         THEN slash_command ELSE $skillName END, 'user',
-       $bodyChars, $bodySha256, $skillPath
+       body_chars, body_sha256, skill_path, install)
+     SELECT $sessionId, id, ts, model, $skillName, 'user',
+       $bodyChars, $bodySha256, $skillPath, $install
      FROM message
      WHERE id = $parentUuid
      ${skillLoadConflict}`,
   );
   const insertCalledSkillBody = db.prepare(
     `INSERT INTO skill_load (session_id, tool_call_id, ts, model, skill_name, how,
-       body_chars, body_sha256, skill_path)
-     SELECT $sessionId, id, ts_call, model, skill_name, 'model',
-       $bodyChars, $bodySha256, $skillPath
+       body_chars, body_sha256, skill_path, install)
+     SELECT $sessionId, id, ts_call, model, ${BARE_SKILL_NAME_SQL("skill_name")}, 'model',
+       $bodyChars, $bodySha256, $skillPath, $install
      FROM tool_call
      WHERE id = $toolCallId AND tool_name = 'Skill' AND ts_call IS NOT NULL AND skill_name IS NOT NULL
+     ${skillLoadConflict}`,
+  );
+  const insertPreload = db.prepare(
+    `INSERT INTO skill_load (session_id, message_id, ts, model, skill_name, how,
+       body_chars, body_sha256, skill_path, install)
+     VALUES ($sessionId, $messageId, $ts, NULL, $skillName, 'preload',
+       $bodyChars, $bodySha256, $skillPath, $install)
      ${skillLoadConflict}`,
   );
 
@@ -355,6 +361,7 @@ export function createIngester(db: Database, home: string) {
           $bodyChars: l.bodyChars,
           $bodySha256: l.bodySha256,
           $skillPath: l.skillPath,
+          $install: l.install,
         });
         return;
       case "typed-body":
@@ -365,6 +372,19 @@ export function createIngester(db: Database, home: string) {
           $bodyChars: l.bodyChars,
           $bodySha256: l.bodySha256,
           $skillPath: l.skillPath,
+          $install: l.install,
+        });
+        return;
+      case "preload":
+        insertPreload.run({
+          $sessionId: spec.sessionId,
+          $messageId: l.messageId,
+          $ts: l.ts,
+          $skillName: l.skillName,
+          $bodyChars: l.bodyChars,
+          $bodySha256: l.bodySha256,
+          $skillPath: l.skillPath,
+          $install: l.install,
         });
         return;
       default:

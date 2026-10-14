@@ -21,8 +21,13 @@ import {
   type TurnRow,
   type UsageRow,
 } from "./ingest-session-records";
-
-import { parseSkillBody, type SkillLoadRow, skillFromCommand } from "./ingest-skill-load";
+import {
+  bareSkillName,
+  parseSkillBody,
+  preloadOf,
+  type SkillLoadRow,
+  skillFromCommand,
+} from "./ingest-skill-load";
 import { Timestamp, timestampMinus } from "./timestamp";
 
 const ClaudeToolUse = z
@@ -209,10 +214,14 @@ const ClaudeLine = byKind(
 
 type ClaudeBlock = z.infer<typeof ClaudeAssistantBlock> | z.infer<typeof ClaudeUserBlock>;
 
+function textBlocks(content: readonly (ClaudeBlock | null)[]): readonly string[] {
+  return content.flatMap((b) => (b?.kind === "text" && b.text !== null ? [b.text] : []));
+}
+
 function visibleText(content: string | readonly (ClaudeBlock | null)[] | undefined): string | null {
   if (typeof content === "string") return nonEmpty(content);
   if (!Array.isArray(content)) return null;
-  const parts = content.flatMap((b) => (b?.kind === "text" && b.text !== null ? [b.text] : []));
+  const parts = textBlocks(content);
   return parts.length > 0 ? parts.join("\n") : null;
 }
 
@@ -325,7 +334,7 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
                 toolCallId: block.id,
                 ts,
                 model,
-                skillName: chosen,
+                skillName: bareSkillName(chosen),
                 how: "model",
               });
             }
@@ -384,7 +393,13 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
           }
         }
         session.push(sessionFactsOf(line));
-        const body = line.isMeta === true && text ? parseSkillBody(text) : null;
+        const preload =
+          line.isMeta === true && Array.isArray(content) ? preloadOf(textBlocks(content)) : null;
+        if (preload) {
+          const { name, ...fields } = preload;
+          skillLoads.push({ kind: "preload", messageId: line.uuid, ts, skillName: name, ...fields });
+        }
+        const body = preload === null && line.isMeta === true && text ? parseSkillBody(text) : null;
         if (body) {
           const { name, ...fields } = body;
           if (line.sourceToolUseID)
@@ -401,12 +416,12 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
           promptSource: nonEmpty(line.promptSource),
           originKind: nonEmpty(line.originKind),
           isMeta: line.isMeta === true,
-          isSkillBody: body !== null,
+          isSkillBody: body !== null || preload !== null,
           attributionSkill: null,
-          slashCommand: text ? skillFromCommand(text) : null,
+          slashCommand: text && preload === null ? skillFromCommand(text) : null,
           denialKind: nonEmpty(line.toolDenialKind),
           userFeedback: feedbackText(line.userFeedback),
-          text: body ? null : text,
+          text: body || preload ? null : text,
           srcLine,
           extra: jsonOrNull({
             isSidechain: line.isSidechain,

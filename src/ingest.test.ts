@@ -1032,7 +1032,7 @@ describe("skill loads", () => {
   function skillLoads(db: Database) {
     return db
       .prepare(
-        `SELECT session_id, message_id, tool_call_id, ts, model, skill_name, how, body_chars, skill_path
+        `SELECT session_id, message_id, tool_call_id, ts, model, skill_name, how, body_chars, skill_path, install
          FROM skill_load ORDER BY session_id, ts, tool_call_id`,
       )
       .all();
@@ -1044,10 +1044,11 @@ describe("skill loads", () => {
     tool_call_id: "toolu-skill",
     ts: at(1),
     model: "claude-opus-5-5",
-    skill_name: "acme:plan",
+    skill_name: "plan",
     how: "model",
     body_chars: 6,
     skill_path: "/Users/x/code/acme/plugin/skills/plan",
+    install: null,
   };
 
   test("stores a Skill call and the body it injected as one load", () => {
@@ -1077,8 +1078,8 @@ describe("skill loads", () => {
     const db = run(env);
     try {
       expect(skillLoads(db)).toMatchObject([
-        { message_id: null, tool_call_id: "toolu-first", skill_name: "acme:plan", how: "model" },
-        { message_id: null, tool_call_id: "toolu-second", skill_name: "acme:plan", how: "model" },
+        { message_id: null, tool_call_id: "toolu-first", skill_name: "plan", how: "model" },
+        { message_id: null, tool_call_id: "toolu-second", skill_name: "plan", how: "model" },
       ]);
     } finally {
       db.close();
@@ -1092,7 +1093,7 @@ describe("skill loads", () => {
     writePrefix(path, lines, bytesThroughLine(lines, 0));
     const db = run(env);
     try {
-      expect(skillLoads(db)).toEqual([{ ...calledLoad, body_chars: null, skill_path: null }]);
+      expect(skillLoads(db)).toEqual([{ ...calledLoad, body_chars: null, skill_path: null, install: null }]);
       writePrefix(path, lines, fullBytes(lines));
       sync(db, env);
       expect(skillLoads(db)).toEqual([calledLoad]);
@@ -1121,10 +1122,11 @@ describe("skill loads", () => {
           tool_call_id: null,
           ts: at(3),
           model: null,
-          skill_name: "acme:plan",
+          skill_name: "plan",
           how: "user",
           body_chars: 6,
           skill_path: "/Users/x/code/acme/plugin/skills/plan",
+          install: null,
         },
       ]);
     } finally {
@@ -1151,6 +1153,7 @@ describe("skill loads", () => {
           how: "user",
           body_chars: 6,
           skill_path: "/Users/x/.claude/skills/review",
+          install: null,
         },
       ]);
     } finally {
@@ -1189,10 +1192,11 @@ describe("skill loads", () => {
           tool_call_id: null,
           ts: at(3),
           model: null,
-          skill_name: "acme:plan",
+          skill_name: "plan",
           how: "user",
           body_chars: 6,
           skill_path: "/Users/x/code/acme/plugin/skills/plan",
+          install: null,
         },
       ]);
     } finally {
@@ -1292,6 +1296,52 @@ describe("skill loads", () => {
       writePrefix(path, lines, fullBytes(lines));
       expect(sync(db, env).failures).toEqual([]);
       expect(skillLoads(db)).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  test("stores an agent's preloaded skill as one load at the message that holds its body", () => {
+    const env = scratchEnv(newRoot());
+    const cache = "/Users/x/.claude/plugins/cache/m/acme/41c40cc68eb7/skills/plan";
+    const preload = {
+      ...base,
+      type: "user",
+      uuid: "u-preload",
+      parentUuid: "u-prompt",
+      timestamp: at(5),
+      isMeta: true,
+      message: {
+        role: "user",
+        content: [
+          {
+            type: "text",
+            text: "<command-message>acme:plan</command-message>\n<command-name>acme:plan</command-name>\n<skill-format>true</skill-format>",
+          },
+          { type: "text", text: `${bodyText(cache)}\n` },
+        ],
+      },
+    };
+    writeTranscript(env, SESSION, [preload]);
+    const db = run(env);
+    try {
+      expect(skillLoads(db)).toEqual([
+        {
+          session_id: SESSION,
+          message_id: "u-preload",
+          tool_call_id: null,
+          ts: at(5),
+          model: null,
+          skill_name: "plan",
+          how: "preload",
+          body_chars: 6,
+          skill_path: cache,
+          install: "41c40cc68eb7",
+        },
+      ]);
+      expect(
+        db.prepare("SELECT is_skill_body, slash_command, text FROM message WHERE id = 'u-preload'").get(),
+      ).toEqual({ is_skill_body: 1, slash_command: null, text: null });
     } finally {
       db.close();
     }

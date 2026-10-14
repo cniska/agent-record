@@ -1,6 +1,7 @@
+import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { parseSkillBody } from "./ingest-skill-load";
+import { BARE_SKILL_NAME_SQL, bareSkillName, parseSkillBody, preloadOf } from "./ingest-skill-load";
 
 const SKILL_FILE_BODY = "# Coordinate\n\nRun the work.\n\n## Red flags\n\n- A stalled agent";
 
@@ -16,6 +17,7 @@ describe("parsing an injected skill body", () => {
       skillPath: "/Users/x/.claude/plugins/cache/acme/kit/41c40cc68eb7/skills/coordinate",
       bodyChars: SKILL_FILE_BODY.length,
       bodySha256: sha256(SKILL_FILE_BODY),
+      install: "41c40cc68eb7",
     };
     expect(parseSkillBody(injected("\n"))).toEqual(expected);
     expect(parseSkillBody(injected(""))).toEqual(expected);
@@ -32,5 +34,60 @@ describe("parsing an injected skill body", () => {
   test("reads no body from text that is not one", () => {
     expect(parseSkillBody("# Coordinate")).toBeNull();
     expect(parseSkillBody("Base directory for this skill: \n\n# Body")).toBeNull();
+  });
+
+  test("reads no install from a skill outside the plugin cache", () => {
+    expect(
+      parseSkillBody(`Base directory for this skill: /Users/x/.claude/skills/build\n\n# Build`)?.install,
+    ).toBeNull();
+    expect(
+      parseSkillBody(`Base directory for this skill: /Users/x/code/kit/skills/build\n\n# Build`)?.install,
+    ).toBeNull();
+  });
+});
+
+describe("naming a skill", () => {
+  test("drops the plugin a name is qualified by", () => {
+    expect(bareSkillName("cniska-skills:coordinate")).toBe("coordinate");
+    expect(bareSkillName("coordinate")).toBe("coordinate");
+  });
+
+  test("drops it the same way in SQL", () => {
+    const db = new Database(":memory:");
+    try {
+      const bare = (name: string) =>
+        db
+          .query<{ bare: string }, [string]>(
+            `SELECT ${BARE_SKILL_NAME_SQL("n")} AS bare FROM (SELECT ? AS n)`,
+          )
+          .get(name)?.bare;
+      expect(bare("cniska-skills:coordinate")).toBe("coordinate");
+      expect(bare("coordinate")).toBe("coordinate");
+    } finally {
+      db.close();
+    }
+  });
+});
+
+describe("reading an agent's preloaded skill", () => {
+  const command =
+    "<command-message>acme:plan</command-message>\n<command-name>acme:plan</command-name>\n<skill-format>true</skill-format>";
+  const body =
+    "Base directory for this skill: /Users/x/.claude/plugins/cache/m/acme/0815d96b8b74-5e689e2b/skills/plan\n\n# Plan\n";
+
+  test("names the skill from the command and hashes the body after it", () => {
+    expect(preloadOf([command, body])).toEqual({
+      name: "plan",
+      skillPath: "/Users/x/.claude/plugins/cache/m/acme/0815d96b8b74-5e689e2b/skills/plan",
+      bodyChars: 6,
+      bodySha256: sha256("# Plan"),
+      install: "0815d96b8b74-5e689e2b",
+    });
+  });
+
+  test("reads none from a body alone, a command alone, or a command without a body", () => {
+    expect(preloadOf([body])).toBeNull();
+    expect(preloadOf([command])).toBeNull();
+    expect(preloadOf([command, "# Plan"])).toBeNull();
   });
 });
