@@ -156,19 +156,33 @@ describe("thread", () => {
     db.close();
   });
 
-  test("refuses an --at that is not a time, naming the shape it takes", () => {
-    const db = seeded();
-    expect(() => thread.run(db, { ...ctx, arg: "s1", flags: { at: "yesterday" } })).toThrow(
-      expect.objectContaining({
-        code: "not_a_time",
-        message: "--at yesterday is not a time",
-        meta: { flag: "at", value: "yesterday" },
-        resolve: "--at <ts>, an ISO time such as 2026-09-01T10:30:00Z",
-        kind: "refusal",
-      }),
-    );
+  test("reads an --at given to the minute, with Z or an offset, as that instant", () => {
+    const db = withActions();
+    const centeredOn = (at: string) => thread.run(db, { ...ctx, arg: "s1", flags: { at } }).denominator;
+    const toTheSecond = centeredOn("2026-09-01T10:34:00.000Z");
+    expect(toTheSecond).toContain("centered on 2026-09-01T10:34:00.000Z");
+    expect(centeredOn("2026-09-01T10:34Z")).toBe(toTheSecond);
+    expect(centeredOn("2026-09-01T12:34+02:00")).toBe(toTheSecond);
     db.close();
   });
+
+  test.each(["yesterday", "2026-09-01T10:34", "2026-09-01T10:34:00", "2026-09-01", "2026-09-01T10Z"])(
+    "refuses an --at of %p, naming the shape it takes",
+    (at) => {
+      const db = seeded();
+      expect(() => thread.run(db, { ...ctx, arg: "s1", flags: { at } })).toThrow(
+        expect.objectContaining({
+          code: "not_a_time",
+          message: `--at ${at} is not a time`,
+          meta: { flag: "at", value: at },
+          resolve:
+            "--at <ts>, an ISO time with Z or an offset, to the minute or finer, such as 2026-09-01T10:30Z",
+          kind: "refusal",
+        }),
+      );
+      db.close();
+    },
+  );
 
   test("refuses a prefix two sessions share, naming them rather than picking one", () => {
     const db = seeded();

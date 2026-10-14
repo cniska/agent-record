@@ -19,6 +19,11 @@ export const EpochSeconds = z
 
 export const Timestamp = z.iso.datetime({ offset: true }).transform(Date.parse).pipe(EpochMs);
 
+export const ArgumentTimestamp = z
+  .union([z.iso.datetime({ offset: true }), z.iso.datetime({ offset: true, precision: -1 })])
+  .transform(Date.parse)
+  .pipe(EpochMs);
+
 export function timestampMinus(time: Timestamp, ms: number): Timestamp | null {
   const shifted = EpochMs.safeParse(Date.parse(time) - ms);
   return shifted.success ? shifted.data : null;

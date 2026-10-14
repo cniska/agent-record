@@ -266,7 +266,7 @@ test("AC-44 signal splits each week by repo or route, newest first, and refuses 
   });
 });
 
-test("AC-45 before-after compares every signal on either side of a commit, from --from when given", () => {
+test("AC-45 before-after compares every signal on either side of a commit, from --from when given to the second or the minute", () => {
   const repo = appRepo([{ subject: "change the workflow", at: "2026-09-18T00:00:00Z" }]);
   const home = synced(twoWeeks(repo));
   const sha = succeeded(
@@ -307,11 +307,15 @@ test("AC-45 before-after compares every signal on either side of a commit, from 
 
   const fromLater = query(home, ["before-after", prefix, "--from", "2026-09-22T00:00:00Z"]);
   expect(stranded(fromLater.rows)).toEqual(["stranded-work", 0, 0, 0, 1, 0, 1]);
+  const fromMinute = query(home, ["before-after", prefix, "--from", "2026-09-22T00:00Z"]);
+  expect(fromMinute.rows).toEqual(fromLater.rows);
+  expect(fromMinute.denominator).toBe(fromLater.denominator);
 
   const codes = [
     ["before-after", "0000000"],
     ["before-after", prefix, "--days", "0"],
     ["before-after", prefix, "--from", "2026-09-01T00:00:00Z"],
+    ["before-after", prefix, "--from", "2026-09-22T00:00"],
   ].map((args) => refused(runCli(home, ["query", ...args]), "query").code);
-  expect(codes).toEqual(["unknown_commit", "not_a_count", "from_before_commit"]);
+  expect(codes).toEqual(["unknown_commit", "not_a_count", "from_before_commit", "not_a_time"]);
 });

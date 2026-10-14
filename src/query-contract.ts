@@ -46,7 +46,8 @@ export const refuseQuery = refuser<{
   },
   not_a_time: {
     message: ({ flag, value }) => `--${flag} ${value} is not a time`,
-    resolve: ({ flag }) => `--${flag} <ts>, an ISO time such as 2026-09-01T10:30:00Z`,
+    resolve: ({ flag }) =>
+      `--${flag} <ts>, an ISO time with Z or an offset, to the minute or finer, such as 2026-09-01T10:30Z`,
   },
   ambiguous_session: {
     message: ({ prefix, matches }) =>

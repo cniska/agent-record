@@ -1,7 +1,7 @@
 import type { Database, SQLQueryBindings } from "bun:sqlite";
 import { invariant } from "./assert";
 import { type Cell, type Rows, refuseQuery } from "./query-contract";
-import { Timestamp } from "./timestamp";
+import { ArgumentTimestamp, type Timestamp } from "./timestamp";
 
 export const SAID = "m.is_skill_body = 0 AND (m.is_meta = 0 OR m.origin_kind IN ('coordinator', 'peer'))";
 
@@ -32,7 +32,7 @@ export function countFlag(flag: string, value: string): number {
 }
 
 export function timeFlag(flag: string, value: string): Timestamp {
-  const time = Timestamp.safeParse(value);
+  const time = ArgumentTimestamp.safeParse(value);
   if (!time.success) throw refuseQuery("not_a_time", { flag, value });
   return time.data;
 }
