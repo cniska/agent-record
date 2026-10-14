@@ -184,6 +184,18 @@ describe("finding the checkouts the sessions ran in", () => {
     ]);
   });
 
+  test("reads each repo a hook event names as a checkout too", () => {
+    const db = freshDb();
+    db.run("INSERT INTO event_file (path) VALUES ('/log')");
+    db.run(
+      `INSERT INTO hook_event (src_file, src_line, ts, event, session, gate, decision, reason, repo)
+       VALUES ('/log', 1, '2026-10-14T08:00:00.000Z', 'gate', 's', 'commit', 'allow', 'accepted', ?)`,
+      [import.meta.dir],
+    );
+    expect(repoRoots(db, scratchEnv(tmpdir()))).toEqual([thisCheckout]);
+    db.close();
+  });
+
   test("skips a cwd that is gone, so a repo above it is not mistaken for its checkout", () => {
     expect(rootsOf([join(import.meta.dir, "agent-record-a-directory-that-is-gone")])).toEqual([]);
   });

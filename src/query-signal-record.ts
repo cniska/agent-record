@@ -1,9 +1,12 @@
 import type { Database } from "bun:sqlite";
+import { invariant, unreachable } from "./assert";
+import type { Decision, Gate, HookEvent, Verdict } from "./ingest-event-kinds";
 import { AGENT_TAIL_CHARS, INTERRUPTED } from "./query-interrupt";
 
 export type SessionRow = {
   readonly id: string;
   readonly parentId: string | null;
+  readonly tool: string;
   readonly project: string | null;
   readonly start: string | null;
   readonly isReviewer: boolean;
@@ -24,12 +27,73 @@ type RouteReadRow = TimedRow & { readonly path: string };
 
 export type CheckoutRow = { readonly path: string; readonly repo: string };
 
+type HookColumns = {
+  readonly at: string;
+  readonly event: HookEvent;
+  readonly sessionId: string;
+  readonly agent: string | null;
+  readonly gate: Gate | null;
+  readonly decision: Decision | null;
+  readonly reason: string | null;
+  readonly repo: string | null;
+  readonly fingerprint: string | null;
+  readonly verdict: Verdict | null;
+};
+
+type HookActor = { readonly at: string; readonly sessionId: string; readonly agent: string | null };
+
+export type GateRow = HookActor & {
+  readonly event: "gate";
+  readonly gate: Gate;
+  readonly decision: Decision;
+  readonly reason: string;
+  readonly repo: string | null;
+  readonly fingerprint: string | null;
+};
+
+export type VerdictRow = HookActor & {
+  readonly event: "verdict";
+  readonly verdict: Verdict;
+  readonly repo: string;
+  readonly fingerprint: string;
+};
+
+export type HookRow =
+  | GateRow
+  | VerdictRow
+  | (HookActor & { readonly event: "permission_prompt" })
+  | (HookActor & { readonly event: "permission_denied"; readonly reason: string });
+
+function hookRowOf(columns: HookColumns): HookRow {
+  const { at, sessionId, agent } = columns;
+  switch (columns.event) {
+    case "gate": {
+      const { gate, decision, reason, repo, fingerprint } = columns;
+      invariant(gate !== null && decision !== null && reason !== null, "a gate event has its gate fields");
+      return { at, sessionId, agent, event: "gate", gate, decision, reason, repo, fingerprint };
+    }
+    case "verdict": {
+      const { verdict, repo, fingerprint } = columns;
+      invariant(verdict !== null && repo !== null && fingerprint !== null, "a verdict event has its fields");
+      return { at, sessionId, agent, event: "verdict", verdict, repo, fingerprint };
+    }
+    case "permission_prompt":
+      return { at, sessionId, agent, event: "permission_prompt" };
+    case "permission_denied":
+      invariant(columns.reason !== null, "an auto-mode denial has its reason");
+      return { at, sessionId, agent, event: "permission_denied", reason: columns.reason };
+    default:
+      return unreachable(columns.event);
+  }
+}
+
 export type SignalRecord = {
   readonly sessions: readonly SessionRow[];
   readonly ownerMessages: readonly OwnerMessageRow[];
   readonly rejections: readonly TimedRow[];
   readonly gitRuns: readonly GitRunRow[];
   readonly routeReads: readonly RouteReadRow[];
+  readonly hookEvents: readonly HookRow[];
   readonly checkouts: readonly CheckoutRow[];
   readonly labels: ReadonlyMap<string, string>;
   readonly newest: string | null;
@@ -60,7 +124,7 @@ const REVIEWER = "%reviewer%";
 export function readSignalRecord(db: Database): SignalRecord {
   const sessions = db
     .query<Omit<SessionRow, "isReviewer"> & { readonly isReviewer: number }, [string]>(
-      `SELECT id, parent_id AS parentId, project, ts_first AS start,
+      `SELECT id, parent_id AS parentId, tool, project, ts_first AS start,
               (parent_id IS NOT NULL AND agent_type LIKE ?) AS isReviewer
        FROM session`,
     )
@@ -92,6 +156,13 @@ export function readSignalRecord(db: Database): SignalRecord {
        WHERE tool_name = 'Read' AND instr(file_path, ?) > 0 AND ts_call IS NOT NULL ORDER BY ts_call`,
     )
     .all(ROUTES_DIR);
+  const hookEvents = db
+    .query<HookColumns, []>(
+      `SELECT ts AS at, event, session AS sessionId, agent, gate, decision, reason, repo, fingerprint, verdict
+       FROM hook_event ORDER BY ts, src_file, src_line`,
+    )
+    .all()
+    .map(hookRowOf);
   const checkouts = db.query<CheckoutRow, []>("SELECT path, repo FROM checkout").all();
   const labels = new Map(
     db
@@ -102,5 +173,5 @@ export function readSignalRecord(db: Database): SignalRecord {
       .map(({ repo, label }) => [repo, label]),
   );
   const newest = db.query<{ ts: string | null }, []>("SELECT max(ts) AS ts FROM message").get()?.ts ?? null;
-  return { sessions, ownerMessages, rejections, gitRuns, routeReads, checkouts, labels, newest };
+  return { sessions, ownerMessages, rejections, gitRuns, routeReads, hookEvents, checkouts, labels, newest };
 }

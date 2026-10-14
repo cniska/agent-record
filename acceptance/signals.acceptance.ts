@@ -253,10 +253,11 @@ test("AC-44 signal splits each week by repo or route, newest first, and refuses 
     ["2026-09-14", "feature", 30],
   ]);
 
-  const unknown = refused(runCli(home, ["query", "signal", "false-stops"]), "query");
+  const unknown = refused(runCli(home, ["query", "signal", "false-stop"]), "query");
   expect({ code: unknown.code, resolve: unknown.resolve }).toEqual({
     code: "unknown_signal",
-    resolve: "one of: owner-interrupts, time-to-land, stranded-work, review-loops",
+    resolve:
+      "one of: owner-interrupts, time-to-land, stranded-work, review-loops, false-stops, review-returns, blocks",
   });
   const grouping = refused(runCli(home, ["query", "signal", "stranded-work", "--by", "day"]), "query");
   expect({ code: grouping.code, resolve: grouping.resolve }).toEqual({
@@ -295,6 +296,9 @@ test("AC-45 before-after compares every signal on either side of a commit, from 
     "time-to-land",
     "stranded-work",
     "review-loops",
+    "false-stops",
+    "review-returns",
+    "blocks",
   ]);
   expect(around.denominator).toBe(
     `commit ${sha} at 2026-09-18T00:00:00.000Z; before 2026-09-04T00:00:00.000Z to 2026-09-18T00:00:00.000Z, ` +

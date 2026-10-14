@@ -17,7 +17,10 @@ const OVERLAP_DAYS = 7;
 
 export function repoRoots(db: Database, env: Env): readonly string[] {
   const cwds = db
-    .query<{ cwd: string }, []>("SELECT DISTINCT cwd FROM session WHERE cwd IS NOT NULL ORDER BY cwd")
+    .query<{ cwd: string }, []>(
+      `SELECT cwd FROM session WHERE cwd IS NOT NULL
+       UNION SELECT repo FROM hook_event WHERE repo IS NOT NULL ORDER BY cwd`,
+    )
     .all();
   const roots = new Set<string>();
   for (const { cwd } of cwds) {

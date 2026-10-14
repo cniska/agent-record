@@ -1,6 +1,15 @@
 import { basename, extname } from "node:path";
+import {
+  type Blocked,
+  blocksOf,
+  type Judged,
+  judgeDenials,
+  type Reviewed,
+  repoNamed,
+  reviewRounds,
+} from "./query-hook-timeline";
 import { type Cause, classify } from "./query-interrupt";
-import type { CheckoutRow, GitRunRow, SessionRow, SignalRecord } from "./query-signal-record";
+import type { CheckoutRow, GitRunRow, HookRow, SessionRow, SignalRecord } from "./query-signal-record";
 import { EpochMs } from "./timestamp";
 
 const NO_ROUTE = "none";
@@ -16,17 +25,23 @@ type Interrupt = Placed & { readonly cause: Cause; readonly text: string | null 
 
 type TaskOutcome = Placed & {
   readonly ownerTyped: boolean;
+  readonly hookLogged: boolean;
   readonly lastCommitRun: string | null;
   readonly landedAt: string | null;
 };
 
 type CommitRun = Placed & { readonly onOriginAt: string | null; readonly lastOfSession: boolean };
 
+type Kinded<Kind extends string> = Placed & { readonly kind: Kind };
+
 export type Timeline = {
   readonly interrupts: readonly Interrupt[];
   readonly tasks: readonly TaskOutcome[];
   readonly commitRuns: readonly CommitRun[];
   readonly reviewerRuns: readonly Placed[];
+  readonly denials: readonly Kinded<Judged["kind"]>[];
+  readonly reviews: readonly Kinded<Reviewed["kind"]>[];
+  readonly blocks: readonly Kinded<Blocked["kind"]>[];
   readonly newest: string | null;
 };
 
@@ -146,6 +161,10 @@ export function timelineOf(record: SignalRecord): Timeline {
     return { ...said, sessionId: root, repo: repoOfRoot(root), route: routeOf(taskKey(root, ms(said.at))) };
   });
 
+  const firstHook = record.hookEvents[0]?.at ?? null;
+  const hookLogged = (root: string, at: string): boolean =>
+    firstHook !== null && sessions.get(root)?.tool === "claude" && ms(at) >= ms(firstHook);
+
   const tasks: TaskOutcome[] = [...prompts.entries()].flatMap(([root, list]) =>
     list.map((prompt, index) => {
       const key = `${root}#${index}`;
@@ -156,10 +175,16 @@ export function timelineOf(record: SignalRecord): Timeline {
         repo: last === null ? repoOfRoot(root) : last.repo,
         route: routeOf(key),
         ownerTyped: ownerTyped.has(root),
+        hookLogged: hookLogged(root, prompt.at),
         lastCommitRun: last === null ? null : last.at,
         landedAt: last === null ? null : iso(onOrigin(last)),
       };
     }),
+  );
+  const hookLoggedTasks = new Set(
+    [...prompts.entries()].flatMap(([root, list]) =>
+      list.flatMap((prompt, index) => (hookLogged(root, prompt.at) ? [`${root}#${index}`] : [])),
+    ),
   );
 
   const commitRuns: CommitRun[] = commits.map((run) => ({
@@ -184,5 +209,28 @@ export function timelineOf(record: SignalRecord): Timeline {
     ];
   });
 
-  return { interrupts, tasks, commitRuns, reviewerRuns, newest: record.newest };
+  const placeHook = <Kind extends string>({ row, kind }: { row: HookRow; kind: Kind }): Kinded<Kind> => {
+    const root = rootOf(row.sessionId);
+    const named = repoNamed(row);
+    return {
+      at: row.at,
+      sessionId: root,
+      repo: named === null ? repoOfRoot(root) : repoOf(named),
+      route: routeOf(taskKey(root, ms(row.at))),
+      kind,
+    };
+  };
+
+  return {
+    interrupts,
+    tasks,
+    commitRuns,
+    reviewerRuns,
+    denials: judgeDenials(record.hookEvents).map(placeHook),
+    reviews: reviewRounds(record.hookEvents).map(placeHook),
+    blocks: blocksOf(record.hookEvents)
+      .filter(({ row }) => hookLoggedTasks.has(taskKey(rootOf(row.sessionId), ms(row.at))))
+      .map(placeHook),
+    newest: record.newest,
+  };
 }

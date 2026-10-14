@@ -47,7 +47,7 @@ function weekOf(at: string): string {
 }
 
 function kindsOf(signal: Signal, events: readonly SignalEvent[]): string {
-  return signal.kinds
+  return [...new Set([...signal.kinds, ...events.map((event) => event.kind)])]
     .map((kind) => ({ kind, count: events.filter((event) => event.kind === kind).length }))
     .filter(({ count }) => count > 0)
     .sort((a, b) => b.count - a.count)

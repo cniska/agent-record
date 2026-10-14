@@ -1,4 +1,12 @@
 import { refuseQuery } from "./query-contract";
+import {
+  BLOCK_SOURCES,
+  isFalseStop,
+  JUDGEMENTS,
+  type Judgement,
+  PENDING,
+  REVIEW_KINDS,
+} from "./query-hook-timeline";
 import { CAUSES } from "./query-interrupt";
 import type { Placed, Timeline } from "./query-timeline";
 
@@ -131,7 +139,9 @@ const strandedWork = signalOf({
 const reviewLoops = signalOf({
   name: "review-loops",
   value: "reviewer runs per commit run",
-  note: "Verdicts and rounds to accept wait on the hook event log; this counts reviewer subagents started.",
+  note:
+    "This counts reviewer subagents started and reaches back past the hook event log; review-returns counts " +
+    "the verdicts.",
   kinds: ["reviewer run", "commit run"] as const,
   events: (timeline) => [
     ...timeline.reviewerRuns.map((run) => event(run, "reviewer run")),
@@ -144,7 +154,66 @@ const reviewLoops = signalOf({
   }),
 });
 
-export const SIGNALS: readonly Signal[] = [ownerInterrupts, timeToLand, strandedWork, reviewLoops];
+const falseStops = signalOf<Judgement>({
+  name: "false-stops",
+  value: "share of judged gate stops the work got past with nothing a gate checks changed",
+  note:
+    "A stop is a denial, an agent's retry of the same denial counted once. A commit-gate stop is false when " +
+    "the same agent later committed in its repo with no review between; one carrying a fingerprint is upheld. " +
+    "A verdict-gate stop is never false: it is unfixed when the reviewer ended on the gate's allow. A stop " +
+    "with nothing after it in its session is pending. Overrides and auto-mode denials are not judged. The " +
+    "hook event log starts when the plugin first wrote it.",
+  kinds: JUDGEMENTS,
+  events: (timeline) => timeline.denials.map((denial) => event(denial, denial.kind)),
+  rate: (count, events) => {
+    const judged = events.length - count(PENDING);
+    const falseStopCount = events.filter((judgedEvent) => isFalseStop(judgedEvent.kind)).length;
+    return { value: ratio(falseStopCount, judged), count: falseStopCount, of: judged };
+  },
+});
+
+const reviewReturns = signalOf({
+  name: "review-returns",
+  value: "return verdicts per reviewed commit",
+  note:
+    "A reviewed commit is a commit-gate allow after an accept for its repo in its session; its returns are " +
+    "the returns since that session's previous allow there. The hook event log starts when the plugin " +
+    "first wrote it; review-loops reaches back further.",
+  kinds: REVIEW_KINDS,
+  events: (timeline) => timeline.reviews.map((review) => event(review, review.kind)),
+  rate: (count) => ({
+    value: ratio(count("return"), count("reviewed commit")),
+    count: count("return"),
+    of: count("reviewed commit"),
+  }),
+});
+
+const blocks = signalOf({
+  name: "blocks",
+  value: "blocks per task, by source",
+  note:
+    "A block is a permission prompt, an auto-mode denial, or a commit-gate or verdict-gate denial. Blocks " +
+    "and tasks are those of the Claude Code tasks given since the first hook event.",
+  kinds: ["task", ...BLOCK_SOURCES],
+  events: (timeline) => [
+    ...timeline.blocks.map((block) => event(block, block.kind)),
+    ...timeline.tasks.filter((task) => task.hookLogged).map((task) => event(task, "task")),
+  ],
+  rate: (count) => {
+    const blocked = BLOCK_SOURCES.reduce((sum, source) => sum + count(source), 0);
+    return { value: ratio(blocked, count("task")), count: blocked, of: count("task") };
+  },
+});
+
+export const SIGNALS: readonly Signal[] = [
+  ownerInterrupts,
+  timeToLand,
+  strandedWork,
+  reviewLoops,
+  falseStops,
+  reviewReturns,
+  blocks,
+];
 
 export function signalNamed(name: string): Signal {
   const signal = SIGNALS.find((candidate) => candidate.name === name);
