@@ -382,6 +382,7 @@ test("AC-27 a sync with nothing changed reads no file, archives no bytes and fin
       { tool: "pi", files: 1 },
       { tool: "omp", files: 1 },
     ],
+    eventLogs: 0,
     filesRead: 0,
     orphanSubagents: [],
     failures: [],

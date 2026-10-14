@@ -39,6 +39,10 @@ export function claudeProjectsDir(env: Env): string {
   return join(env.home, ".claude", "projects");
 }
 
+export function pluginDataDir(env: Env): string {
+  return join(env.home, ".claude", "plugins", "data");
+}
+
 export function codexDir(env: Env): string {
   return join(env.home, ".codex");
 }

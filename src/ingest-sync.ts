@@ -6,9 +6,12 @@ import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
 import type { Env } from "./env";
 import { createIngester, type FileSpec, ingestFile, type SourceFile } from "./ingest";
 import { type ArchiveReport, archiveRootOf, archiveSources } from "./ingest-archive";
+import { ARCHIVED_EVENT_LOGS, eventArchiveRoot } from "./ingest-event-source";
+import { createEventIngester, ingestEventLog } from "./ingest-events";
 import { type GitReport, ingestCommits, probeCheckouts, repoRoots } from "./ingest-git";
 import type { SessionId } from "./ingest-ids";
 import { parentsFirst } from "./ingest-order";
+import { scan } from "./ingest-scan";
 import { listSource, SESSION_SOURCES, type SessionSource } from "./ingest-sources";
 import { TOOLS, type Tool } from "./ingest-tools";
 import { indexRepoFiles, type RepoFileReport } from "./repo-files";
@@ -16,6 +19,7 @@ import { indexRepoFiles, type RepoFileReport } from "./repo-files";
 export type SyncReport = {
   archive: ArchiveReport;
   sources: { tool: Tool; files: number }[];
+  eventLogs: number;
   filesRead: number;
   orphanSubagents: SessionId[];
   failures: PathFailure[];
@@ -24,8 +28,11 @@ export type SyncReport = {
   repoFiles: RepoFileReport;
 };
 
+type ReadResult = { readonly read: boolean; readonly dropped: readonly number[] };
+
 export function sync(db: Database, env: Env): SyncReport {
   const ingester = createIngester(db, env.home);
+  const eventIngester = createEventIngester(db);
   const sessionExists = db.prepare<{ one: number }, [string]>("SELECT 1 AS one FROM session WHERE id = ?");
   const setTitle = db.prepare<void, [string, string]>(
     "UPDATE session SET title = ? WHERE id = ? AND title IS NULL",
@@ -34,6 +41,7 @@ export function sync(db: Database, env: Env): SyncReport {
   const report: SyncReport = {
     archive: { files: 0, bytes: 0 },
     sources: [],
+    eventLogs: 0,
     filesRead: 0,
     orphanSubagents: [],
     failures: [],
@@ -47,17 +55,19 @@ export function sync(db: Database, env: Env): SyncReport {
     report.failures.push({ path, error: errorRecord(error) });
   };
 
-  const run = (spec: FileSpec): boolean => {
+  const count = <Result extends ReadResult>(path: string, read: () => Result): Result | null => {
     try {
-      const result = ingestFile(ingester, spec);
+      const result = read();
       if (result.read) report.filesRead += 1;
-      if (result.dropped.length > 0) report.dropped.push({ path: spec.path, lines: result.dropped });
-      return result.reset;
+      if (result.dropped.length > 0) report.dropped.push({ path, lines: result.dropped });
+      return result;
     } catch (error) {
-      fail(spec.path, error);
-      return false;
+      fail(path, error);
+      return null;
     }
   };
+
+  const run = (spec: FileSpec): boolean => count(spec.path, () => ingestFile(ingester, spec))?.reset ?? false;
 
   const titlesOf = (source: SessionSource, root: string): ReadonlyMap<SessionId, string> | null => {
     if (source.titles === null) return null;
@@ -70,7 +80,10 @@ export function sync(db: Database, env: Env): SyncReport {
     }
   };
 
-  report.archive = archiveSources(env, fail, ingester.resetFileSession);
+  report.archive = archiveSources(env, fail, {
+    resetSession: (copy) => ingester.resetFileSession(copy),
+    resetLog: (copy) => eventIngester.resetLog(copy),
+  });
 
   for (const tool of TOOLS) {
     const source = SESSION_SOURCES[tool];
@@ -97,6 +110,10 @@ export function sync(db: Database, env: Env): SyncReport {
     }
     report.sources.push({ tool, files: files.length });
   }
+
+  const eventLogs = scan(eventArchiveRoot(env), ARCHIVED_EVENT_LOGS);
+  for (const path of eventLogs) count(path, () => ingestEventLog(eventIngester, path));
+  report.eventLogs = eventLogs.length;
 
   const checkouts = probeCheckouts(repoRoots(db, env), fail);
   report.git = ingestCommits(db, checkouts, fail);

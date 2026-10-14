@@ -14,11 +14,12 @@ import type { Env } from "./env";
 import { isEnvironmentError } from "./error-read";
 import { copyIfChanged, copyWhole, sameStamp, stampLike } from "./file-copy";
 import { type Failure, refuseIngest } from "./ingest-contract";
+import { EVENT_LOGS, eventArchiveRoot, segmentOf } from "./ingest-event-source";
 import { readAt } from "./ingest-read-at";
 import { scan } from "./ingest-scan";
 import { SESSION_SOURCES, type SessionSource } from "./ingest-sources";
 import { TOOLS, type Tool } from "./ingest-tools";
-import { archiveDir } from "./paths";
+import { archiveDir, pluginDataDir } from "./paths";
 
 const TAIL_BYTES = 4096;
 const COMPARE_CHUNK_BYTES = 1 << 20;
@@ -65,7 +66,7 @@ function appendTail(live: string, copy: string, copySize: number, liveStat: Stat
   return tail.length;
 }
 
-function archiveSession(resetCopy: (copy: string) => void): Archiver {
+function archiveGrowing(onRewritten: (copy: string) => void): Archiver {
   return (live, copy) => {
     const liveStat = statSync(live);
     const copyStat = statSync(copy, { throwIfNoEntry: false });
@@ -78,9 +79,16 @@ function archiveSession(resetCopy: (copy: string) => void): Archiver {
     if (copyStat.size < liveStat.size && startsWithCopy(live, copy, copyStat.size)) {
       return appendTail(live, copy, copyStat.size, liveStat);
     }
-    return copyWhole(live, copy, liveStat, () => resetCopy(copy));
+    return copyWhole(live, copy, liveStat, () => onRewritten(copy));
   };
 }
+
+const keepAsSegment = (copy: string): void => renameSync(copy, segmentOf(copy, existsSync));
+
+export type CopyResets = {
+  readonly resetSession: (copy: string) => void;
+  readonly resetLog: (copy: string) => void;
+};
 
 const archiveWhole: Archiver = (live, copy) => copyIfChanged(live, copy) ?? UNTOUCHED;
 
@@ -127,7 +135,7 @@ function isReadable(path: string): boolean {
   }
 }
 
-export function archiveSources(env: Env, fail: Failure, resetCopy: (copy: string) => void): ArchiveReport {
+export function archiveSources(env: Env, fail: Failure, resets: CopyResets): ArchiveReport {
   let files = 0;
   let bytes = 0;
 
@@ -150,7 +158,11 @@ export function archiveSources(env: Env, fail: Failure, resetCopy: (copy: string
     }
   };
 
-  const archiveSessionFile = archiveSession(resetCopy);
+  const archiveGrowingFile = archiveGrowing(resets.resetSession);
+  const archiveEventLog = archiveGrowing((copy) => {
+    resets.resetLog(copy);
+    keepAsSegment(copy);
+  });
 
   for (const tool of TOOLS) {
     const source = SESSION_SOURCES[tool];
@@ -164,7 +176,7 @@ export function archiveSources(env: Env, fail: Failure, resetCopy: (copy: string
       failArchiving(liveRoot, copyRoot, error);
     }
     for (const live of sessions) {
-      archiveOne(live, copyOf(live), archiveSessionFile);
+      archiveOne(live, copyOf(live), archiveGrowingFile);
       for (const sidecar of source.sidecars(live)) {
         if (existsSync(sidecar)) archiveOne(sidecar, copyOf(sidecar), archiveWhole);
       }
@@ -173,6 +185,12 @@ export function archiveSources(env: Env, fail: Failure, resetCopy: (copy: string
       const titles = join(liveRoot, source.titles.file);
       if (existsSync(titles)) archiveOne(titles, copyOf(titles), archiveWhole);
     }
+  }
+
+  const eventsRoot = pluginDataDir(env);
+  const eventsCopyRoot = eventArchiveRoot(env);
+  for (const live of scan(eventsRoot, EVENT_LOGS)) {
+    archiveOne(live, rebaseScanned(eventsRoot, eventsCopyRoot, live), archiveEventLog);
   }
 
   return { files, bytes };

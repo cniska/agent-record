@@ -212,6 +212,7 @@ const COUNT = z.number().int().nonnegative();
 const SYNC_RESULT = z.strictObject({
   archive: z.strictObject({ files: COUNT, bytes: COUNT }),
   sources: z.array(z.strictObject({ tool: TOOL, files: COUNT })),
+  eventLogs: COUNT,
   filesRead: COUNT,
   orphanSubagents: z.array(z.string()),
   failures: z.array(z.strictObject({ path: z.string(), error: ERROR })),

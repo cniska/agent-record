@@ -1,14 +1,13 @@
 import type { Database } from "bun:sqlite";
-import { existsSync, statSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { basename } from "node:path";
 import { unreachable } from "./assert";
 import { writeTransaction } from "./db";
 import { gitRuns } from "./git-operations";
-import { readChunk } from "./ingest-chunk";
 import type { SessionId, ToolCallId } from "./ingest-ids";
-import { advance, type Position, planRead } from "./ingest-read-plan";
+import { readNewLines } from "./ingest-read-new";
+import { advance, type Position } from "./ingest-read-plan";
 import type { ChunkParser, ParsedChunk, SessionFacts, ToolCallRow } from "./ingest-session-records";
-import { readingSource } from "./ingest-source-read";
 import type { Kind, Tool } from "./ingest-tools";
 import type { Timestamp } from "./timestamp";
 import { projectOf, worktreeOf } from "./worktree";
@@ -497,13 +496,11 @@ function claimMovedCursor(ingester: Ingester, spec: FileSpec): Cursor | null {
 }
 
 export function ingestFile(ingester: Ingester, spec: FileSpec): FileResult {
-  const { size } = readingSource("source_unreadable", spec.path, () => statSync(spec.path));
-  const { reset, from } = planRead(ingester.cursorOf(spec.path) ?? claimMovedCursor(ingester, spec), size);
-  const chunk =
-    from === null
-      ? null
-      : readingSource("source_unreadable", spec.path, () => readChunk(spec.path, size, from.bytes));
-  if (from === null || chunk === null) {
+  const { reset, from, chunk } = readNewLines(
+    spec.path,
+    ingester.cursorOf(spec.path) ?? claimMovedCursor(ingester, spec),
+  );
+  if (from === null) {
     if (reset) ingester.resetSession(spec.sessionId);
     return { read: false, reset, dropped: [] };
   }

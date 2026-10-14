@@ -52,7 +52,7 @@ The record is what agent workflows improve from. Its first use is search: an age
 
 - **FR-24** — `rebuild` drops the record and reads it again from the archive, whatever schema version the record had.
 - **FR-25** — After `rebuild`, every session `sync` archived is in the record as the archive last held it, including sessions whose tool files are gone. Git history is not covered (FR-23).
-- **FR-26** — Given the same archive, `rebuild` writes the same session, message, turn, usage, tool-call, git-run and skill-load rows that the syncs that built the archive wrote.
+- **FR-26** — Given the same archive, `rebuild` writes the same session, message, turn, usage, tool-call, git-run, skill-load and hook-event rows that the syncs that built the archive wrote.
 
 ### 2.5 Schema version
 
@@ -142,6 +142,13 @@ Requirements:
 - **FR-75** — `query signal-events <name>` lists each message, task, commit run or reviewer run the signal counted, newest first, with its time, kind, repo, route, its minutes where the signal times it, the session `thread` opens, and the owner's words for an interrupt.
 - **FR-76** — `query before-after <sha>` finds the commit in the record by a prefix of its SHA and compares each signal over the `--days <n>` days (14 by default) before the commit's time with the same span after it. `--from <ts>` starts the after window at that time instead, when the change took effect later than its commit, such as when a hook it replaced was removed. The after window ends at the record's newest message. For each signal it returns its value before and after, with the count behind each and what it is out of, so windows of different lengths compare. A prefix that matches no commit or more than one, a `--days` that is not a whole number of at least 1, and a `--from` before the commit are refused.
 
+### 2.13 Hook events
+
+The cniska-skills plugin's hooks append one JSON line per decision to `events.jsonl` in the plugin's data folder (agent-skills `hooks/events.md`): commit and verdict gate decisions, reviewer verdicts, permission prompts and auto-mode denials. The hooks never write the record's formats; agent-record archives the log as one more source and reads it at ingest. The log begins when the plugin first wrote it.
+
+- **FR-77** — `sync` archives `events.jsonl` from the data folder of every cniska-skills plugin install, `~/.claude/plugins/data/cniska-skills-<marketplace>/`, into the archive's `plugin-data/` at the same path relative to `~/.claude/plugins/data/`, as it archives a session file: new bytes are added (FR-2), a deleted log keeps its archive copy (FR-3), and a log shrunk or rewritten, as a reinstalled plugin starts it again, gets a fresh copy while its earlier copy stays beside it as `events-<n>.jsonl`, the first number free, and its events are the record's under that new name: the log is the only record of past gate decisions. The mirror carries it with the rest of the archive (FR-62), and `rebuild` reads it again (FR-24, FR-25, FR-26).
+- **FR-78** — The record holds each line of an archived log as one hook event: its file and line, time, kind, session, agent, working directory, and the fields its kind carries. Only complete new lines are read (FR-8, FR-9). A line that is not a JSON object of format version 1, and a version 1 line of a kind the record keeps (`gate`, `verdict`, `permission_prompt`, `permission_denied`) that lacks a field its kind requires or whose `gate`, `decision` or `verdict` lies outside the values `hooks/events.md` lists, is skipped and reported with its file and line (FR-10); a version 1 line of another kind is skipped without a report. `reason`, `tool` and `rule` are free text, so a new reason code is read, and a field the format adds is ignored.
+
 ## 3. Non-functional requirements
 
 - **NF-1** — agent-record needs no network and no credential, and sends nothing off the machine itself: the mirror is a folder on this machine that a backup service, such as iCloud Drive, may carry off it (FR-61).
@@ -208,6 +215,7 @@ Requirements:
 - **AC-43** — Sync a session with two reviewer subagents and one commit run: `signal review-loops` gives two reviewer runs per commit run. (FR-73)
 - **AC-44** — `signal` by week, with `--by repo`, `--by route`, an unknown signal and an unknown `--by`: rows per week, split by repo with its label and by route, and two refusals naming the choices. (FR-74)
 - **AC-45** — `before-after` on a fixture commit with sessions on both sides, with `--from`, and with an unknown SHA, a `--days 0` and a `--from` before the commit: each signal's value before and after with its counts, the after window starting at `--from`, and three refusals. (FR-76)
+- **AC-46** — Sync a fixture home with an event log in two cniska-skills installs and an `events.jsonl` in another plugin's folder, the log holding a line of each kept kind, a malformed `gate` line, a version 2 line and a line of an unknown kind: each cniska-skills log is in the archive under `plugin-data/` and in the mirror, the other plugin's is in neither, `sql` returns one hook event per good line with its fields, and the sync reports the malformed and version 2 lines and not the unknown one. Append a line and sync: only it is read. Delete both logs and `rebuild`: the record holds the same hook events. Write one log again with one new line and sync: the record holds those events and the new one. (FR-26, FR-77, FR-78)
 
 ## 6. Deliverables
 

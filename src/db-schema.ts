@@ -1,9 +1,10 @@
+import { DECISIONS, GATES, HOOK_EVENTS, VERDICTS } from "./ingest-event-kinds";
 import { ROLES } from "./ingest-session-records";
 import { HOWS } from "./ingest-skill-load";
 import { KINDS, TOOLS } from "./ingest-tools";
 
 const sqlList = (values: readonly string[]): string => values.map((value) => `'${value}'`).join(",");
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS source_file (
@@ -177,6 +178,34 @@ CREATE TABLE IF NOT EXISTS checkout (
   head            TEXT,
   index_stat      TEXT
 );
+
+CREATE TABLE IF NOT EXISTS event_file (
+  path            TEXT PRIMARY KEY,
+  bytes_ingested  INTEGER NOT NULL DEFAULT 0,
+  lines_ingested  INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS hook_event (
+  src_file        TEXT NOT NULL REFERENCES event_file(path),
+  src_line        INTEGER NOT NULL,
+  ts              TEXT NOT NULL,
+  event           TEXT NOT NULL CHECK (event IN (${sqlList(HOOK_EVENTS)})),
+  session         TEXT NOT NULL,
+  agent           TEXT,
+  cwd             TEXT,
+  gate            TEXT CHECK (gate IN (${sqlList(GATES)})),
+  decision        TEXT CHECK (decision IN (${sqlList(DECISIONS)})),
+  reason          TEXT,
+  repo            TEXT,
+  head            TEXT,
+  fingerprint     TEXT,
+  verdict         TEXT CHECK (verdict IN (${sqlList(VERDICTS)})),
+  tool            TEXT,
+  tool_use        TEXT,
+  rule            TEXT,
+  PRIMARY KEY (src_file, src_line)
+);
+CREATE INDEX IF NOT EXISTS hook_event_ts ON hook_event(ts);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS message_fts USING fts5(
   text,

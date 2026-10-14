@@ -10,7 +10,7 @@ import type { Env } from "./env";
 import { scratchEnv, writeClaudeTranscript } from "./fixtures.test-support";
 import { rebuild, sync } from "./ingest-sync";
 import { TOOLS } from "./ingest-tools";
-import { archiveDir, dbPath } from "./paths";
+import { archiveDir, dbPath, pluginDataDir } from "./paths";
 
 type Scratch = { db: Database; env: Env };
 
@@ -157,6 +157,40 @@ describe("a sync", () => {
     const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     try {
       expect(sync(db, env).sources).toEqual(TOOLS.map((tool) => ({ tool, files: 0 })));
+    } finally {
+      db.close();
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("reads every archived hook event log, reports its dropped lines, and keeps its events through a rebuild", () => {
+    const root = mkdtempSync(join(tmpdir(), "agent-record-events-"));
+    const env = scratchEnv(root);
+    const live = join(pluginDataDir(env), "cniska-skills-cniska", "events.jsonl");
+    mkdirSync(join(live, ".."), { recursive: true });
+    const prompt = {
+      v: 1,
+      ts: "2026-10-14T08:00:00Z",
+      event: "permission_prompt",
+      session: "s1",
+      agent: null,
+    };
+    writeFileSync(live, `${JSON.stringify({ ...prompt, cwd: "/w", tool: "Bash" })}\n{broken\n`);
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
+    const events = () => db.query("SELECT src_file, src_line, event, tool FROM hook_event").all();
+    const copy = join(archiveDir(env), "plugin-data", "cniska-skills-cniska", "events.jsonl");
+    try {
+      const report = sync(db, env);
+      expect({ eventLogs: report.eventLogs, filesRead: report.filesRead, dropped: report.dropped }).toEqual({
+        eventLogs: 1,
+        filesRead: 1,
+        dropped: [{ path: copy, lines: [2] }],
+      });
+      const synced = events();
+      expect(synced).toEqual([{ src_file: copy, src_line: 1, event: "permission_prompt", tool: "Bash" }]);
+      rmSync(live);
+      rebuild(db, env);
+      expect(events()).toEqual(synced);
     } finally {
       db.close();
       rmSync(root, { recursive: true, force: true });
