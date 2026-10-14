@@ -88,6 +88,7 @@ function sources(): string[] {
 describe("the command contract", () => {
   test("cli.ts only runs the CLI with its runtime", () => {
     expect([...importsOf(readFileSync(join(SRC, "cli.ts"), "utf8"))].sort()).toEqual([
+      "../package.json",
       "./cli-main",
       "./env",
       "node:path",

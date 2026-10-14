@@ -194,7 +194,7 @@ What the owner types while an agent works, kept beside the messages of §2.2 so 
 
 - **FR-90** — A message the owner typed into Claude Code while a turn ran, which the transcript keeps as a `queued_command` attachment marked human, is recorded as a user message the owner typed, at that line's time, with the text it carries. It counts within the task that was running, as an interrupt where a cause fits (FR-70), and never starts a task. What the harness or another agent queued that way, such as a task notification or a peer's message, is not.
 
-### 2.19 Install and update
+### 2.19 Release
 
 - **FR-91** — A release is one executable that runs every command on a machine with no Bun, no mise and no checkout of agent-record.
 
@@ -203,6 +203,13 @@ What the owner types while an agent works, kept beside the messages of §2.2 so 
 The steps of one task, for a coach to read instead of whole transcripts.
 
 - **FR-92** — `query trace <id-prefix>` prints the steps of the session the prefix names and of every subagent under it (FR-12), its task, one JSON line per row, in time order. A line holds `at`, `session`, its `parent`, the `task`, `seq` (the line's place among its session's lines, from 1), `step`, `phase` (`started` or `ended`), and on `ended` the `ms` since it started and an `outcome`: `{kind: ok}`, `{kind: refused, code}` or `{kind: failed, error}`. The steps are one closed list, each adding its own start and result fields: `agent`, a session, with its agent type and model, and on its end its input, cache-read, cache-write and output tokens, failed as the call that started it (FR-12) failed, and otherwise ok; `tool`, a tool call, with its id and tool, refused with the tool's denial kind as its code, and failed when it was interrupted, exited non-zero or errored; `commit` and `push`, a git run of that subcommand (FR-13), with its tool call and directory, ending as its call does; `verdict` and `gate`, a hook event (FR-78) where the event log has one, with a verdict's repo and verdict, or a gate's gate and repo, a deny refused with its reason as its code; and `compact`, a compaction. An agent has ended, at its last line, once every tool call it made has returned; until then it, like a tool call awaiting its result, prints `started` with no `ended`. A prefix matching more than one session is refused as `thread`'s is (FR-41), and one matching none answers with no rows and a note saying so.
+
+### 2.21 Install and update
+
+- **FR-93** — `agent-record --version` prints the running build's version alone on one line and exits 0: the release's stamped at build time, the checkout's from `package.json`. It is the one invocation that prints no JSON line (FR-30), so an installer and a stager can read it.
+- **FR-94** — The launcher is what a release installs onto PATH. It runs the newest of the build it was installed with and every build staged under `$XDG_DATA_HOME/agent-record/bin/<version>/`, passing its arguments through and its own absolute path as the command the launchd agent runs (FR-51), and never writes anything. With no runnable build it refuses with `binary_missing`.
+- **FR-95** — `install.sh`, run by `curl … | sh`, downloads the latest release's build for this platform and the launcher, checks each against its published sha256, and installs the build under `~/.local/lib/agent-record/` and the launcher as `~/.local/bin/agent-record`. A download that fails or does not match its checksum installs nothing. Run again, it replaces the install.
+- **FR-96** — The npm package `@cniska/agent-record` installs the build for its platform from `@cniska/agent-record-darwin-arm64` or `@cniska/agent-record-linux-x64` and runs it through the launcher (FR-94), with the npm command on PATH as the command the launchd agent runs. On another platform, or with the platform package missing, it refuses with `no_build_for_platform` or `platform_package_missing`.
 
 ## 3. Non-functional requirements
 
@@ -288,13 +295,16 @@ The steps of one task, for a coach to read instead of whole transcripts.
 - **AC-59** — Sync a session whose worker subagent starts a reviewer subagent, beside a subagent whose metadata names no starting call: the reviewer is recorded under the worker, the worker and the other under the top-level session, the sync counts one subagent it could not link, and after `rebuild` the same holds. (FR-12)
 - **AC-60** — Compile the release, and in a fresh home with only it on PATH beside the system's tools, `sync` a fixture home, run a query and `agent install`: the sync reads the fixture, the query finds its words, and the launchd agent runs the binary's `sync` by its absolute path. (FR-51, FR-91)
 - **AC-61** — Sync a coordinator whose worker subagent compacts, has a call rejected, starts a reviewer that gives a verdict and whose starting call errors, commits twice past a gate that denies then allows, and pushes, beside a watcher subagent still waiting on a call, with their hook event log: `query trace` prints each step's lines in time order, the reviewer under the worker and ending failed, the rejection and the deny refused with their codes, the worker's tokens on its end, and the watcher and its call started with no end. (FR-92)
+- **AC-62** — Install a release build through the launcher, then stage a newer and an older build: `--version` prints the installed version, then the newer staged one, and `agent install` schedules the launcher's `sync` by the launcher's path. (FR-51, FR-93, FR-94)
+- **AC-63** — Run `install.sh` in a fresh home against a stand-in for the release downloads, twice, then once with a wrong checksum in another fresh home: the installed `agent-record --version` prints the release's version, `agent install` schedules `~/.local/bin/agent-record sync`, and the bad download is refused with nothing written. (FR-95)
+- **AC-64** — Build the npm packages from a release build, install the shim and its platform package into a prefix, and run the shim through Node: `--version` prints the package version and `agent install` schedules the npm command's `sync`. (FR-96)
 
 ## 6. Deliverables
 
 - **D-1** — The `agent-record` CLI, as a release, one executable per platform that needs no Bun and no checkout (FR-91); and as source, run by Bun from a checkout and linked onto PATH by `mise install` in the primary checkout, never in a worktree.
 - **D-2** — The `cniska-record` Claude Code plugin in `plugin/`.
 - **D-3** — `README.md` (install, commands, where the record and its mirror live, and how to restore the archive from the mirror), `AGENTS.md` (repository rules), `src/README.md` (module map), and this spec.
-- **D-4** — The test suite, run by `bun run check`, and the acceptance suite in `acceptance/`, run by `bun run acceptance`. The acceptance suite drives only the CLI, and reaches past it only in two files. `acceptance/cli.ts` plants or reads state no command makes or reports without waiting real time (the record's schema version, the last-sync stamp, the mirror's time, a held lock, a held record) or stands in for the OS (a `launchctl` on PATH), and compiles the release that runs where no Bun is (AC-60). `acceptance/cli-no-wait.ts` runs the CLI with no wait for a held record, so a busy record is refused at once.
+- **D-4** — The test suite, run by `bun run check`, and the acceptance suite in `acceptance/`, run by `bun run acceptance`. The acceptance suite drives only the CLI, and reaches past it only in two files. `acceptance/cli.ts` plants or reads state no command makes or reports without waiting real time (the record's schema version, the last-sync stamp, the mirror's time, a held lock, a held record) or stands in for the OS (a `launchctl` on PATH) or the network (a `curl` serving release downloads), and compiles and lays out the release that runs where no Bun is (AC-60, AC-62 to AC-64). `acceptance/cli-no-wait.ts` runs the CLI with no wait for a held record, so a busy record is refused at once.
 
 ## 7. Constraints (fixed)
 
@@ -324,6 +334,7 @@ The steps of one task, for a coach to read instead of whole transcripts.
 - The launchd agent's 15-minute interval is promised to the user (FR-51).
 - An unreachable or stale mirror is a `warn` in `doctor`, not a `fail`: the record still works without it (FR-68).
 - The mirror keeps only the archive, not the record: the record is rebuilt from the archive (FR-24).
+- A release's version follows its schema: while on 0.x, a release that bumps the schema version (FR-27) is a minor release, never a patch, and the release workflow refuses a patch tag whose schema differs from the previous tag's.
 
 ## 9. Open questions and known gaps
 

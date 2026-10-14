@@ -1,0 +1,191 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+
+    strategy:
+      matrix:
+        include:
+          - target: darwin-arm64
+            runner: macos-latest
+          - target: linux-x64
+            runner: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup toolchain
+        uses: jdx/mise-action@v5
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Check the tag against the version and the schema
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          TAG: ${{ github.ref_name }}
+        run: bun scripts/release-check.ts "$TAG"
+
+      - name: Check
+        if: matrix.target == 'linux-x64'
+        run: bun run check
+
+      - name: Build binary
+        run: bash scripts/build-compiled.sh agent-record
+
+      - name: Smoke test binary
+        run: |
+          expected="$(bun -e 'console.log(require("./package.json").version)')"
+          test "$(./agent-record --version)" = "$expected"
+          ./agent-record | grep -q '"ok":true'
+
+      - name: Package artifact
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          mkdir -p artifacts
+          tar -czf "artifacts/agent-record-$TARGET.tar.gz" agent-record
+          cd artifacts && sha256sum "agent-record-$TARGET.tar.gz" > "agent-record-$TARGET.sha256"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: agent-record-${{ matrix.target }}
+          path: artifacts/
+
+  release:
+    name: GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Add launcher and installer
+        run: |
+          cp scripts/launcher.sh scripts/install.sh artifacts/
+          cd artifacts && sha256sum launcher.sh > launcher.sha256
+
+      - name: Generate checksums
+        run: cd artifacts && sha256sum *.tar.gz launcher.sh install.sh > SHA256SUMS.txt
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+
+      - name: Keep the release files of a dry run
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dry-run
+          path: artifacts/
+
+  npm:
+    name: npm Packages
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup toolchain
+        uses: jdx/mise-action@v5
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Update npm
+        run: npm install --global npm@latest
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: agent-record-*
+          path: artifacts
+          merge-multiple: true
+
+      - name: Build packages
+        run: bun scripts/build-npm.ts artifacts dist/npm
+
+      - name: Pack without publishing
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        run: |
+          for package in darwin-arm64 linux-x64 agent-record; do
+            npm pack --dry-run "./dist/npm/$package"
+          done
+
+      - name: Publish
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          for package in darwin-arm64 linux-x64 agent-record; do
+            name=$(node -p "require('./dist/npm/$package/package.json').name")
+            version=$(node -p "require('./dist/npm/$package/package.json').version")
+            if npm view "$name@$version" version >/dev/null 2>&1; then
+              echo "$name@$version is already published"
+              continue
+            fi
+            npm publish "./dist/npm/$package" --access public --provenance
+          done
+
+  homebrew:
+    name: Bump Homebrew Formula
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Dispatch formula bump
+        env:
+          GH_TOKEN: ${{ secrets.AGENT_RECORD_TAP_DISPATCH_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh api --method POST repos/cniska/homebrew-tap/dispatches \
+            -f event_type=formula-release \
+            -f "client_payload[formula]=agent-record" \
+            -f "client_payload[ref]=$TAG"

@@ -21,6 +21,8 @@ const BUN_CACHE_OUTSIDE_HOMES = join(tmpdir(), "agent-record-acceptance-bun-cach
 const CWD_PLACEHOLDER = "{{cwd}}";
 const BUILD_RELEASE = join(import.meta.dir, "..", "scripts", "build-compiled.sh");
 const SYSTEM_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
+const LAUNCHER = join(import.meta.dir, "..", "scripts", "launcher.sh");
+const RELEASE_DOWNLOADS = "https://github.com/cniska/agent-record/releases/latest/download";
 
 const TOOL = z.enum(["claude", "codex", "grok", "pi", "omp"]);
 
@@ -199,18 +201,75 @@ export function runCli(home: Home, args: readonly string[], env: RunEnv = {}): R
   return { exitCode: ran.exitCode, stdout: ran.stdout.toString(), stderr: ran.stderr.toString() };
 }
 
-export function compiledRelease(dir: string): string {
+export function compiledRelease(dir: string, version?: string): string {
   const binary = join(dir, "agent-record");
-  const ran = Bun.spawnSync(["/bin/bash", BUILD_RELEASE, binary], {
-    env: { PATH: `${dirname(process.execPath)}:${SYSTEM_PATH}` },
-  });
+  const ran = Bun.spawnSync(
+    ["/bin/bash", BUILD_RELEASE, binary, ...(version === undefined ? [] : [version])],
+    {
+      env: { PATH: `${dirname(process.execPath)}:${SYSTEM_PATH}` },
+    },
+  );
   expect({ exitCode: ran.exitCode, stderr: ran.stderr.toString() }).toMatchObject({ exitCode: 0 });
   return binary;
 }
 
-export function runOnCleanMachine(home: Home, binary: string, args: readonly string[]): Ran {
-  const ran = Bun.spawnSync([binary, ...args], {
-    env: { PATH: `${dirname(binary)}:${SYSTEM_PATH}`, HOME: home.root },
+export function installedLauncher(bin: string, baseline: string, version: string): string {
+  const launcher = join(bin, "agent-record");
+  mkdirSync(bin, { recursive: true });
+  writeFileSync(
+    launcher,
+    readFileSync(LAUNCHER, "utf8")
+      .replace("__BASELINE_BIN__", baseline)
+      .replace("__BASELINE_VERSION__", version),
+  );
+  chmodSync(launcher, 0o755);
+  return launcher;
+}
+
+export function releaseAssets(dir: string, binary: string): string {
+  mkdirSync(dir, { recursive: true });
+  const tarball = join(dir, "agent-record-darwin-arm64.tar.gz");
+  const packed = Bun.spawnSync(["tar", "-czf", tarball, "-C", dirname(binary), "agent-record"]);
+  expect(packed.exitCode).toBe(0);
+  writeFileSync(join(dir, "launcher.sh"), readFileSync(LAUNCHER));
+  writeChecksum(tarball, join(dir, "agent-record-darwin-arm64.sha256"));
+  writeChecksum(join(dir, "launcher.sh"), join(dir, "launcher.sha256"));
+  return dir;
+}
+
+function writeChecksum(file: string, to: string): void {
+  const digest = new Bun.CryptoHasher("sha256").update(readFileSync(file)).digest("hex");
+  writeFileSync(to, `${digest}  ${relative(dirname(file), file)}\n`);
+}
+
+export function curlServing(bin: string, assets: string): string {
+  mkdirSync(bin, { recursive: true });
+  const curl = join(bin, "curl");
+  writeFileSync(
+    curl,
+    [
+      "#!/bin/sh",
+      "url=; out=",
+      'while [ "$#" -gt 0 ]; do case "$1" in -o) out="$2"; shift ;; https://*) url="$1" ;; esac; shift; done',
+      `file="${assets}/\${url##*/}"`,
+      `case "$url" in ${RELEASE_DOWNLOADS}/*) ;; *) exit 22 ;; esac`,
+      '[ -f "$file" ] || exit 22',
+      'cp "$file" "$out"',
+      "",
+    ].join("\n"),
+  );
+  chmodSync(curl, 0o755);
+  return bin;
+}
+
+export function runOnCleanMachine(
+  home: Home,
+  bins: readonly string[],
+  args: readonly string[],
+  env: RunEnv = {},
+): Ran {
+  const ran = Bun.spawnSync([...args], {
+    env: { PATH: [...bins, SYSTEM_PATH].join(":"), HOME: home.root, ...env },
   });
   return { exitCode: ran.exitCode, stdout: ran.stdout.toString(), stderr: ran.stderr.toString() };
 }

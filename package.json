@@ -9,8 +9,8 @@
   },
   "scripts": {
     "agent-record": "bun run src/cli.ts",
-    "format": "bunx biome check --write src acceptance scripts",
-    "lint": "bunx biome check --error-on-warnings src acceptance scripts",
+    "format": "bunx biome check --write src acceptance scripts npm",
+    "lint": "bunx biome check --error-on-warnings src acceptance scripts npm",
     "typecheck": "bunx tsc --noEmit",
     "test": "bun test",
     "acceptance": "bun test ./acceptance/*.acceptance.ts",

@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { version } from "../package.json";
 import { runCli } from "../src/cli-main";
 import { parseEnv } from "../src/env";
 
@@ -9,4 +10,5 @@ await runCli({
   heldRecordWaitMs: NO_WAIT_MS,
   env: parseEnv(process.env),
   command: [process.execPath, resolve(import.meta.dir, "..", "src", "cli.ts")],
+  version,
 });

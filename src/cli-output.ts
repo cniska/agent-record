@@ -5,6 +5,10 @@ export function writeResult(command: string, value: unknown): void {
   process.stdout.write(`${JSON.stringify({ command, ok: true, result: value ?? null })}\n`);
 }
 
+export function writeVersion(version: string): void {
+  process.stdout.write(`${version}\n`);
+}
+
 export function writeError(command: string, error: unknown): number {
   process.stderr.write(`${JSON.stringify({ command, ok: false, error: errorRecord(codedOf(error)) })}\n`);
   return 1;

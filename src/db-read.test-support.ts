@@ -18,6 +18,7 @@ export function testRuntime(env: Env): Runtime {
     heldRecordWaitMs: NO_WAIT_MS,
     env,
     command: ["/opt/homebrew/bin/agent-record"],
+    version: "0.1.0",
   };
 }
 

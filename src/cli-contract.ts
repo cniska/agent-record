@@ -13,6 +13,7 @@ export type Runtime = {
   readonly heldRecordWaitMs: number;
   readonly env: Env;
   readonly command: ProgramArguments;
+  readonly version: string;
 };
 
 export type ProgramArguments = readonly [string, ...string[]];

@@ -118,8 +118,9 @@ agent-gates doctor
 
 - `bun run check` runs the lint, the typecheck, knip (an export, file or dependency nothing uses) and the tests.
 - `bun run acceptance` proves the criteria in [`SPEC.md`](SPEC.md) through the CLI alone; each test in `acceptance/` is named for the criteria it proves, and `src/spec.test.ts`, in the check, fails when the tests and the criteria do not cite each other.
-- `scripts/build-compiled.sh <outfile>` compiles the release: one executable, from `src/cli-release.ts`, that runs with no Bun or checkout.
-- `bun run format` formats `src/`, `acceptance/` and `scripts/` with Biome, and the format gate runs it with the linter off before each commit and stages what it changes in the staged files.
+- `scripts/build-compiled.sh <outfile> [<version>]` compiles the release: one executable, from `src/cli-release.ts`, that runs with no Bun or checkout and prints its stamped version on `--version`.
+- `scripts/release.sh patch|minor|major` bumps the version and tags it; `.github/workflows/release.yml` builds the tag into a GitHub release, the npm packages and a Homebrew bump, as [`docs/releasing.md`](docs/releasing.md) says.
+- `bun run format` formats `src/`, `acceptance/`, `scripts/` and `npm/` with Biome, and the format gate runs it with the linter off before each commit and stages what it changes in the staged files.
 - `bun run search-recall` rebuilds the search recall fixture from the live record, as [`src/query-recall.md`](src/query-recall.md) describes.
 - `.github/workflows/check.yml` runs the check and the acceptance suite on each push and pull request, and `commits.yml`, `format.yml` and `no-comments.yml` run the gates.
 
