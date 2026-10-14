@@ -180,10 +180,7 @@ describe("reading the repos the sessions ran in", () => {
     expect(probeCheckouts([removed, healthy], fail).map((checkout) => checkout.path)).toEqual([healthy]);
     expect(failed).toEqual([]);
     expect(db.query("SELECT repo, subject FROM repo_commit ORDER BY repo").all()).toEqual(
-      [
-        { repo: healthy, subject: "feat: a" },
-        { repo: removed, subject: "feat: a" },
-      ].sort((a, b) => a.repo.localeCompare(b.repo)),
+      [healthy, removed].sort().map((repo) => ({ repo, subject: "feat: a" })),
     );
     db.close();
   });
