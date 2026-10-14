@@ -65,7 +65,7 @@ function appendTail(live: string, copy: string, copySize: number, liveStat: Stat
   return tail.length;
 }
 
-function archiveSession(beforeReplace: (copy: string) => void): Archiver {
+function archiveSession(resetCopy: (copy: string) => void): Archiver {
   return (live, copy) => {
     const liveStat = statSync(live);
     const copyStat = statSync(copy, { throwIfNoEntry: false });
@@ -78,7 +78,7 @@ function archiveSession(beforeReplace: (copy: string) => void): Archiver {
     if (copyStat.size < liveStat.size && startsWithCopy(live, copy, copyStat.size)) {
       return appendTail(live, copy, copyStat.size, liveStat);
     }
-    return copyWhole(live, copy, liveStat, () => beforeReplace(copy));
+    return copyWhole(live, copy, liveStat, () => resetCopy(copy));
   };
 }
 
@@ -127,11 +127,7 @@ function isReadable(path: string): boolean {
   }
 }
 
-export function archiveSources(
-  env: Env,
-  fail: Failure,
-  beforeReplace: (copy: string) => void,
-): ArchiveReport {
+export function archiveSources(env: Env, fail: Failure, resetCopy: (copy: string) => void): ArchiveReport {
   let files = 0;
   let bytes = 0;
 
@@ -154,7 +150,7 @@ export function archiveSources(
     }
   };
 
-  const archiveSessionFile = archiveSession(beforeReplace);
+  const archiveSessionFile = archiveSession(resetCopy);
 
   for (const tool of TOOLS) {
     const source = SESSION_SOURCES[tool];

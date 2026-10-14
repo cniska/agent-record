@@ -50,7 +50,7 @@ const refuseMirror = refuser<{
   },
 });
 
-function setAsideCopyItShrinks(archived: Stats, copy: Stats, path: string): void {
+function setAsideCopyIfItShrinks(archived: Stats, copy: Stats, path: string): void {
   if (archived.size < copy.size) copyBackup(path);
 }
 
@@ -95,7 +95,7 @@ export function mirrorArchive(env: Env, now: Date): MirrorPass {
     const to = join(mirrorArchiveDir(env), relative(archive, from));
     const unwritable = (detail: string) => refuseMirror("mirror_unwritable", { path: to, detail });
     attempt(to, unwritable, () => {
-      const copied = copyIfChanged(from, to, setAsideCopyItShrinks);
+      const copied = copyIfChanged(from, to, setAsideCopyIfItShrinks);
       if (copied === null) return;
       files += 1;
       bytes += copied;
