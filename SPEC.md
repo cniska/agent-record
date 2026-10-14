@@ -1,6 +1,6 @@
 # agent-record Specification
 
-> A local record of every coding-agent session on this machine, and the queries that bring earlier work back to an agent.
+> A local record of every coding-agent session on this machine: the record agent workflows improve from.
 
 This document states what must hold, not how. [`README.md`](README.md) lists the commands and [`src/README.md`](src/README.md) maps the modules that meet these requirements.
 
@@ -9,6 +9,8 @@ This document states what must hold, not how. [`README.md`](README.md) lists the
 ## 1. Purpose & context
 
 A coding agent's context ends at compaction, at a handoff, or when another agent takes over. The tools' transcripts on disk keep what was said, decided and done, but each tool keeps them in its own format and place, and may delete them. agent-record copies them into one archive, reads that archive into one SQLite record, and answers questions over it.
+
+The record is what agent workflows improve from. Its first use is search: an agent finds where earlier work was said, decided or ran into friction, and reads the thread around it. The direction, not built yet, is to also check whether a workflow change helped, by comparing the record before and after it.
 
 **Primary user:** the owner's coding agents on the owner's own machine, through the CLI and the Claude Code plugin; the owner when diagnosing the record. Not the audience: other users of the machine, remote services, teams sharing a record.
 

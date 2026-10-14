@@ -1,9 +1,9 @@
 # agent-record
 
-A local record of every coding-agent session on this machine, and the queries that bring earlier work back to an agent.
+A local record of every coding-agent session on this machine: the record agent workflows improve from.
 
 - `agent-record sync` reads the session files of Claude Code, Codex, Grok, pi and omp into one SQLite database, with the commits of the repos those sessions worked in.
-- `agent-record query` and `agent-record sql` read it.
+- `agent-record query` and `agent-record sql` read it. Search comes first: `query search` finds where earlier work was said, decided or ran into friction, and `query thread` shows what happened around it.
 - It needs no network and no credential, and has no per-token cost.
 
 ## Install
