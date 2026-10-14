@@ -6,7 +6,7 @@ import type { Env } from "./env";
 import { checkoutRoot } from "./git-checkout";
 import { type Checkout, probeCheckout } from "./git-probe";
 import { originLabel } from "./git-remote";
-import type { Failure } from "./ingest-contract";
+import { type Failure, skippingGoneCheckouts } from "./ingest-contract";
 import { type Commit, readCommits } from "./ingest-git-source";
 import { isScratchRepo } from "./ingest-scratch";
 import { Timestamp, timestampMinus } from "./timestamp";
@@ -31,7 +31,8 @@ export function repoRoots(db: Database, env: Env): readonly string[] {
   return [...roots];
 }
 
-export function probeCheckouts(roots: readonly string[], fail: Failure): readonly Checkout[] {
+export function probeCheckouts(roots: readonly string[], failure: Failure): readonly Checkout[] {
+  const fail = skippingGoneCheckouts(failure);
   const checkouts: Checkout[] = [];
   for (const root of roots) {
     try {
@@ -43,7 +44,8 @@ export function probeCheckouts(roots: readonly string[], fail: Failure): readonl
   return checkouts;
 }
 
-export function ingestCommits(db: Database, checkouts: readonly Checkout[], fail: Failure): GitReport {
+export function ingestCommits(db: Database, checkouts: readonly Checkout[], failure: Failure): GitReport {
+  const fail = skippingGoneCheckouts(failure);
   const insertCommit = db.prepare(
     `INSERT INTO repo_commit (sha, repo, label, ts, author, subject, kind)
      VALUES (?, ?, ?, ?, ?, ?, ?)

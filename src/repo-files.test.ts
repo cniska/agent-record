@@ -84,19 +84,46 @@ describe("indexing what a repo tracks", () => {
 
   test("reports a repo git cannot read and still indexes the others", () => {
     const repo = repoWith(["a.ts"]);
-    const gone = repoWith(["b.ts"]);
-    const probedBeforeGone = probeCheckout(gone);
-    rmSync(gone, { recursive: true, force: true });
-    expect(existsSync(gone)).toBe(false);
+    const corrupt = repoWith(["b.ts"]);
+    const probedBeforeCorrupt = probeCheckout(corrupt);
+    writeFileSync(join(corrupt, ".git", "index"), "not an index");
     failures.length = 0;
     try {
       const db = freshDb();
-      expect(indexRepoFiles(db, [probedBeforeGone, probeCheckout(repo)], fail)).toEqual({
+      expect(indexRepoFiles(db, [probedBeforeCorrupt, probeCheckout(repo)], fail)).toEqual({
         repos: 1,
         files: 2,
         unchanged: 0,
       });
-      expect(failures).toEqual([{ path: gone, code: "git_failed" }]);
+      expect(failures).toEqual([{ path: corrupt, code: "git_failed" }]);
+      db.close();
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+      rmSync(corrupt, { recursive: true, force: true });
+    }
+  });
+
+  test("skips a checkout removed after it was probed, keeping the files it indexed before", () => {
+    const repo = repoWith(["a.ts"]);
+    const gone = repoWith(["b.ts"]);
+    failures.length = 0;
+    try {
+      const db = freshDb();
+      index(db, gone);
+      const probedBeforeGone = probeCheckout(gone);
+      writeFileSync(join(gone, "c.ts"), "x");
+      execFileSync("git", ["-C", gone, "add", "c.ts"]);
+      const probedAfterAdd = probeCheckout(gone);
+      expect(probedAfterAdd.indexStat).not.toBe(probedBeforeGone.indexStat);
+      rmSync(gone, { recursive: true, force: true });
+      expect(existsSync(gone)).toBe(false);
+      expect(indexRepoFiles(db, [probedAfterAdd, probeCheckout(repo)], fail)).toEqual({
+        repos: 1,
+        files: 2,
+        unchanged: 0,
+      });
+      expect(failures).toEqual([]);
+      expect(pathsIn(db, gone).filter((path) => !path.startsWith("/"))).toEqual([".gitignore", "b.ts"]);
       db.close();
     } finally {
       rmSync(repo, { recursive: true, force: true });

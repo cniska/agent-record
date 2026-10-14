@@ -46,7 +46,7 @@ The record is what agent workflows improve from. Its first use is search: an age
 - **FR-20** — `sync` records the tracked files of each of those checkouts.
 - **FR-21** — A checkout in a scratch location, such as a temporary directory, is not the owner's work and is not read.
 - **FR-22** — A checkout unchanged since the last sync is not read again.
-- **FR-23** — Git history is read from the checkouts on disk when `sync` runs, not from the archive. A checkout no longer on disk is not read: `sync` keeps the history it recorded before, and `rebuild` does not.
+- **FR-23** — Git history is read from the checkouts on disk when `sync` runs, not from the archive. A checkout no longer on disk, including one removed while `sync` runs, is not read and is not a failure: `sync` keeps the history and tracked files it recorded before, and `rebuild` does not.
 
 ### 2.4 Rebuild
 

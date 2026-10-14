@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { writeTransaction } from "./db";
 import { nulFields, ran } from "./git";
 import type { Checkout } from "./git-probe";
-import type { Failure } from "./ingest-contract";
+import { type Failure, skippingGoneCheckouts } from "./ingest-contract";
 
 export type RepoFileReport = { repos: number; files: number; unchanged: number };
 
@@ -11,7 +11,12 @@ export function trackedFiles(repo: string): string[] {
   return nulFields(ran(repo, ["ls-files", "-z"]), "git ls-files -z").map((path) => join(repo, path));
 }
 
-export function indexRepoFiles(db: Database, checkouts: readonly Checkout[], fail: Failure): RepoFileReport {
+export function indexRepoFiles(
+  db: Database,
+  checkouts: readonly Checkout[],
+  failure: Failure,
+): RepoFileReport {
+  const fail = skippingGoneCheckouts(failure);
   const indexUnchanged = db.query<{ one: number }, [string, string | null]>(
     "SELECT 1 AS one FROM checkout WHERE path = ? AND index_stat IS ?",
   );

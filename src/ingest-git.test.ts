@@ -164,6 +164,29 @@ describe("reading the repos the sessions ran in", () => {
     );
     db.close();
   });
+
+  test("skips a checkout removed while sync runs, keeping what it read before", () => {
+    const db = freshDb();
+    const failed: { path: string; code: unknown }[] = [];
+    const fail = (path: string, error: unknown) => failed.push({ path, code: errorCode(error) });
+    const healthy = repoWithCommit();
+    const removed = repoWithCommit("y");
+    commitsOf(db, [removed]);
+    commitIn(removed, "b.ts");
+    const checkouts = probeCheckouts([removed, healthy], fail);
+    rmSync(removed, { recursive: true });
+
+    expect(ingestCommits(db, checkouts, fail)).toEqual({ repos: 1, commits: 1, files: 1, unchanged: 0 });
+    expect(probeCheckouts([removed, healthy], fail).map((checkout) => checkout.path)).toEqual([healthy]);
+    expect(failed).toEqual([]);
+    expect(db.query("SELECT repo, subject FROM repo_commit ORDER BY repo").all()).toEqual(
+      [
+        { repo: healthy, subject: "feat: a" },
+        { repo: removed, subject: "feat: a" },
+      ].sort((a, b) => a.repo.localeCompare(b.repo)),
+    );
+    db.close();
+  });
 });
 
 describe("finding the checkouts the sessions ran in", () => {
