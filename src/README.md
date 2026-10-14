@@ -1,6 +1,6 @@
 # src/
 
-Flat, so a module is found by name. A file's prefix is its module: `db-read.ts` belongs to `db`, `ingest-sync.ts` to `ingest`. A module that is one file carries its bare name (`paths.ts`, `worktree.ts`). A test sits beside its module as `<module>.test.ts`; a file ending in `.test-support.ts` is shared by tests only.
+Flat, so a module is found by name. A file's prefix is its module: `db-read.ts` belongs to `db`, `ingest-sync.ts` to `ingest`. A module that is one file carries its bare name (`paths.ts`, `worktree.ts`). A test sits beside its module as `<module>.test.ts`; a file ending in `.test-support.ts` is shared by tests and `scripts/` only.
 
 Two of a module's files are named for their layer:
 

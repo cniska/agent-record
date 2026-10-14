@@ -6,7 +6,7 @@ const MAX_TERMS = 16;
 
 type Term = { readonly word: string; readonly quoted: string };
 
-function termsOf(words: string): { readonly terms: readonly Term[]; readonly dropped: number } {
+export function termsOf(words: string): { readonly terms: readonly Term[]; readonly dropped: number } {
   const all = [...new Set(words.split(/\s+/).filter(Boolean))];
   return {
     terms: all.slice(0, MAX_TERMS).map((word) => ({ word, quoted: `"${word.replaceAll('"', '""')}"` })),

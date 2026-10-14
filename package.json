@@ -9,11 +9,12 @@
   },
   "scripts": {
     "agent-record": "bun run src/cli.ts",
-    "format": "bunx biome check --write src acceptance",
-    "lint": "bunx biome check --error-on-warnings src acceptance",
+    "format": "bunx biome check --write src acceptance scripts",
+    "lint": "bunx biome check --error-on-warnings src acceptance scripts",
     "typecheck": "bunx tsc --noEmit",
     "test": "bun test",
     "acceptance": "bun test ./acceptance/*.acceptance.ts",
+    "search-recall": "bun run scripts/search-recall.ts",
     "check": "bun run lint && bun run typecheck && bun test",
     "prepare": "! git rev-parse --git-dir >/dev/null 2>&1 || git config core.hooksPath .githooks"
   },
