@@ -75,7 +75,7 @@ describe("reading an agent's preloaded skill", () => {
   const body =
     "Base directory for this skill: /Users/x/.claude/plugins/cache/m/acme/0815d96b8b74-5e689e2b/skills/plan\n\n# Plan\n";
 
-  test("names the skill from the command and hashes the body after it", () => {
+  test("hashes the body that follows the command", () => {
     expect(preloadOf([command, body])).toEqual({
       name: "plan",
       skillPath: "/Users/x/.claude/plugins/cache/m/acme/0815d96b8b74-5e689e2b/skills/plan",
@@ -83,6 +83,10 @@ describe("reading an agent's preloaded skill", () => {
       bodySha256: sha256("# Plan"),
       install: "0815d96b8b74-5e689e2b",
     });
+  });
+
+  test("names the skill by its directory, as every other load with a body", () => {
+    expect(preloadOf([command.replaceAll("acme:plan", "acme:other"), body])?.name).toBe("plan");
   });
 
   test("reads none from a body alone, a command alone, or a command without a body", () => {

@@ -80,10 +80,8 @@ export function parseSkillBody(text: string): ({ readonly name: string } & Skill
 export function preloadOf(texts: readonly string[]): ({ readonly name: string } & SkillBodyFields) | null {
   const [command, text] = texts;
   if (command === undefined || text === undefined) return null;
-  const named = skillFromCommand(command);
-  const body = parseSkillBody(text);
-  if (named === null || body === null) return null;
-  return { ...body, name: bareSkillName(named) };
+  if (skillFromCommand(command) === null) return null;
+  return parseSkillBody(text);
 }
 
 export function skillFromCommand(text: string): string | null {
