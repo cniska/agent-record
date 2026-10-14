@@ -35,6 +35,13 @@ function absoluteOr(raw: RawEnv, variable: string, home: string, fallback: reado
   return value !== undefined && isAbsolute(value) ? value : join(home, ...fallback);
 }
 
+const LAUNCHER_VARIABLE = "AGENT_RECORD_COMMAND";
+
+export function launcherOf(raw: RawEnv): string | null {
+  const launcher = raw[LAUNCHER_VARIABLE];
+  return launcher !== undefined && isAbsolute(launcher) ? launcher : null;
+}
+
 export function parseEnv(raw: RawEnv): Env {
   const home = homeOf(raw);
   return {

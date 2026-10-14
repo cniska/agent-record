@@ -2,6 +2,8 @@ import { allCommands, findCommand } from "./cli-commands";
 import { type Runtime, refuseUsage } from "./cli-contract";
 import { listing, writeError, writeResult } from "./cli-output";
 
+export const HELD_RECORD_WAIT_MS = 5000;
+
 export async function runCli(runtime: Runtime): Promise<void> {
   const [name, ...args] = process.argv.slice(2);
   if (name === undefined) {

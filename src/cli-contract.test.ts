@@ -94,9 +94,16 @@ describe("the command contract", () => {
     ]);
   });
 
-  test("only cli.ts reads the environment, and env.ts parses it", () => {
+  test("cli-release.ts only runs the CLI with a release's runtime", () => {
+    expect([...importsOf(readFileSync(join(SRC, "cli-release.ts"), "utf8"))].sort()).toEqual([
+      "./cli-main",
+      "./env",
+    ]);
+  });
+
+  test("only the two entries read the environment, and env.ts parses it", () => {
     const readers = sources().filter((path) => readsEnvironment(readFileSync(join(SRC, path), "utf8")));
-    expect(readers.sort()).toEqual(["cli.ts", "env.ts"]);
+    expect(readers.sort()).toEqual(["cli-release.ts", "cli.ts", "env.ts"]);
   });
 
   test("the environment check finds each way to read it, and not one named in a string", () => {

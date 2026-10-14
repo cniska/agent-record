@@ -18,33 +18,46 @@ afterEach(() => {
 });
 
 function host(dir: string): AgentHost {
-  return { env: scratchEnv(dir), bunPath: "/opt/bun/bin/bun", checkout: "/code/agent-record" };
+  return { env: scratchEnv(dir), invocation: ["/opt/homebrew/bin/agent-record"] };
 }
 
 describe("launchd agent", () => {
-  test("runs bun by absolute path, because launchd has no PATH to look it up on", () => {
-    const plist = agentPlist("/opt/homebrew/bin/bun", "/Users/x/code/agent-record", scratchEnv(newRoot()));
-    expect(plist).toContain("<string>/opt/homebrew/bin/bun</string>");
-    expect(plist).toContain("<string>/Users/x/code/agent-record/src/cli.ts</string>");
-    expect(plist).toContain("<string>sync</string>");
+  test("runs the invocation's sync by absolute path, because launchd has no PATH to look it up on", () => {
+    const plist = agentPlist(
+      ["/opt/homebrew/bin/bun", "/Users/x/code/agent-record/src/cli.ts"],
+      scratchEnv(newRoot()),
+    );
+    expect(plist).toContain(
+      "<array>\n    <string>/opt/homebrew/bin/bun</string>\n    <string>/Users/x/code/agent-record/src/cli.ts</string>\n    <string>sync</string>\n  </array>",
+    );
+    expect(plist).not.toContain("WorkingDirectory");
+  });
+
+  test("runs an installed release through its launcher alone, so no checkout or Bun is needed", () => {
+    const plist = agentPlist(["/opt/homebrew/bin/agent-record"], scratchEnv(newRoot()));
+    expect(plist).toContain(
+      "<array>\n    <string>/opt/homebrew/bin/agent-record</string>\n    <string>sync</string>\n  </array>",
+    );
   });
 
   test("syncs on a fifteen minute interval and at load", () => {
-    const plist = agentPlist("/bin/bun", "/repo", scratchEnv(newRoot()));
+    const plist = agentPlist(["/usr/local/bin/agent-record"], scratchEnv(newRoot()));
     expect(plist).toContain("<key>StartInterval</key>\n  <integer>900</integer>");
     expect(plist).toContain("<key>RunAtLoad</key>\n  <true/>");
   });
 
   test("captures output, since nobody is watching an unattended run", () => {
     const dir = newRoot();
-    const plist = agentPlist("/bin/bun", "/repo", scratchEnv(dir));
+    const plist = agentPlist(["/usr/local/bin/agent-record"], scratchEnv(dir));
     expect(plist).toContain(`<string>${join(dir, "state", "agent-record", "sync.log")}</string>`);
   });
 
-  test("runs the agent under the bun that runs agent-record, not whichever bun the caller's PATH finds", () => {
+  test("runs a checkout's agent under the bun that runs agent-record, not whichever bun the caller's PATH finds", () => {
     const env = scratchEnv(newRoot());
     expect(runCli(env, ["agent", "install"]).exitCode).toBe(0);
-    expect(readFileSync(agentPlistPath(env), "utf8")).toContain(`<string>${process.execPath}</string>`);
+    expect(readFileSync(agentPlistPath(env), "utf8")).toContain(
+      `<string>${process.execPath}</string>\n    <string>${join(import.meta.dir, "cli.ts")}</string>`,
+    );
   });
 
   test("writes the plist where launchd looks, and reports when it already matches", () => {

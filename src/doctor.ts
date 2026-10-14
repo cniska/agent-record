@@ -1,7 +1,7 @@
 import { dirname } from "node:path";
 import { type AgentPlan, bootoutCommand, bootstrapCommand, planAgent } from "./agent-launchd";
 import { unreachable } from "./assert";
-import type { Runtime } from "./cli-contract";
+import type { Invocation, Runtime } from "./cli-contract";
 import { CodedError, isRefusal } from "./coded-error";
 import type { HeldRecordWait } from "./db";
 import { readingRecord } from "./db-read";
@@ -79,7 +79,7 @@ function syncHealth(stamp: SyncStamp, now: Date): Health {
   }
 }
 
-function agentHealth(plan: AgentPlan, loaded: () => boolean): Health {
+function agentHealth(plan: AgentPlan, invocation: Invocation, loaded: () => boolean): Health {
   const name = "agent";
   switch (plan.state) {
     case "missing":
@@ -93,7 +93,7 @@ function agentHealth(plan: AgentPlan, loaded: () => boolean): Health {
       return {
         name,
         state: "warn",
-        detail: "the launchd agent runs a different checkout or Bun than this agent-record",
+        detail: `the launchd agent does not run ${[...invocation, "sync"].join(" ")}, the sync this agent-record schedules`,
         fix: `agent-record agent install, then ${bootoutCommand()} and ${bootstrapCommand(plan.path)}`,
       };
     case "current": {
@@ -149,7 +149,7 @@ export function recordDoctor(probes: DoctorProbes): DoctorReport {
   const checks = [
     recordHealth(env, probes),
     syncHealth(readSyncStamp(env), now()),
-    agentHealth(planAgent(probes), agentLoaded),
+    agentHealth(planAgent(probes), probes.invocation, agentLoaded),
     mirrorHealth(readMirror(env), now()),
   ];
   return { checks, failing: checks.filter(({ state }) => state === "fail").length };

@@ -1,5 +1,5 @@
 {
   "$schema": "node_modules/knip/schema.json",
-  "entry": ["acceptance/cli-no-wait.ts", "src/db-writer.test-support.ts"],
+  "entry": ["acceptance/cli-no-wait.ts", "src/cli-release.ts", "src/db-writer.test-support.ts"],
   "project": ["src/**/*.ts", "acceptance/**/*.ts", "scripts/**/*.ts"]
 }

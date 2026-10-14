@@ -34,6 +34,8 @@ const AGENT_INSTALL = z.union([
 
 const agentInstall = (home: Home) => succeeded(runCli(home, ["agent", "install"]), "agent", AGENT_INSTALL);
 
+const SOURCE_SYNC = [process.execPath, join(import.meta.dir, "..", "src", "cli.ts"), "sync"];
+
 const plistOf = (home: Home) => join(home.root, "Library", "LaunchAgents", "dev.agentrecord.sync.plist");
 
 const doctorCheck = (home: Home, name: string) => {
@@ -176,7 +178,7 @@ test("AC-18 doctor names the fix for each launchd agent state", () => {
     check: {
       name: "agent",
       state: "warn",
-      detail: "the launchd agent runs a different checkout or Bun than this agent-record",
+      detail: `the launchd agent does not run ${SOURCE_SYNC.join(" ")}, the sync this agent-record schedules`,
       fix:
         "agent-record agent install, then launchctl bootout gui/$(id -u)/dev.agentrecord.sync and " +
         `launchctl bootstrap gui/$(id -u) ${plist}`,
@@ -214,7 +216,9 @@ test("AC-20 agent install writes a missing agent, keeps the same one, and backs 
 
   expect(agentInstall(home)).toEqual(loading);
   const written = readFileSync(plist, "utf8");
-  expect(written).toContain("<string>sync</string>");
+  expect(written).toContain(
+    `<array>\n${SOURCE_SYNC.map((arg) => `    <string>${arg}</string>\n`).join("")}  </array>`,
+  );
   expect(written).toContain("<key>StartInterval</key>\n  <integer>900</integer>");
   expect(written).toContain("<key>RunAtLoad</key>\n  <true/>");
   expect(written).toContain(`<string>${join(home.state, "sync.log")}</string>`);

@@ -86,13 +86,13 @@ The record is what agent workflows improve from. Its first use is search: an age
 - **FR-45** — `doctor` reports four checks, each `ok`, `warn` or `fail` with a detail and a fix: the record, the last sync, the launchd agent, and the archive's mirror.
 - **FR-46** — The record check fails when the record is missing, of another schema version, or busy, with the refusal's fix.
 - **FR-47** — The sync check fails when no sync has finished, when the last sync failed, or when its outcome cannot be read; it warns when the last sync reported failed files, or finished longer ago than a threshold well past the agent's interval, which the detail states.
-- **FR-48** — The agent check warns when the launchd agent is missing, runs another checkout or Bun than this agent-record, or is written but not loaded.
+- **FR-48** — The agent check warns when the launchd agent is missing, runs another command than the `sync` this agent-record schedules (FR-51), or is written but not loaded.
 - **FR-49** — `doctor` exits 1 when any check fails, and 0 otherwise.
 - **FR-50** — Every `sync` and `rebuild` records its outcome, finished or failed, where `doctor` reads it.
 
 ### 2.9 Scheduling and plugin
 
-- **FR-51** — `agent install` writes a launchd agent that runs `sync` every 15 minutes and at login, logging to the state directory, and prints the command that loads it. A run with nothing to change says so.
+- **FR-51** — `agent install` writes a launchd agent that runs this agent-record's `sync` every 15 minutes and at login, logging to the state directory, and prints the command that loads it. A release runs its `sync` by the absolute path of the command it was installed as, the launcher on PATH or, run bare, the binary itself; a checkout runs Bun and its `src/cli.ts` by absolute path. A run with nothing to change says so.
 - **FR-52** — Replacing an existing, different launchd agent first keeps a backup copy of it.
 - **FR-53** — The Claude Code plugin starts `sync` in the background whenever a session starts, resumes, clears or compacts, and adds a note telling the agent to search the record before acting on a handoff or plan.
 - **FR-54** — The plugin does nothing when `agent-record` is not on PATH.
@@ -194,6 +194,10 @@ What the owner types while an agent works, kept beside the messages of §2.2 so 
 
 - **FR-90** — A message the owner typed into Claude Code while a turn ran, which the transcript keeps as a `queued_command` attachment marked human, is recorded as a user message the owner typed, at that line's time, with the text it carries. It counts within the task that was running, as an interrupt where a cause fits (FR-70), and never starts a task. What the harness or another agent queued that way, such as a task notification or a peer's message, is not.
 
+### 2.19 Install and update
+
+- **FR-91** — A release is one executable that runs every command on a machine with no Bun, no mise and no checkout of agent-record.
+
 ## 3. Non-functional requirements
 
 - **NF-1** — agent-record needs no network and no credential, and sends nothing off the machine itself: the mirror is a folder on this machine that a backup service, such as iCloud Drive, may carry off it (FR-61).
@@ -276,13 +280,14 @@ What the owner types while an agent works, kept beside the messages of §2.2 so 
 - **AC-57** — Sync a session whose owner asks Fable to validate a design, asks what Fable's review said, and pastes a handoff that asks Fable to plan: `signal second-read-asks` gives one ask over four tasks, and `signal-events second-read-asks` names the ask. (FR-89)
 - **AC-58** — Sync a session in which the owner queues a correction while a turn runs, and another that fits no cause, beside a task notification the harness queued: `search` finds the correction and not the notification, `signal-events owner-interrupts` counts it as `correct`, `signal owner-interrupts` counts one task, the other queued message starting none, and after `rebuild` `search` still finds it. (FR-37, FR-70, FR-90)
 - **AC-59** — Sync a session whose worker subagent starts a reviewer subagent, beside a subagent whose metadata names no starting call: the reviewer is recorded under the worker, the worker and the other under the top-level session, the sync counts one subagent it could not link, and after `rebuild` the same holds. (FR-12)
+- **AC-60** — Compile the release, and in a fresh home with only it on PATH beside the system's tools, `sync` a fixture home, run a query and `agent install`: the sync reads the fixture, the query finds its words, and the launchd agent runs the binary's `sync` by its absolute path. (FR-51, FR-91)
 
 ## 6. Deliverables
 
-- **D-1** — The `agent-record` CLI, run by Bun from a checkout and linked onto PATH by `mise install` in the primary checkout, never in a worktree.
+- **D-1** — The `agent-record` CLI, as a release, one executable per platform that needs no Bun and no checkout (FR-91); and as source, run by Bun from a checkout and linked onto PATH by `mise install` in the primary checkout, never in a worktree.
 - **D-2** — The `cniska-record` Claude Code plugin in `plugin/`.
 - **D-3** — `README.md` (install, commands, where the record and its mirror live, and how to restore the archive from the mirror), `AGENTS.md` (repository rules), `src/README.md` (module map), and this spec.
-- **D-4** — The test suite, run by `bun run check`, and the acceptance suite in `acceptance/`, run by `bun run acceptance`. The acceptance suite drives only the CLI, and reaches past it only in two files. `acceptance/cli.ts` plants or reads state no command makes or reports without waiting real time (the record's schema version, the last-sync stamp, the mirror's time, a held lock, a held record) or stands in for the OS (a `launchctl` on PATH). `acceptance/cli-no-wait.ts` runs the CLI with no wait for a held record, so a busy record is refused at once.
+- **D-4** — The test suite, run by `bun run check`, and the acceptance suite in `acceptance/`, run by `bun run acceptance`. The acceptance suite drives only the CLI, and reaches past it only in two files. `acceptance/cli.ts` plants or reads state no command makes or reports without waiting real time (the record's schema version, the last-sync stamp, the mirror's time, a held lock, a held record) or stands in for the OS (a `launchctl` on PATH), and compiles the release that runs where no Bun is (AC-60). `acceptance/cli-no-wait.ts` runs the CLI with no wait for a held record, so a busy record is refused at once.
 
 ## 7. Constraints (fixed)
 

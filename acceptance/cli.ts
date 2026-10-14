@@ -19,6 +19,8 @@ const FIXTURES = join(import.meta.dir, "fixtures");
 const SCRATCH_OUTSIDE_TEMP = join(import.meta.dir, ".scratch");
 const BUN_CACHE_OUTSIDE_HOMES = join(tmpdir(), "agent-record-acceptance-bun-cache");
 const CWD_PLACEHOLDER = "{{cwd}}";
+const BUILD_RELEASE = join(import.meta.dir, "..", "scripts", "build-compiled.sh");
+const SYSTEM_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
 
 const TOOL = z.enum(["claude", "codex", "grok", "pi", "omp"]);
 
@@ -197,6 +199,22 @@ export function runCli(home: Home, args: readonly string[], env: RunEnv = {}): R
   return { exitCode: ran.exitCode, stdout: ran.stdout.toString(), stderr: ran.stderr.toString() };
 }
 
+export function compiledRelease(dir: string): string {
+  const binary = join(dir, "agent-record");
+  const ran = Bun.spawnSync(["/bin/bash", BUILD_RELEASE, binary], {
+    env: { PATH: `${dirname(process.execPath)}:${SYSTEM_PATH}` },
+  });
+  expect({ exitCode: ran.exitCode, stderr: ran.stderr.toString() }).toMatchObject({ exitCode: 0 });
+  return binary;
+}
+
+export function runOnCleanMachine(home: Home, binary: string, args: readonly string[]): Ran {
+  const ran = Bun.spawnSync([binary, ...args], {
+    env: { PATH: `${dirname(binary)}:${SYSTEM_PATH}`, HOME: home.root },
+  });
+  return { exitCode: ran.exitCode, stdout: ran.stdout.toString(), stderr: ran.stderr.toString() };
+}
+
 const ERROR = z.strictObject({
   kind: z.enum(["refusal", "fault"]),
   code: z.string(),
@@ -224,7 +242,7 @@ const SYNC_RESULT = z.strictObject({
 
 type SyncResult = z.infer<typeof SYNC_RESULT>;
 
-const SYNC_COMMAND_RESULT = SYNC_RESULT.extend({
+export const SYNC_COMMAND_RESULT = SYNC_RESULT.extend({
   mirror: z.discriminatedUnion("state", [
     z.strictObject({ state: z.literal("mirrored"), path: z.string(), files: COUNT, bytes: COUNT }),
     z.strictObject({ state: z.literal("unreachable"), path: z.string(), detail: z.string() }),

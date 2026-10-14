@@ -141,7 +141,8 @@ describe("agent-record doctor", () => {
     expect(check(env, "agent", true)).toEqual({
       name: "agent",
       state: "warn",
-      detail: "the launchd agent runs a different checkout or Bun than this agent-record",
+      detail:
+        "the launchd agent does not run /opt/homebrew/bin/agent-record sync, the sync this agent-record schedules",
       fix: `agent-record agent install, then launchctl bootout gui/$(id -u)/dev.agentrecord.sync and launchctl bootstrap gui/$(id -u) ${plist}`,
     });
     installAgent(testRuntime(env));

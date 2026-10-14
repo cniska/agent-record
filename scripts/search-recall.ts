@@ -1,3 +1,4 @@
+import { HELD_RECORD_WAIT_MS } from "../src/cli-main";
 import { readingRecord } from "../src/db-read";
 import { parseEnv } from "../src/env";
 import { dbPath } from "../src/paths";
@@ -9,8 +10,6 @@ import {
   RECALL_FIXTURE,
   writeFixture,
 } from "../src/query-recall-fixture.test-support";
-
-const HELD_RECORD_WAIT_MS = 5000;
 
 const rate = (recall: Recall): string => `${recall.found}/${recall.cases}`;
 
