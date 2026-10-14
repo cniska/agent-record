@@ -15,7 +15,8 @@
     "test": "bun test",
     "acceptance": "bun test ./acceptance/*.acceptance.ts",
     "search-recall": "bun run scripts/search-recall.ts",
-    "check": "bun run lint && bun run typecheck && bun test",
+    "knip": "bunx --bun knip",
+    "check": "bun run lint && bun run typecheck && bun run knip && bun test",
     "prepare": "! git rev-parse --git-dir >/dev/null 2>&1 || git config core.hooksPath .githooks"
   },
   "devDependencies": {
@@ -23,6 +24,7 @@
     "@babel/types": "^7.29.8",
     "@biomejs/biome": "^2.5.14",
     "@types/bun": "^1.4.2",
+    "knip": "6.39.0",
     "typescript": "^7.0.2"
   },
   "dependencies": {
