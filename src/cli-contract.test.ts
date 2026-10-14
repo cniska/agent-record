@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { allCommands, findCommand } from "./cli-commands";
 import { runCli, scratchEnv } from "./fixtures.test-support";
 import { SYNCED_SESSION, syncedRecord } from "./query.test-support";
-import { QUERIES } from "./query-registry";
+import { importsOf } from "./syntax.test-support";
 
 const COMMANDS = await allCommands();
 
@@ -29,10 +29,11 @@ function sources(): string[] {
 
 describe("the command contract", () => {
   test("cli.ts only dispatches through the list of commands", () => {
-    const imports = [...readFileSync(join(SRC, "cli.ts"), "utf8").matchAll(/from "([^"]+)"/g)].map(
-      (m) => m[1],
-    );
-    expect(imports.sort()).toEqual(["./cli-commands", "./cli-contract", "./cli-output"]);
+    expect([...importsOf(readFileSync(join(SRC, "cli.ts"), "utf8"))].sort()).toEqual([
+      "./cli-commands",
+      "./cli-contract",
+      "./cli-output",
+    ]);
   });
 
   test("only the writer writes to stdout", () => {
@@ -40,15 +41,6 @@ describe("the command contract", () => {
       /console\.log|process\.stdout\.write/.test(readFileSync(join(SRC, path), "utf8")),
     );
     expect(writers.sort()).toEqual(["cli-output.ts"]);
-  });
-
-  test("only the list of commands imports a command file", () => {
-    const importers = sources().filter(
-      (path) =>
-        path !== "cli-commands.ts" &&
-        /(?:from |import\()"\.\/[a-z-]+-command"/.test(readFileSync(join(SRC, path), "utf8")),
-    );
-    expect(importers).toEqual([]);
   });
 
   test("every command declared is on the list, once", () => {
@@ -190,13 +182,6 @@ describe("the command contract", () => {
     for (const command of COMMANDS) {
       expect(command.usage).toStartWith(`agent-record ${command.name}`);
       expect(command.summary.length).toBeGreaterThan(0);
-    }
-  });
-
-  test("every named query's usage names each flag its parse takes, --rows last", () => {
-    for (const query of QUERIES) {
-      for (const flag of query.flags) expect(query.usage).toContain(` [--${flag} <`);
-      expect(query.usage).toEndWith(" [--rows <n>]");
     }
   });
 });

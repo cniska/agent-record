@@ -6,8 +6,7 @@ import { dirname, join } from "node:path";
 import { SCHEMA_SQL } from "./db-schema";
 import { repoWithWorktree } from "./git-fixtures.test-support";
 import { probeCheckout } from "./git-probe";
-import { ingestCommits } from "./ingest-git";
-import { ctx } from "./query.test-support";
+import { ctx, recordCommits } from "./query.test-support";
 import { priorArt } from "./query-prior-art";
 import { indexRepoFiles } from "./repo-files";
 
@@ -27,7 +26,7 @@ test("dates a file found only through a worktree by the commits of its repositor
     const fail = (path: string, error: unknown) => {
       throw new Error(`${path}: ${String(error)}`);
     };
-    ingestCommits(db, [worktree, repo].map(probeCheckout), fail);
+    recordCommits(db, [worktree, repo], fail);
     indexRepoFiles(db, [probeCheckout(worktree)], fail);
 
     const result = priorArt.run(db, { ...ctx, arg: "a.ts", home: dirname(repo) });

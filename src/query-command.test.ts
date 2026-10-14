@@ -67,6 +67,13 @@ describe("agent-record query", () => {
     });
   }
 
+  test("names in each query's usage every flag its parse takes, --rows last", () => {
+    for (const query of QUERIES) {
+      for (const flag of query.flags) expect(query.usage).toContain(` [--${flag} <`);
+      expect(query.usage).toEndWith(" [--rows <n>]");
+    }
+  });
+
   test("refuses a query while a writer holds the record, naming it busy", async () => {
     const { home, path } = recordWithCommit();
     const writer = new Database(path);

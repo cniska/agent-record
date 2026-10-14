@@ -2,6 +2,9 @@ import { Database } from "bun:sqlite";
 import { openDb } from "./db";
 import { SCHEMA_SQL } from "./db-schema";
 import { scratchEnv, writeClaudeTranscript, writeCodexRollout } from "./fixtures.test-support";
+import { probeCheckout } from "./git-probe";
+import type { Failure } from "./ingest-contract";
+import { ingestCommits } from "./ingest-git";
 import { sync } from "./ingest-sync";
 import { dbPath } from "./paths";
 import type { QueryContext } from "./query-contract";
@@ -29,6 +32,10 @@ export function seeded(): Database {
     ["Injected reminder about the checkout."],
   );
   return db;
+}
+
+export function recordCommits(db: Database, checkouts: readonly string[], fail: Failure): void {
+  ingestCommits(db, checkouts.map(probeCheckout), fail);
 }
 
 export const ctx: QueryContext = { arg: "", flags: {}, home: "/home", maxRows: 40 };
