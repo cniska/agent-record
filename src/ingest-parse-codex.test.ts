@@ -284,6 +284,15 @@ describe("parseCodexChunk", () => {
     expect(parsed.messages).toMatchObject([{ id: `${THREAD}:6`, role: "assistant" }]);
   });
 
+  test("records a message whose text parts are empty as having no text", () => {
+    const line = JSON.stringify({
+      type: "response_item",
+      timestamp: "2026-09-16T10:00:00.000Z",
+      payload: { type: "message", role: "assistant", content: [{ type: "output_text", text: "" }] },
+    });
+    expect(parseCodexChunk([line], 5, FRESH).messages).toMatchObject([{ id: `${THREAD}:5`, text: null }]);
+  });
+
   test("keeps a message line whose payload id and content blocks are null", () => {
     const line = JSON.stringify({
       type: "response_item",

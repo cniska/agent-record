@@ -144,8 +144,7 @@ function commandText(value: unknown): string | null {
 
 function visibleText(content: (z.infer<typeof CodexContent> | null)[] | null | undefined): string | null {
   if (!Array.isArray(content)) return null;
-  const parts = content.flatMap((b) => (b?.text !== undefined ? [b.text] : []));
-  return parts.length > 0 ? parts.join("\n") : null;
+  return nonEmpty(content.flatMap((b) => (b?.text !== undefined ? [b.text] : [])).join("\n"));
 }
 
 type CodexThread = { readonly id: SessionId; readonly state: CodexState };
