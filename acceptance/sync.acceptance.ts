@@ -468,10 +468,12 @@ test("AC-52 a subagent's hand-back report is its last message text, through sync
     where s.agent_type = 'acme:reviewer' and m.role = 'assistant' and m.text is not null
     order by m.ts desc limit 1`;
 
+  const said = `Reviewed.\n${report}`;
+
   sync(home);
-  expect(rowsOf(home, lastText)).toEqual([[report]]);
+  expect(rowsOf(home, lastText)).toEqual([[said]]);
   rebuild(home);
-  expect(rowsOf(home, lastText)).toEqual([[report]]);
+  expect(rowsOf(home, lastText)).toEqual([[said]]);
 });
 
 test("AC-53 a shell call's exit code is recorded from every tool that writes one, through sync and rebuild", () => {
@@ -526,6 +528,18 @@ test("AC-53 a shell call's exit code is recorded from every tool that writes one
             rawOutput: { type: "Bash", exit_code: 3 },
           },
           _meta: { eventId: "g-failed", agentTimestampMs: 1789553070000 },
+        },
+      },
+    ],
+    [
+      GROK_UPDATES,
+      {
+        timestamp: 1789553071,
+        method: "session/update",
+        params: {
+          sessionId: "grok-session",
+          update: { sessionUpdate: "tool_call_update", toolCallId: "grok-failed", status: "completed" },
+          _meta: { eventId: "g-failed-again", agentTimestampMs: 1789553071000 },
         },
       },
     ],

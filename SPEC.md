@@ -173,7 +173,7 @@ A version of a skill is its body's hash (FR-17), with the plugin install it was 
 What an agent handed back, and how its commands ended, kept beside the messages of §2.2 so a run's outcome is read from the record, not its transcript.
 
 - **FR-84** — A subagent's hand-back report, which Claude Code carries only in the input of its `SubagentHandback` call, is the text of the assistant message that makes the call, after any text that message shows, so a subagent's report is its last assistant message text.
-- **FR-85** — A shell call's exit code is recorded where its tool's transcript states one: Codex for every command; Grok for a finished shell command; omp in a failed command's details; pi and Claude Code only for a failed command, in the line pi ends its output with and the line Claude Code starts it with. A tool that states no code leaves it empty, as Claude Code and pi do for a command that succeeded, and Claude Code for a command whose non-zero exit it reports as no error, such as a search that matched nothing; it is never inferred from whether the call failed.
+- **FR-85** — A shell call's exit code is recorded where its tool's transcript states one: Codex for every command; Grok for a finished shell command; omp in a result's details, which it writes for a failed command; pi and Claude Code only for a failed command, in the line pi ends its output with and the line Claude Code starts it with. A tool that states no code leaves it empty, as Claude Code and pi do for a command that succeeded, and Claude Code for a command whose non-zero exit it reports as no error, such as a search that matched nothing; it is never inferred from whether the call failed.
 
 ## 3. Non-functional requirements
 

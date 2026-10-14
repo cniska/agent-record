@@ -62,6 +62,8 @@ function linesOf(sessionId: string, cwd: string, steps: readonly Step[], prefix:
     if ("agent" in step) return [assistant(step.at, [{ type: "text", text: step.agent }])];
     if ("handback" in step) {
       return [
+        assistant(step.at, [{ type: "thinking", thinking: "the diff is small" }]),
+        assistant(step.at, [{ type: "text", text: "Reviewed." }]),
         assistant(step.at, [
           { type: "tool_use", id: tool, name: "SubagentHandback", input: { message: step.handback } },
         ]),
