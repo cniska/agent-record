@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { invariant } from "./assert";
-import type { Invocation, Runtime } from "./cli-contract";
+import type { ProgramArguments, Runtime } from "./cli-contract";
 import type { Env } from "./env";
 import { errorDetail } from "./error-read";
 import { copyBackup } from "./file-backup";
@@ -24,8 +24,8 @@ function xmlText(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-export function agentPlist(invocation: Invocation, env: Env): string {
-  const args = [...invocation, "sync"];
+export function agentPlist(command: ProgramArguments, env: Env): string {
+  const args = [...command, "sync"];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -58,11 +58,11 @@ function agentState(path: string, contents: string): AgentState {
   return readFileSync(path, "utf8") === contents ? "current" : "stale";
 }
 
-export type AgentHost = Pick<Runtime, "env" | "invocation">;
+export type AgentHost = Pick<Runtime, "env" | "command">;
 
-export function planAgent({ env, invocation }: AgentHost): AgentPlan {
+export function planAgent({ env, command }: AgentHost): AgentPlan {
   const path = agentPlistPath(env);
-  const contents = agentPlist(invocation, env);
+  const contents = agentPlist(command, env);
   return { path, contents, state: agentState(path, contents) };
 }
 

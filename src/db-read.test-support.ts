@@ -17,7 +17,7 @@ export function testRuntime(env: Env): Runtime {
     now: () => new Date("2026-10-11T12:00:00Z"),
     heldRecordWaitMs: NO_WAIT_MS,
     env,
-    invocation: ["/opt/homebrew/bin/agent-record"],
+    command: ["/opt/homebrew/bin/agent-record"],
   };
 }
 

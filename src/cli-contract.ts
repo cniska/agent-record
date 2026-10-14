@@ -12,10 +12,10 @@ export type Runtime = {
   readonly now: () => Date;
   readonly heldRecordWaitMs: number;
   readonly env: Env;
-  readonly invocation: Invocation;
+  readonly command: ProgramArguments;
 };
 
-export type Invocation = readonly [string, ...string[]];
+export type ProgramArguments = readonly [string, ...string[]];
 
 export type CommandResult = { readonly value: unknown; readonly exitCode: 0 | 1 };
 

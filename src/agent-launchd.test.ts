@@ -18,11 +18,11 @@ afterEach(() => {
 });
 
 function host(dir: string): AgentHost {
-  return { env: scratchEnv(dir), invocation: ["/opt/homebrew/bin/agent-record"] };
+  return { env: scratchEnv(dir), command: ["/opt/homebrew/bin/agent-record"] };
 }
 
 describe("launchd agent", () => {
-  test("runs the invocation's sync by absolute path, because launchd has no PATH to look it up on", () => {
+  test("runs the command's sync by absolute path, because launchd has no PATH to look it up on", () => {
     const plist = agentPlist(
       ["/opt/homebrew/bin/bun", "/Users/x/code/agent-record/src/cli.ts"],
       scratchEnv(newRoot()),

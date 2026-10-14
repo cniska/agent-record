@@ -8,5 +8,5 @@ await runCli({
   now: () => new Date(),
   heldRecordWaitMs: NO_WAIT_MS,
   env: parseEnv(process.env),
-  invocation: [process.execPath, resolve(import.meta.dir, "..", "src", "cli.ts")],
+  command: [process.execPath, resolve(import.meta.dir, "..", "src", "cli.ts")],
 });
