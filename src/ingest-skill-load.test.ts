@@ -1,7 +1,6 @@
-import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { BARE_SKILL_NAME_SQL, bareSkillName, type SkillBody, skillBodyOf } from "./ingest-skill-load";
+import { bareSkillName, type SkillBody, skillBodyOf } from "./ingest-skill-load";
 
 const SKILL_FILE_BODY = "# Coordinate\n\nRun the work.\n\n## Red flags\n\n- A stalled agent";
 
@@ -53,22 +52,6 @@ describe("naming a skill", () => {
   test("drops the plugin a name is qualified by", () => {
     expect(bareSkillName("cniska-skills:coordinate")).toBe("coordinate");
     expect(bareSkillName("coordinate")).toBe("coordinate");
-  });
-
-  test("drops it the same way in SQL", () => {
-    const db = new Database(":memory:");
-    try {
-      const bare = (name: string) =>
-        db
-          .query<{ bare: string }, [string]>(
-            `SELECT ${BARE_SKILL_NAME_SQL} AS bare FROM (SELECT ? AS skill_name)`,
-          )
-          .get(name)?.bare;
-      expect(bare("cniska-skills:coordinate")).toBe("coordinate");
-      expect(bare("coordinate")).toBe("coordinate");
-    } finally {
-      db.close();
-    }
   });
 });
 

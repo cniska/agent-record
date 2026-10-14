@@ -8,7 +8,7 @@ import type { SessionId, ToolCallId } from "./ingest-ids";
 import { type ReadResult, readNewLines } from "./ingest-read-new";
 import { advance, type Position } from "./ingest-read-plan";
 import type { ChunkParser, ParsedChunk, SessionFacts, ToolCallRow } from "./ingest-session-records";
-import { BARE_SKILL_NAME_SQL, type SkillLoadRow } from "./ingest-skill-load";
+import type { SkillLoadRow } from "./ingest-skill-load";
 import type { Kind, Tool } from "./ingest-tools";
 import type { Timestamp } from "./timestamp";
 import { projectOf, worktreeOf } from "./worktree";
@@ -245,13 +245,9 @@ export function createIngester(db: Database, home: string) {
      ${skillLoadConflict}`,
   );
   const insertCalledSkillBody = db.prepare(
-    `INSERT INTO skill_load (session_id, tool_call_id, ts, model, skill_name, how,
-       body_chars, body_sha256, skill_path, install)
-     SELECT $sessionId, id, ts_call, model, ${BARE_SKILL_NAME_SQL}, 'model',
-       $bodyChars, $bodySha256, $skillPath, $install
-     FROM tool_call
-     WHERE id = $toolCallId AND tool_name = 'Skill' AND ts_call IS NOT NULL AND skill_name IS NOT NULL
-     ${skillLoadConflict}`,
+    `UPDATE skill_load
+     SET body_chars = $bodyChars, body_sha256 = $bodySha256, skill_path = $skillPath, install = $install
+     WHERE session_id = $sessionId AND tool_call_id = $toolCallId AND how = 'model'`,
   );
   const insertPreload = db.prepare(
     `INSERT INTO skill_load (session_id, message_id, ts, model, skill_name, how,

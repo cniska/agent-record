@@ -60,8 +60,6 @@ function withoutAppendedArguments(body: string): string {
 
 export const bareSkillName = (name: string): string => name.slice(name.indexOf(QUALIFIER) + 1);
 
-export const BARE_SKILL_NAME_SQL = `substr(skill_name, instr(skill_name, '${QUALIFIER}') + 1)`;
-
 type ParsedBody = { readonly name: string } & SkillBodyFields;
 
 export type SkillBody = { readonly kind: "preload" | "injected" } & ParsedBody;
