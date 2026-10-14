@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { invariant } from "./assert";
 import { readingRecord } from "./db-read";
-import { NO_WAIT_MS } from "./db-read.test-support";
+import { NO_WAIT } from "./db-read.test-support";
 import { SCHEMA_SQL } from "./db-schema";
 import { ctx, SYNCED_SESSION, seeded, syncedRecord } from "./query.test-support";
 import type { QueryResult } from "./query-contract";
@@ -203,7 +203,7 @@ describe("thread", () => {
   test("reads what was said, and centers on a timestamp when given one", () => {
     const root = mkdtempSync(join(tmpdir(), "agent-record-q-"));
     try {
-      readingRecord(syncedRecord(root), NO_WAIT_MS, (db) => {
+      readingRecord(syncedRecord(root), NO_WAIT, (db) => {
         const whole = thread.run(db, { ...ctx, arg: SYNCED_SESSION.slice(0, 8) });
         expect(whole.rows.length).toBeGreaterThan(0);
         const texts = whole.rows.map((r) => String(r[3]));

@@ -20,7 +20,7 @@ export const queryCommand: Command = {
     const { arg, flags } = parseArg(rest, ["rows", ...query.flags], query.usage);
     const { rows, ...own } = flags;
     return {
-      value: runQuery(query, { arg, flags: own, maxRows: rowsOf(rows) }, runtime.heldRecordWaitMs),
+      value: runQuery(query, { arg, flags: own, maxRows: rowsOf(rows) }, runtime),
       exitCode: 0,
     };
   },

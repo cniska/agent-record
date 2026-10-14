@@ -1,3 +1,4 @@
+import type { HeldRecordWait } from "./db";
 import { readingRecord } from "./db-read";
 import { dbPath, resolveHomeDir } from "./paths";
 import type { CappedResult, Query, QueryContext } from "./query-contract";
@@ -11,9 +12,9 @@ export function listQueries() {
 export function runQuery(
   query: Query,
   asked: Omit<QueryContext, "home">,
-  heldRecordWaitMs: number,
+  wait: HeldRecordWait,
 ): CappedResult {
-  return readingRecord(dbPath(), heldRecordWaitMs, (db) =>
+  return readingRecord(dbPath(), wait, (db) =>
     capResult(query.run(db, { ...asked, home: resolveHomeDir() }), asked.maxRows),
   );
 }

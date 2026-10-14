@@ -4,13 +4,12 @@ import { listing, writeError, writeResult } from "./cli-output";
 
 export async function runCli(runtime: Runtime): Promise<void> {
   const [name, ...args] = process.argv.slice(2);
-  const command = await findCommand(name);
-
   if (name === undefined) {
     writeResult("agent-record", listing(await allCommands()));
     process.exitCode = 0;
     return;
   }
+  const command = await findCommand(name);
   if (command === undefined) {
     process.exitCode = writeError("agent-record", refuseUsage("unknown_command", { name }));
     return;

@@ -2,6 +2,7 @@ import { type AgentPlan, bootoutCommand, bootstrapCommand, planAgent } from "./a
 import { unreachable } from "./assert";
 import type { Runtime } from "./cli-contract";
 import { CodedError, isRefusal } from "./coded-error";
+import type { HeldRecordWait } from "./db";
 import { readingRecord } from "./db-read";
 import { SCHEMA_VERSION } from "./db-schema";
 import { dbPath, type Env } from "./paths";
@@ -31,9 +32,9 @@ function refusalOr<T>(probe: () => T): T | CodedError {
   }
 }
 
-function recordHealth(env: Env, heldRecordWaitMs: number): Health {
+function recordHealth(env: Env, wait: HeldRecordWait): Health {
   const name = "record";
-  const read = refusalOr(() => readingRecord(dbPath(env), heldRecordWaitMs, () => null));
+  const read = refusalOr(() => readingRecord(dbPath(env), wait, () => null));
   if (read instanceof CodedError) return { name, state: "fail", detail: read.message, fix: read.resolve };
   return { name, state: "ok", detail: `schema version ${SCHEMA_VERSION}`, fix: null };
 }
@@ -108,9 +109,10 @@ function agentHealth(plan: AgentPlan, loaded: () => boolean): Health {
   }
 }
 
-export function recordDoctor(env: Env, { agentLoaded, now, heldRecordWaitMs }: DoctorProbes): DoctorReport {
+export function recordDoctor(env: Env, probes: DoctorProbes): DoctorReport {
+  const { agentLoaded, now } = probes;
   const checks = [
-    recordHealth(env, heldRecordWaitMs),
+    recordHealth(env, probes),
     syncHealth(readSyncStamp(env), now()),
     agentHealth(planAgent(env), () => agentLoaded(env)),
   ];

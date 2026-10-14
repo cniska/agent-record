@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import type { Command, CommandResult } from "./cli-contract";
 import { parseArg } from "./cli-flags";
+import type { HeldRecordWait } from "./db";
 import { sqliteCode } from "./db-error";
 import { readingRecord } from "./db-read";
 import { errorDetail } from "./error-read";
@@ -43,8 +44,8 @@ function readRows(db: Database, statement: string, maxRows: number): Rows {
   }
 }
 
-function answer(path: string, heldRecordWaitMs: number, statement: string, maxRows: number): CommandResult {
-  return readingRecord(path, heldRecordWaitMs, (db) => {
+function answer(path: string, wait: HeldRecordWait, statement: string, maxRows: number): CommandResult {
+  return readingRecord(path, wait, (db) => {
     const { columns, rows } = readRows(db, statement, maxRows);
     const result = {
       denominator: SQL_DENOMINATOR,
@@ -63,6 +64,6 @@ export const sqlCommand: Command = {
   run(args, runtime) {
     const { arg: statement, flags } = parseArg(args, ["rows"], sqlCommand.usage);
     const maxRows = rowsOf(flags.rows);
-    return answer(dbPath(), runtime.heldRecordWaitMs, statement, maxRows);
+    return answer(dbPath(), runtime, statement, maxRows);
   },
 };

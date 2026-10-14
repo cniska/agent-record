@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { invariant } from "./assert";
 import { readingRecord } from "./db-read";
-import { NO_WAIT_MS } from "./db-read.test-support";
+import { NO_WAIT } from "./db-read.test-support";
 import { ctx, seeded, syncedRecord } from "./query.test-support";
 import type { QueryContext, QueryResult } from "./query-contract";
 import { findQuery } from "./query-registry";
@@ -194,7 +194,7 @@ describe("search", () => {
   test("finds a message by its words and keeps the index level with the table", () => {
     const root = mkdtempSync(join(tmpdir(), "agent-record-q-"));
     try {
-      readingRecord(syncedRecord(root), NO_WAIT_MS, (db) => {
+      readingRecord(syncedRecord(root), NO_WAIT, (db) => {
         const hit = search.run(db, { ...ctx, arg: "parser" });
         expect(hit.rows.length).toBeGreaterThan(0);
         expect(String(hit.rows[0]?.[hit.columns.indexOf("text")])).toContain("parser");

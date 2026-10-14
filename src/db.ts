@@ -49,10 +49,11 @@ export function openRecordFile(
   }
 }
 
-export function openDb(
-  path: string,
-  opts: { readonly forRebuild?: boolean; readonly heldRecordWaitMs: number },
-): Database {
+export type HeldRecordWait = { readonly heldRecordWaitMs: number };
+
+export type RecordOpening = HeldRecordWait & { readonly forRebuild?: boolean };
+
+export function openDb(path: string, opts: RecordOpening): Database {
   mkdirSync(dirname(path), { recursive: true });
   const db = openRecordFile(path, {
     create: true,
@@ -93,11 +94,7 @@ export function refusingBusy<T>(path: string, run: () => T): T {
   }
 }
 
-export function withDb<T>(
-  path: string,
-  use: (db: Database) => T,
-  opts: { readonly forRebuild?: boolean; readonly heldRecordWaitMs: number },
-): T {
+export function withDb<T>(path: string, use: (db: Database) => T, opts: RecordOpening): T {
   return refusingBusy(path, () => {
     const db = openDb(path, opts);
     try {

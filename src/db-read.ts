@@ -1,9 +1,13 @@
 import type { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
-import { isFresh, openRecordFile, refuseOtherVersion, refusingBusy } from "./db";
+import { type HeldRecordWait, isFresh, openRecordFile, refuseOtherVersion, refusingBusy } from "./db";
 import { refuseRecord } from "./db-contract";
 
-export function readingRecord<T>(path: string, heldRecordWaitMs: number, use: (db: Database) => T): T {
+export function readingRecord<T>(
+  path: string,
+  { heldRecordWaitMs }: HeldRecordWait,
+  use: (db: Database) => T,
+): T {
   if (!existsSync(path)) throw refuseRecord("no_database", { path });
   return refusingBusy(path, () => {
     const db = openRecordFile(path, { readwrite: true, create: false, heldRecordWaitMs });
