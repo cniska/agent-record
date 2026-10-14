@@ -18,7 +18,7 @@ const SyncOutcome = z.discriminatedUnion("kind", [
   }),
   z.strictObject({ kind: z.literal("failed"), at: At, error: ErrorRecord }),
 ]);
-export type SyncOutcome = z.infer<typeof SyncOutcome>;
+type SyncOutcome = z.infer<typeof SyncOutcome>;
 
 export type SyncStamp =
   | { readonly kind: "never" }

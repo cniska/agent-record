@@ -4,7 +4,7 @@ import type { Home } from "./cli";
 
 const PLUGIN_DATA = [".claude", "plugins", "data"];
 
-export const INSTALL = "cniska-skills-cniska";
+const INSTALL = "cniska-skills-cniska";
 
 type Fields = Readonly<Record<string, unknown>>;
 

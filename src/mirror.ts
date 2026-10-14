@@ -17,7 +17,7 @@ import { copyIfChanged, PART_SUFFIX } from "./file-copy";
 import { parseJson } from "./ingest-source-read";
 import { archiveDir, mirrorArchiveDir, mirrorStampPath } from "./paths";
 
-export type MirrorReport =
+type MirrorReport =
   | { readonly state: "mirrored"; readonly path: string; readonly files: number; readonly bytes: number }
   | { readonly state: "unreachable"; readonly path: string; readonly detail: string };
 

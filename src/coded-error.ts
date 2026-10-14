@@ -51,7 +51,7 @@ export function isRefusal(error: unknown): error is CodedError {
   return error instanceof CodedError && error.kind === "refusal";
 }
 
-export type ErrorTable<Metas extends Record<string, object>> = {
+type ErrorTable<Metas extends Record<string, object>> = {
   readonly [Code in keyof Metas]: {
     readonly message: (meta: Metas[Code]) => string;
     readonly resolve: (meta: Metas[Code]) => string;

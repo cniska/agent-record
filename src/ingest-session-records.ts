@@ -5,8 +5,6 @@ import { Timestamp } from "./timestamp";
 
 export const ROLES = ["user", "assistant"] as const;
 
-export type Role = (typeof ROLES)[number];
-
 const nullableString = z.string().nullable();
 const nullableNumber = z.number().nullable();
 const nullableTime = Timestamp.nullable();

@@ -2,9 +2,9 @@ import { unreachable } from "./assert";
 import { GATES, type Gate } from "./ingest-event-kinds";
 import type { GateRow, HookRow, VerdictRow } from "./query-signal-record";
 
-export const UPHELD = "upheld";
+const UPHELD = "upheld";
 
-export const UNFIXED = "unfixed";
+const UNFIXED = "unfixed";
 
 export const PENDING = "pending";
 

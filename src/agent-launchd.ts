@@ -16,7 +16,7 @@ export function agentPlistPath(env: Env): string {
   return join(env.home, "Library", "LaunchAgents", `${AGENT_LABEL}.plist`);
 }
 
-export function syncLogPath(env: Env): string {
+function syncLogPath(env: Env): string {
   return join(stateDir(env), "sync.log");
 }
 
@@ -51,7 +51,7 @@ ${args.map((a) => `    <string>${xmlText(a)}</string>`).join("\n")}
 `;
 }
 
-export type AgentState = "missing" | "stale" | "current";
+type AgentState = "missing" | "stale" | "current";
 
 export type AgentPlan = { path: string; contents: string; state: AgentState };
 

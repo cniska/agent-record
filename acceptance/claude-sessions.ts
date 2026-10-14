@@ -20,7 +20,7 @@ type Usage = {
   readonly output_tokens: number;
 };
 
-export type Subagent = { readonly id: string; readonly agentType: string; readonly steps: readonly Step[] };
+type Subagent = { readonly id: string; readonly agentType: string; readonly steps: readonly Step[] };
 
 export type ClaudeSession = {
   readonly id: string;
