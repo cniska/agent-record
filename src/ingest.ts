@@ -244,7 +244,7 @@ export function createIngester(db: Database, home: string) {
      WHERE id = $parentUuid
      ${skillLoadConflict}`,
   );
-  const insertCalledSkillBody = db.prepare(
+  const updateCalledSkillBody = db.prepare(
     `UPDATE skill_load
      SET body_chars = $bodyChars, body_sha256 = $bodySha256, skill_path = $skillPath, install = $install
      WHERE session_id = $sessionId AND tool_call_id = $toolCallId AND how = 'model'`,
@@ -351,7 +351,7 @@ export function createIngester(db: Database, home: string) {
         });
         return;
       case "called-body":
-        insertCalledSkillBody.run({
+        updateCalledSkillBody.run({
           $sessionId: spec.sessionId,
           $toolCallId: l.toolCallId,
           $bodyChars: l.bodyChars,
