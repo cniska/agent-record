@@ -792,6 +792,81 @@ describe("ingest", () => {
       db.close();
     }
   });
+
+  describe("a subagent another subagent started", () => {
+    const at = (minute: number): string => `2026-09-16T10:${minute}:00.000Z`;
+
+    const spawning = (toolUseId: string, minute: number): unknown => ({
+      type: "assistant",
+      sessionId: SESSION,
+      uuid: `${toolUseId}-turn`,
+      timestamp: at(minute),
+      message: {
+        id: `${toolUseId}-msg`,
+        model: "claude-opus-5",
+        content: [{ type: "tool_use", id: toolUseId, name: "Agent", input: { prompt: "review the diff" } }],
+      },
+    });
+
+    function writeSubagent(env: Env, agentId: string, lines: unknown[], meta: object): void {
+      const dir = join(claudeProjectsDir(env), "-Users-x-code-demo", SESSION, "subagents");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(
+        join(dir, `agent-${agentId}.jsonl`),
+        `${lines.map((l) => JSON.stringify(l)).join("\n")}\n`,
+      );
+      writeFileSync(join(dir, `agent-${agentId}.meta.json`), JSON.stringify(meta));
+    }
+
+    const parentOf = (db: Database, agentId: string) =>
+      db.prepare("SELECT parent_id FROM session WHERE id = ?").get(`${agentId}@${SESSION}`);
+
+    test("is recorded under the subagent whose Agent call started it, read before or after it", () => {
+      const env = scratchEnv(newRoot());
+      writeClaudeTranscript(env, "-Users-x-code-demo", SESSION, [
+        ...claudeTranscriptLines(SESSION),
+        spawning("toolu-worker", 10),
+      ]);
+      writeSubagent(env, "areviewer", [spawning("toolu-unused", 12)], {
+        agentType: "acme:reviewer",
+        toolUseId: "toolu-reviewer",
+        spawnDepth: 2,
+      });
+      writeSubagent(env, "zworker", [spawning("toolu-reviewer", 11)], {
+        agentType: "general-purpose",
+        toolUseId: "toolu-worker",
+        spawnDepth: 1,
+      });
+      const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
+      try {
+        expect(sync(db, env).unlinkedSubagents).toBe(0);
+        expect(parentOf(db, "areviewer")).toEqual({ parent_id: `zworker@${SESSION}` });
+        expect(parentOf(db, "zworker")).toEqual({ parent_id: SESSION });
+        expect(sync(db, env).unlinkedSubagents).toBe(0);
+        expect(parentOf(db, "areviewer")).toEqual({ parent_id: `zworker@${SESSION}` });
+      } finally {
+        db.close();
+      }
+    });
+
+    test("whose starting call is not recorded keeps the top-level parent, and the sync counts it", () => {
+      const env = scratchEnv(newRoot());
+      writeClaudeTranscript(env, "-Users-x-code-demo", SESSION);
+      writeSubagent(env, "aworker", [spawning("toolu-other", 11)], {
+        agentType: "general-purpose",
+        toolUseId: "toolu-gone",
+      });
+      writeSubagent(env, "bold", [spawning("toolu-older", 12)], { agentType: "Explore" });
+      const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
+      try {
+        expect(sync(db, env).unlinkedSubagents).toBe(2);
+        expect(parentOf(db, "aworker")).toEqual({ parent_id: SESSION });
+        expect(parentOf(db, "bold")).toEqual({ parent_id: SESSION });
+      } finally {
+        db.close();
+      }
+    });
+  });
 });
 
 describe("the archive", () => {

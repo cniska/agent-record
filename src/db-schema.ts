@@ -4,7 +4,7 @@ import { HOWS } from "./ingest-skill-load";
 import { KINDS, TOOLS } from "./ingest-tools";
 
 const sqlList = (values: readonly string[]): string => values.map((value) => `'${value}'`).join(",");
-export const SCHEMA_VERSION = 14;
+export const SCHEMA_VERSION = 15;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS source_file (
@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS session (
   tool            TEXT NOT NULL CHECK (tool IN (${sqlList(TOOLS)})),
   parent_id       TEXT REFERENCES session(id),
   agent_type      TEXT,
+  spawn_call      TEXT,
   cwd             TEXT,
   worktree        TEXT,
   project         TEXT,

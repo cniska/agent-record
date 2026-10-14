@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { basename } from "node:path";
 import type { SourceFile } from "./ingest";
 import { faultIngest } from "./ingest-contract";
-import { SessionId, sessionIdOf } from "./ingest-ids";
+import { type SessionId, sessionIdOf, TopLevelSessionId } from "./ingest-ids";
 import { CodexState, NO_CODEX_STATE, parseCodexChunk } from "./ingest-parse-codex";
 import { parseJson, readingSource } from "./ingest-source-read";
 
@@ -11,7 +11,7 @@ const ROLLOUT_NAME = /^rollout-[0-9T:-]+-([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f
 
 export function threadIdOf(path: string): SessionId | null {
   const thread = ROLLOUT_NAME.exec(basename(path, ".jsonl"))?.[1];
-  return thread === undefined ? null : SessionId.parse(thread);
+  return thread === undefined ? null : TopLevelSessionId.parse(thread);
 }
 
 function readState(thread: SessionId, raw: string | null): CodexState {
@@ -40,6 +40,7 @@ export function listCodexRollouts(paths: readonly string[]): SourceFile[] {
         sessionId: threadId,
         parentId: null,
         agentType: null,
+        spawnCall: null,
         parse: (lines, first, state) =>
           parseCodexChunk(lines, first, { id: threadId, state: readState(threadId, state) }),
       },

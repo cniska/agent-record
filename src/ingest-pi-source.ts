@@ -10,6 +10,16 @@ export function listPiSessions(paths: readonly string[]): SourceFile[] {
     const name = basename(path, ".jsonl");
     const sessionId = sessionIdOf(name.slice(name.indexOf("_") + 1));
     if (sessionId === null) return [];
-    return [{ path, kind: "transcript", sessionId, parentId: null, agentType: null, parse: parsePiChunk }];
+    return [
+      {
+        path,
+        kind: "transcript",
+        sessionId,
+        parentId: null,
+        agentType: null,
+        spawnCall: null,
+        parse: parsePiChunk,
+      },
+    ];
   });
 }

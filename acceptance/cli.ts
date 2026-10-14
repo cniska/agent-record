@@ -215,6 +215,7 @@ const SYNC_RESULT = z.strictObject({
   eventLogs: COUNT,
   filesRead: COUNT,
   orphanSubagents: z.array(z.string()),
+  unlinkedSubagents: COUNT,
   failures: z.array(z.strictObject({ path: z.string(), error: ERROR })),
   dropped: z.array(z.strictObject({ path: z.string(), lines: z.array(COUNT) })),
   git: z.strictObject({ repos: COUNT, commits: COUNT, files: COUNT, unchanged: COUNT }),

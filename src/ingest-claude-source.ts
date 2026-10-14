@@ -2,7 +2,7 @@ import { basename, dirname, join } from "node:path";
 import { z } from "zod";
 import type { SourceFile } from "./ingest";
 import type { Failure } from "./ingest-contract";
-import { SessionId, sessionIdOf } from "./ingest-ids";
+import { sessionIdOf, subagentSessionId, ToolCallId } from "./ingest-ids";
 import { nonEmpty } from "./ingest-parse";
 import { parseClaudeChunk } from "./ingest-parse-claude";
 import { readSidecar } from "./ingest-source-read";
@@ -30,26 +30,34 @@ export function listClaudeSessions(paths: readonly string[], fail: Failure): Sou
 function transcript(path: string): SourceFile[] {
   const sessionId = sessionIdOf(basename(path, ".jsonl"));
   if (sessionId === null) return [];
-  return [{ path, kind: "transcript", sessionId, parentId: null, agentType: null, parse: parseClaudeChunk }];
+  return [
+    {
+      path,
+      kind: "transcript",
+      sessionId,
+      parentId: null,
+      agentType: null,
+      spawnCall: null,
+      parse: parseClaudeChunk,
+    },
+  ];
 }
 
-const SubagentMeta = z.looseObject({ agentType: z.string().optional() });
-
-function agentTypeOf(path: string, fail: Failure): string | null {
-  return readSidecar(metaPathOf(path), SubagentMeta, fail)?.agentType || null;
-}
+const SubagentMeta = z.looseObject({ agentType: z.string().optional(), toolUseId: ToolCallId.optional() });
 
 function subagent(path: string, fail: Failure): SourceFile[] {
   const parentId = sessionIdOf(basename(dirname(dirname(path))));
   const agentId = nonEmpty(basename(path, ".jsonl").replace(/^agent-/, ""));
   if (parentId === null || agentId === null) return [];
+  const meta = readSidecar(metaPathOf(path), SubagentMeta, fail);
   return [
     {
       path,
       kind: "subagent",
-      sessionId: SessionId.parse(`${agentId}@${parentId}`),
+      sessionId: subagentSessionId(agentId, parentId),
       parentId,
-      agentType: agentTypeOf(path, fail),
+      agentType: meta?.agentType || null,
+      spawnCall: meta?.toolUseId ?? null,
       parse: parseClaudeChunk,
     },
   ];

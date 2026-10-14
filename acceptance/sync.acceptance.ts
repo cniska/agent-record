@@ -387,6 +387,7 @@ test("AC-27 a sync with nothing changed reads no file, archives no bytes and fin
     eventLogs: 0,
     filesRead: 0,
     orphanSubagents: [],
+    unlinkedSubagents: 0,
     failures: [],
     dropped: [],
     git: { repos: 0, commits: 0, files: 0, unchanged: 1 },
@@ -475,6 +476,53 @@ test("AC-52 a subagent's hand-back report is its last message text, through sync
   expect(rowsOf(home, lastText)).toEqual([[said]]);
   rebuild(home);
   expect(rowsOf(home, lastText)).toEqual([[said]]);
+});
+
+test("AC-59 a reviewer a worker started is recorded under the worker, and an unlinked subagent is counted", () => {
+  const home = withClaudeSessions(scratchHome(), [
+    {
+      id: "coordinator",
+      cwd: "/Users/x/code/demo",
+      steps: [
+        { owner: "run the task", at: "2026-09-16T10:00:00Z" },
+        { spawn: "toolu-worker", at: "2026-09-16T10:01:00Z", done: "2026-09-16T10:09:00Z" },
+      ],
+      subagents: [
+        {
+          id: "reviewer",
+          agentType: "acme:reviewer",
+          startedBy: "toolu-reviewer",
+          steps: [{ owner: "judge the diff", at: "2026-09-16T10:03:00Z" }],
+        },
+        {
+          id: "worker",
+          agentType: "general-purpose",
+          startedBy: "toolu-worker",
+          steps: [
+            { owner: "build the step", at: "2026-09-16T10:01:01Z" },
+            { spawn: "toolu-reviewer", at: "2026-09-16T10:02:59Z", done: "2026-09-16T10:04:00Z" },
+          ],
+        },
+        {
+          id: "older",
+          agentType: "Explore",
+          steps: [{ owner: "look around", at: "2026-09-16T10:05:00Z" }],
+        },
+      ],
+    },
+  ]);
+  const parents = "select id, parent_id from session order by id";
+  const linked = [
+    ["coordinator", null],
+    ["older@coordinator", "coordinator"],
+    ["reviewer@coordinator", "worker@coordinator"],
+    ["worker@coordinator", "coordinator"],
+  ];
+
+  expect(sync(home).unlinkedSubagents).toBe(1);
+  expect(rowsOf(home, parents)).toEqual(linked);
+  expect(rebuild(home).unlinkedSubagents).toBe(1);
+  expect(rowsOf(home, parents)).toEqual(linked);
 });
 
 test("AC-53 a shell call's exit code is recorded from every tool that writes one, through sync and rebuild", () => {

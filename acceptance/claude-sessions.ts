@@ -8,6 +8,7 @@ export type Step =
   | { readonly agent: string; readonly at: string; readonly usage?: Usage }
   | { readonly handback: string; readonly at: string }
   | { readonly bash: string; readonly at: string; readonly done: string }
+  | { readonly spawn: string; readonly at: string; readonly done: string }
   | { readonly read: string; readonly at: string }
   | { readonly compacted: string }
   | { readonly rejected: string; readonly at: string }
@@ -21,7 +22,12 @@ type Usage = {
   readonly output_tokens: number;
 };
 
-type Subagent = { readonly id: string; readonly agentType: string; readonly steps: readonly Step[] };
+type Subagent = {
+  readonly id: string;
+  readonly agentType: string;
+  readonly startedBy?: string;
+  readonly steps: readonly Step[];
+};
 
 export type ClaudeSession = {
   readonly id: string;
@@ -104,6 +110,14 @@ function linesOf(sessionId: string, cwd: string, steps: readonly Step[], prefix:
         result(step.done, tool),
       ];
     }
+    if ("spawn" in step) {
+      return [
+        assistant(step.at, [
+          { type: "tool_use", id: step.spawn, name: "Agent", input: { prompt: "do the step" } },
+        ]),
+        result(step.done, step.spawn),
+      ];
+    }
     if ("read" in step) {
       return [
         assistant(step.at, [{ type: "tool_use", id: tool, name: "Read", input: { file_path: step.read } }]),
@@ -170,7 +184,10 @@ export function withClaudeSessions(home: Home, sessions: readonly ClaudeSession[
     for (const sub of subagents) {
       const path = join(project, id, "subagents", `agent-${sub.id}`);
       writeFileSync(`${path}.jsonl`, linesOf(id, cwd, sub.steps, `${id}-${sub.id}`));
-      writeFileSync(`${path}.meta.json`, JSON.stringify({ agentType: sub.agentType }));
+      writeFileSync(
+        `${path}.meta.json`,
+        JSON.stringify({ agentType: sub.agentType, toolUseId: sub.startedBy }),
+      );
     }
   }
   return home;

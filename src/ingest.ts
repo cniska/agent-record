@@ -21,6 +21,7 @@ export type SourceFile = {
   readonly sessionId: SessionId;
   readonly parentId: SessionId | null;
   readonly agentType: string | null;
+  readonly spawnCall: ToolCallId | null;
   readonly parse: ChunkParser;
 };
 
@@ -90,13 +91,14 @@ export function createIngester(db: Database, home: string) {
      VALUES (?, ?, ?, ?) ON CONFLICT(path) DO NOTHING`,
   );
   const upsertSession = db.prepare(
-    `INSERT INTO session (id, tool, parent_id, agent_type, cwd, worktree, project, git_branch, cli_version,
+    `INSERT INTO session (id, tool, parent_id, agent_type, spawn_call, cwd, worktree, project, git_branch, cli_version,
        entrypoint, ts_first, ts_last, title)
-     VALUES ($id, $tool, $parent, $agentType, $cwd, $worktree, $project, $gitBranch, $cliVersion,
+     VALUES ($id, $tool, $parent, $agentType, $spawnCall, $cwd, $worktree, $project, $gitBranch, $cliVersion,
        $entrypoint, $tsFirst, $tsLast, $title)
      ON CONFLICT(id) DO UPDATE SET
        parent_id    = coalesce(session.parent_id, excluded.parent_id),
        agent_type   = coalesce(session.agent_type, excluded.agent_type),
+       spawn_call   = coalesce(session.spawn_call, excluded.spawn_call),
        cwd          = coalesce(session.cwd, excluded.cwd),
        worktree     = coalesce(session.worktree, excluded.worktree),
        project      = coalesce(session.project, excluded.project),
@@ -269,7 +271,7 @@ export function createIngester(db: Database, home: string) {
   const deleteUsage = db.prepare<void, [string]>("DELETE FROM usage WHERE session_id = ?");
   const deleteMessages = db.prepare<void, [string]>("DELETE FROM message WHERE session_id = ?");
   const clearTranscriptFields = db.prepare<void, [string]>(
-    `UPDATE session SET agent_type = NULL, cwd = NULL, worktree = NULL, project = NULL, git_branch = NULL,
+    `UPDATE session SET agent_type = NULL, spawn_call = NULL, cwd = NULL, worktree = NULL, project = NULL, git_branch = NULL,
        cli_version = NULL, entrypoint = NULL, ts_first = NULL, ts_last = NULL, title = NULL
      WHERE id = ?`,
   );
@@ -410,6 +412,7 @@ export function createIngester(db: Database, home: string) {
       $tool: spec.tool,
       $parent: spec.parentId,
       $agentType: spec.agentType,
+      $spawnCall: spec.spawnCall,
       $cwd: s.cwd,
       $worktree: worktreeOf(s.cwd),
       $project: projectOf(s.cwd),

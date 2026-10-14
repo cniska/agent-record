@@ -10,6 +10,7 @@ function file(sessionId: string, parentId: string | null = null): SourceFile {
     sessionId: SessionId.parse(sessionId),
     parentId: parentId === null ? null : SessionId.parse(parentId),
     agentType: null,
+    spawnCall: null,
     parse: () => {
       throw new Error("ordering reads no file");
     },

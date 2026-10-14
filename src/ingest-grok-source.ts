@@ -2,14 +2,14 @@ import { basename, dirname, join } from "node:path";
 import { z } from "zod";
 import type { SourceFile } from "./ingest";
 import type { Failure } from "./ingest-contract";
-import { SessionId, sessionIdOf } from "./ingest-ids";
+import { SessionId, sessionIdOf, TopLevelSessionId } from "./ingest-ids";
 import { nonEmpty } from "./ingest-parse";
 import { parseGrokChunk } from "./ingest-parse-grok";
 import type { SessionFacts } from "./ingest-session-records";
 import { readSidecar } from "./ingest-source-read";
 
 const SummaryFile = z.looseObject({
-  info: z.looseObject({ id: SessionId.optional(), cwd: z.string().optional() }).optional(),
+  info: z.looseObject({ id: TopLevelSessionId.optional(), cwd: z.string().optional() }).optional(),
   generated_title: z.string().nullish(),
   head_branch: z.string().nullish(),
   parent_session_id: SessionId.nullish(),
@@ -54,6 +54,7 @@ export function listGrokSessions(paths: readonly string[], fail: Failure): Sourc
       sessionId,
       parentId: summary?.parent_session_id ?? null,
       agentType: nonEmpty(summary?.agent_name),
+      spawnCall: null,
       parse: (lines, first) => {
         const parsed = parseGrokChunk(lines, first);
         return { ...parsed, session: [...parsed.session, ...facts] };

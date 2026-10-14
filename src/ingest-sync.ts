@@ -14,6 +14,7 @@ import { parentsFirst } from "./ingest-order";
 import type { ReadResult } from "./ingest-read-new";
 import { scan } from "./ingest-scan";
 import { listSource, SESSION_SOURCES, type SessionSource } from "./ingest-sources";
+import { linkSpawnedSubagents } from "./ingest-spawn";
 import { TOOLS, type Tool } from "./ingest-tools";
 import { indexRepoFiles, type RepoFileReport } from "./repo-files";
 
@@ -23,6 +24,7 @@ export type SyncReport = {
   eventLogs: number;
   filesRead: number;
   orphanSubagents: SessionId[];
+  unlinkedSubagents: number;
   failures: PathFailure[];
   dropped: { path: string; lines: readonly number[] }[];
   git: GitReport;
@@ -43,6 +45,7 @@ export function sync(db: Database, env: Env): SyncReport {
     eventLogs: 0,
     filesRead: 0,
     orphanSubagents: [],
+    unlinkedSubagents: 0,
     failures: [],
     dropped: [],
     git: { repos: 0, commits: 0, files: 0, unchanged: 0 },
@@ -109,6 +112,7 @@ export function sync(db: Database, env: Env): SyncReport {
     }
     report.sources.push({ tool, files: files.length });
   }
+  report.unlinkedSubagents = linkSpawnedSubagents(db);
 
   const eventLogs = scan(eventArchiveRoot(env), ARCHIVED_EVENT_LOGS);
   for (const path of eventLogs) count(path, () => ingestEventLog(eventIngester, path));
