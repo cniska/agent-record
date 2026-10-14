@@ -29,7 +29,11 @@ export const refuseQuery = refuser<{
   readonly unknown_query: { readonly name: string };
   readonly not_a_count: { readonly flag: string; readonly value: string };
   readonly not_a_time: { readonly flag: string; readonly value: string };
-  readonly ambiguous_session: { readonly prefix: string; readonly matches: readonly string[] };
+  readonly ambiguous_session: {
+    readonly query: string;
+    readonly prefix: string;
+    readonly matches: readonly string[];
+  };
   readonly unknown_signal: { readonly name: string; readonly signals: readonly string[] };
   readonly unknown_grouping: { readonly by: string; readonly groupings: readonly string[] };
   readonly unknown_commit: { readonly prefix: string };
@@ -53,7 +57,8 @@ export const refuseQuery = refuser<{
   ambiguous_session: {
     message: ({ prefix, matches }) =>
       `${prefix} matches more than one session, among them ${matches.join(" and ")}`,
-    resolve: ({ matches }) => `agent-record query thread <a longer prefix of one of: ${matches.join(", ")}>`,
+    resolve: ({ query, matches }) =>
+      `agent-record query ${query} <a longer prefix of one of: ${matches.join(", ")}>`,
   },
   unknown_signal: {
     message: ({ name }) => `no signal named ${name}`,

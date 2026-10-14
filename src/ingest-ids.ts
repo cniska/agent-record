@@ -19,6 +19,10 @@ export function subagentSessionId(agentId: string, topLevel: SessionId): Session
   return SessionId.parse(`${agentId}${SUBAGENT_OF}${topLevel}`);
 }
 
+export function subagentSessionIdSql(agentColumn: string, topLevelColumn: string): string {
+  return `${agentColumn} || '${SUBAGENT_OF}' || ${topLevelColumn}`;
+}
+
 export function subagentSessionSql(column: string): string {
   return `instr(${column}, '${SUBAGENT_OF}') > 0`;
 }

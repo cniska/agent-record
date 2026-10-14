@@ -1,17 +1,13 @@
 import type { Database } from "bun:sqlite";
 import { invariant } from "./assert";
-import { SAID, select, timeFlag } from "./query";
-import { type Query, refuseQuery } from "./query-contract";
+import { callFailureSql, SAID, select, sessionByPrefix, timeFlag } from "./query";
+import type { Query } from "./query-contract";
 import { rowsToRead } from "./query-row-cap";
 import type { Timestamp } from "./timestamp";
 
 const TRANSCRIPT_READING_CHARS = 240;
 
-const TOOL_OUTCOME = `CASE
-  WHEN is_interrupted = 1 THEN ' → interrupted'
-  WHEN exit_code IS NOT NULL AND exit_code <> 0 THEN ' → exit ' || exit_code
-  WHEN is_error = 1 THEN ' → error'
-  ELSE '' END`;
+const TOOL_OUTCOME = `coalesce(' → ' || ${callFailureSql("c")}, '')`;
 
 const TIMELINE = `WITH timeline AS (
   SELECT m.ts,
@@ -28,7 +24,7 @@ const TIMELINE = `WITH timeline AS (
   SELECT coalesce(ts_call, ts_result), 'tool', 1, src_line_call,
          'tool', coalesce(attribution_skill, ''),
          coalesce(tool_name, '(unnamed)') || coalesce(': ' || coalesce(command, file_path), '') || ${TOOL_OUTCOME}
-  FROM tool_call WHERE session_id = ?1
+  FROM tool_call c WHERE session_id = ?1
 )`;
 
 const IN_ORDER = "ORDER BY ts, rank, line";
@@ -79,24 +75,15 @@ export const thread: Query<"at"> = {
   run: (db, ctx) => {
     const prefix = ctx.arg;
     const at = passageTime(ctx.flags.at);
-    const found = db
-      .query<{ id: string }, [string]>(
-        "SELECT id FROM session WHERE instr(lower(id), lower(?)) = 1 ORDER BY id LIMIT 2",
-      )
-      .all(prefix);
-    if (found.length > 1) {
-      throw refuseQuery("ambiguous_session", { prefix, matches: found.map((session) => session.id) });
-    }
-    const whole = (id: string) =>
+    const id = sessionByPrefix(db, "thread", prefix);
+    const whole = (session: string) =>
       select(db, `${TIMELINE} ${SHOWN} FROM timeline WHERE ts IS NOT NULL ${IN_ORDER} LIMIT ?2`, [
-        id,
+        session,
         rowsToRead(ctx.maxRows),
       ]);
-    const [match] = found;
-    if (!match) {
+    if (id === null) {
       return { denominator: "0 sessions", ...whole(""), note: `no session starts with ${prefix}` };
     }
-    const { id } = match;
     const counts = countsOf(db, id, at);
     const before = Math.ceil(ctx.maxRows / 2);
     const after = ctx.maxRows - before;

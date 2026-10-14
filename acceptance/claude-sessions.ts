@@ -9,6 +9,7 @@ export type Step =
   | { readonly handback: string; readonly at: string }
   | { readonly bash: string; readonly at: string; readonly done: string }
   | { readonly spawn: string; readonly at: string; readonly done: string }
+  | { readonly pending: string; readonly at: string }
   | { readonly read: string; readonly at: string }
   | { readonly compacted: string }
   | { readonly rejected: string; readonly at: string }
@@ -116,6 +117,11 @@ function linesOf(sessionId: string, cwd: string, steps: readonly Step[], prefix:
           { type: "tool_use", id: step.spawn, name: "Agent", input: { prompt: "do the step" } },
         ]),
         result(step.done, step.spawn),
+      ];
+    }
+    if ("pending" in step) {
+      return [
+        assistant(step.at, [{ type: "tool_use", id: tool, name: "Bash", input: { command: step.pending } }]),
       ];
     }
     if ("read" in step) {

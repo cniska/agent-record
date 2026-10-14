@@ -191,7 +191,7 @@ describe("thread", () => {
       expect.objectContaining({
         code: "ambiguous_session",
         message: "s matches more than one session, among them s1 and s2",
-        meta: { prefix: "s", matches: ["s1", "s2"] },
+        meta: { query: "thread", prefix: "s", matches: ["s1", "s2"] },
         resolve: "agent-record query thread <a longer prefix of one of: s1, s2>",
         kind: "refusal",
       }),

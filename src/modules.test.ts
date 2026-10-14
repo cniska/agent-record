@@ -21,6 +21,7 @@ const PUBLIC: Readonly<Record<string, readonly string[]>> = {
   ingest: [
     "ingest-checkout-failure",
     "ingest-event-kinds",
+    "ingest-ids",
     "ingest-session-records",
     "ingest-skill-load",
     "ingest-source-read",

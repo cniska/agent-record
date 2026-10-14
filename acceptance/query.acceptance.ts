@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { join } from "node:path";
 import { z } from "zod";
+import { withClaudeSessions } from "./claude-sessions";
 import {
   type Home,
   holdingRecord,
@@ -19,6 +20,7 @@ import {
   withFixtures,
 } from "./cli";
 import { CLAUDE, CODEX, CODEX_OVERCACHED, LONG, REPO_SESSION, WORKTREE_SESSION } from "./fixture-names";
+import { gate, verdict, withEventLog } from "./hook-events";
 
 afterEach(removeScratch);
 
@@ -37,6 +39,7 @@ test("AC-13 query list names every query with its usage and summary", () => {
     { name: "prior-art", usage: 'agent-record query prior-art "<path fragment>" [--rows <n>]' },
     { name: "search", usage: 'agent-record query search "<words>" [--rows <n>]' },
     { name: "thread", usage: "agent-record query thread <id-prefix> [--at <ts>] [--rows <n>]" },
+    { name: "trace", usage: "agent-record query trace <id-prefix> [--rows <n>]" },
     {
       name: "signal",
       usage:
@@ -245,5 +248,220 @@ test("AC-23 a query answers beside a writer and is refused as busy under an excl
     code: "record_busy",
     meta: { path: home.record },
     resolve: "run this again; if it keeps failing, close whatever holds the file",
+  });
+});
+
+const TRACED = "/Users/x/code/demo";
+
+const tracedHome = (): Home =>
+  withEventLog(
+    withClaudeSessions(scratchHome(), [
+      {
+        id: "coordinator",
+        cwd: TRACED,
+        steps: [
+          { owner: "run the task", at: "2026-09-16T10:00:00Z" },
+          { spawn: "toolu-worker", at: "2026-09-16T10:01:00Z", done: "2026-09-16T10:20:00Z" },
+          { spawn: "toolu-watcher", at: "2026-09-16T10:09:00Z", done: "2026-09-16T10:09:01Z" },
+        ],
+        subagents: [
+          {
+            id: "worker",
+            agentType: "general-purpose",
+            startedBy: "toolu-worker",
+            steps: [
+              { owner: "build the step", at: "2026-09-16T10:01:01Z" },
+              {
+                agent: "building",
+                at: "2026-09-16T10:01:30Z",
+                usage: {
+                  input_tokens: 10,
+                  cache_read_input_tokens: 2000,
+                  cache_creation_input_tokens: 300,
+                  output_tokens: 40,
+                },
+              },
+              { compacted: "2026-09-16T10:02:00Z" },
+              { rejected: "rm -rf build", at: "2026-09-16T10:02:30Z" },
+              { spawn: "toolu-reviewer", at: "2026-09-16T10:03:00Z", done: "2026-09-16T10:05:00Z" },
+              {
+                bash: "git commit -m 'feat: add the step'",
+                at: "2026-09-16T10:05:30Z",
+                done: "2026-09-16T10:05:31Z",
+              },
+              {
+                bash: "git commit -m 'feat: add the step'",
+                at: "2026-09-16T10:06:00Z",
+                done: "2026-09-16T10:06:01Z",
+              },
+              { bash: "git push", at: "2026-09-16T10:07:00Z", done: "2026-09-16T10:07:02Z" },
+              { agent: "landed", at: "2026-09-16T10:08:00Z" },
+            ],
+          },
+          {
+            id: "reviewer",
+            agentType: "acme:reviewer",
+            startedBy: "toolu-reviewer",
+            steps: [
+              { owner: "judge the diff", at: "2026-09-16T10:03:01Z" },
+              { agent: "Verdict: accept", at: "2026-09-16T10:04:00Z" },
+            ],
+          },
+          {
+            id: "watcher",
+            agentType: "Explore",
+            startedBy: "toolu-watcher",
+            steps: [
+              { owner: "watch the build", at: "2026-09-16T10:09:02Z" },
+              { pending: "sleep 600", at: "2026-09-16T10:09:30Z" },
+            ],
+          },
+        ],
+      },
+    ]),
+    "coordinator",
+    [
+      verdict("2026-09-16T10:04:00Z", { agent: "reviewer", verdict: "accept", repo: TRACED }),
+      gate("2026-09-16T10:05:30Z", { agent: "worker", decision: "deny", reason: "changed_since_accept" }),
+      gate("2026-09-16T10:06:00Z", { agent: "worker", decision: "allow", reason: "accepted" }),
+    ],
+  );
+
+test("AC-61 trace prints a worker's steps and the reviewer it started, one JSON line per step, a running one with no end", () => {
+  const home = tracedHome();
+  sync(home);
+
+  const result = query(home, ["trace", "coord", "--rows", "100"]);
+  const lines = result.rows.map(([line]) => JSON.parse(String(line)));
+  const shape = (line: Record<string, unknown>) => {
+    const outcome = z
+      .object({ kind: z.string(), code: z.string().optional() })
+      .optional()
+      .parse(line.outcome);
+    return [
+      String(line.session).split("@")[0],
+      line.seq,
+      line.step,
+      line.phase,
+      outcome?.code ?? outcome?.kind ?? "-",
+    ];
+  };
+  const worker = { session: "worker@coordinator", parent: "coordinator", task: "coordinator" };
+
+  expect(result.denominator).toBe(
+    "session coordinator and the 3 subagents under it: 19 steps, 2 still running",
+  );
+  expect(lines.map(shape)).toEqual([
+    ["coordinator", 1, "agent", "started", "-"],
+    ["coordinator", 2, "tool", "started", "-"],
+    ["worker", 1, "agent", "started", "-"],
+    ["worker", 2, "compact", "started", "-"],
+    ["worker", 3, "compact", "ended", "ok"],
+    ["worker", 4, "tool", "started", "-"],
+    ["worker", 5, "tool", "ended", "user-rejected"],
+    ["worker", 6, "tool", "started", "-"],
+    ["reviewer", 1, "agent", "started", "-"],
+    ["reviewer", 2, "verdict", "started", "-"],
+    ["reviewer", 3, "verdict", "ended", "ok"],
+    ["reviewer", 4, "agent", "ended", "ok"],
+    ["worker", 7, "tool", "ended", "ok"],
+    ["worker", 8, "tool", "started", "-"],
+    ["worker", 9, "commit", "started", "-"],
+    ["worker", 10, "gate", "started", "-"],
+    ["worker", 11, "gate", "ended", "changed_since_accept"],
+    ["worker", 12, "tool", "ended", "ok"],
+    ["worker", 13, "commit", "ended", "ok"],
+    ["worker", 14, "tool", "started", "-"],
+    ["worker", 15, "commit", "started", "-"],
+    ["worker", 16, "gate", "started", "-"],
+    ["worker", 17, "gate", "ended", "ok"],
+    ["worker", 18, "tool", "ended", "ok"],
+    ["worker", 19, "commit", "ended", "ok"],
+    ["worker", 20, "tool", "started", "-"],
+    ["worker", 21, "push", "started", "-"],
+    ["worker", 22, "tool", "ended", "ok"],
+    ["worker", 23, "push", "ended", "ok"],
+    ["worker", 24, "agent", "ended", "ok"],
+    ["coordinator", 3, "tool", "started", "-"],
+    ["coordinator", 4, "tool", "ended", "ok"],
+    ["watcher", 1, "agent", "started", "-"],
+    ["watcher", 2, "tool", "started", "-"],
+    ["coordinator", 5, "tool", "ended", "ok"],
+    ["coordinator", 6, "agent", "ended", "ok"],
+  ]);
+  expect(lines[8]).toEqual({
+    at: "2026-09-16T10:03:01.000Z",
+    session: "reviewer@coordinator",
+    parent: "worker@coordinator",
+    task: "coordinator",
+    seq: 1,
+    step: "agent",
+    phase: "started",
+    agentType: "acme:reviewer",
+    model: null,
+  });
+  expect(lines[10]).toEqual({
+    at: "2026-09-16T10:04:00.000Z",
+    session: "reviewer@coordinator",
+    parent: "worker@coordinator",
+    task: "coordinator",
+    seq: 3,
+    step: "verdict",
+    phase: "ended",
+    ms: 0,
+    outcome: { kind: "ok" },
+    verdict: "accept",
+  });
+  expect(lines[6]).toEqual({
+    at: "2026-09-16T10:02:30.000Z",
+    ...worker,
+    seq: 5,
+    step: "tool",
+    phase: "ended",
+    ms: 0,
+    outcome: { kind: "refused", code: "user-rejected" },
+    call: "coordinator-worker-3-tool",
+  });
+  expect(lines[16]).toEqual({
+    at: "2026-09-16T10:05:30.000Z",
+    ...worker,
+    seq: 11,
+    step: "gate",
+    phase: "ended",
+    ms: 0,
+    outcome: { kind: "refused", code: "changed_since_accept" },
+  });
+  expect(lines[26]).toEqual({
+    at: "2026-09-16T10:07:00.000Z",
+    ...worker,
+    seq: 21,
+    step: "push",
+    phase: "started",
+    call: "coordinator-worker-7-tool",
+    dir: TRACED,
+  });
+  expect(lines[29]).toEqual({
+    at: "2026-09-16T10:08:00.000Z",
+    ...worker,
+    seq: 24,
+    step: "agent",
+    phase: "ended",
+    ms: 419000,
+    outcome: { kind: "ok" },
+    inputTokens: 10,
+    cacheReadTokens: 2000,
+    cacheWriteTokens: 300,
+    outputTokens: 40,
+  });
+
+  const unknown = query(home, ["trace", "nobody"]);
+  expect({ rows: unknown.rows, note: unknown.note }).toEqual({
+    rows: [],
+    note: "no session starts with nobody",
+  });
+  const error = refused(runCli(home, ["query", "trace", "w"]), "query");
+  expect({ code: error.code, meta: error.meta }).toEqual({
+    code: "ambiguous_session",
+    meta: { query: "trace", prefix: "w", matches: ["watcher@coordinator", "worker@coordinator"] },
   });
 });

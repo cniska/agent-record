@@ -4,6 +4,7 @@ import type { Decision, Gate, HookEvent, Verdict } from "./ingest-event-kinds";
 import { MID_TURN_PROMPT } from "./ingest-session-records";
 import type { HOWS } from "./ingest-skill-load";
 import type { Tool } from "./ingest-tools";
+import { callFailureSql } from "./query";
 import { ESCAPE_REACH_DAYS } from "./query-escaped-defects";
 import { AGENT_TAIL_CHARS, INTERRUPTED } from "./query-interrupt";
 
@@ -152,8 +153,7 @@ const AGENT_BEFORE = `(SELECT substr(a.text, -${AGENT_TAIL_CHARS}) FROM message 
     AND a.ts < m.ts
   ORDER BY a.ts DESC LIMIT 1)`;
 
-const SUCCEEDED = `c.ts_result IS NOT NULL AND coalesce(c.is_error, 0) = 0
-  AND coalesce(c.is_interrupted, 0) = 0 AND coalesce(c.exit_code, 0) = 0`;
+const SUCCEEDED = `c.ts_result IS NOT NULL AND ${callFailureSql("c")} IS NULL`;
 
 const PRELOAD = "preload" satisfies (typeof HOWS)[number];
 
