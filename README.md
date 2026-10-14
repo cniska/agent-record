@@ -43,7 +43,7 @@ Git keeps what landed. Everything else an agent did lives in each tool's own ses
 
 The questions lead to a workflow that improves itself (kaizen). A reviewing agent, such as the [workflow-review](https://github.com/cniska/agent-skills/tree/main/skills/workflow/workflow-review) skill, finds the friction that repeats; a change to a skill, gate or hook removes it; and the record shows whether that friction dropped after the commit and under the new skill version.
 
-The [search-sessions](https://github.com/cniska/agent-skills/tree/main/skills/search-sessions) skill in [cniska/agent-skills](https://github.com/cniska/agent-skills) asks it first.
+The [search-sessions](https://github.com/cniska/agent-skills/tree/main/skills/workflow/search-sessions) skill in [cniska/agent-skills](https://github.com/cniska/agent-skills) asks it first.
 
 ## Commands
 
