@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { type ErrorRecord, errorRecord, isRefusal } from "./coded-error";
 import { writeTransaction } from "./db";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
-import { createIngester, type FileSpec, type SourceFile } from "./ingest";
+import { createIngester, type FileSpec, ingestFile, type SourceFile } from "./ingest";
 import { type ArchiveReport, archiveRootOf, archiveSources } from "./ingest-archive";
 import { type GitReport, ingestCommits, probeCheckouts, repoRoots } from "./ingest-git";
 import type { SessionId } from "./ingest-ids";
@@ -49,7 +49,7 @@ export function sync(db: Database, env: Env = process.env): SyncReport {
 
   const run = (spec: FileSpec): boolean => {
     try {
-      const result = ingester.ingestFile(spec);
+      const result = ingestFile(ingester, spec);
       if (result.read) report.filesRead += 1;
       if (result.dropped.length > 0) report.dropped.push({ path: spec.path, lines: result.dropped });
       return result.reset;

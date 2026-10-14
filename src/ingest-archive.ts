@@ -6,7 +6,6 @@ import {
   existsSync,
   mkdirSync,
   openSync,
-  readSync,
   renameSync,
   type Stats,
   statSync,
@@ -16,6 +15,7 @@ import { dirname, join, relative, sep } from "node:path";
 import { invariant } from "./assert";
 import { isEnvironmentError } from "./error-read";
 import { type Failure, refuseIngest } from "./ingest-contract";
+import { readAt } from "./ingest-read-at";
 import { scan } from "./ingest-scan";
 import { SESSION_SOURCES, type SessionSource } from "./ingest-sources";
 import { TOOLS, type Tool } from "./ingest-tools";
@@ -54,22 +54,6 @@ function sameStamp(a: Stats, b: Stats): boolean {
 function stampLike(path: string, live: Stats): void {
   const at = new Date(Math.trunc(live.mtimeMs));
   utimesSync(path, at, at);
-}
-
-function readAt(path: string, offset: number, length: number): Buffer {
-  const fd = openSync(path, "r");
-  try {
-    const buf = Buffer.alloc(length);
-    let read = 0;
-    while (read < length) {
-      const n = readSync(fd, buf, read, length - read, offset + read);
-      if (n === 0) break;
-      read += n;
-    }
-    return buf.subarray(0, read);
-  } finally {
-    closeSync(fd);
-  }
 }
 
 function startsWithCopy(live: string, copy: string, copySize: number): boolean {

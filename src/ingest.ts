@@ -5,6 +5,7 @@ import { writeTransaction } from "./db";
 import { gitSubcommands } from "./git-operations";
 import { readChunk } from "./ingest-chunk";
 import type { SessionId } from "./ingest-ids";
+import { advance, type Position, planRead } from "./ingest-read-plan";
 import type { ChunkParser, ParsedChunk, SessionFacts } from "./ingest-session-records";
 import { readingSource } from "./ingest-source-read";
 import type { Kind, Tool } from "./ingest-tools";
@@ -24,11 +25,11 @@ export type SourceFile = {
 
 export type FileResult = {
   read: boolean;
-  bytes: number;
-  lines: number;
   reset: boolean;
   dropped: readonly number[];
 };
+
+type Cursor = Position & { readonly path: string };
 
 const FROM_ANOTHER_FILE = "message.src_file IS NOT excluded.src_file";
 
@@ -38,16 +39,7 @@ const MERGED_TEXT = `CASE
   WHEN message.text IS NULL THEN excluded.text
   ELSE message.text || char(10) || excluded.text END`;
 
-type Cursor = {
-  readonly path: string;
-  readonly bytes: number;
-  readonly lines: number;
-  readonly state: string | null;
-};
-
 const CURSOR_COLUMNS = "path, bytes_ingested AS bytes, lines_ingested AS lines, cursor_state AS state";
-
-const START: Omit<Cursor, "path"> = { bytes: 0, lines: 0, state: null };
 
 type FoldedSession = {
   cwd: string | null;
@@ -254,7 +246,7 @@ export function createIngester(db: Database) {
     "UPDATE source_file SET bytes_ingested = 0, lines_ingested = 0, cursor_state = NULL WHERE session_id = ?",
   );
 
-  function resetSession(sessionId: string): void {
+  function clearSession(sessionId: string): void {
     deleteSkillLoads.run(sessionId);
     deleteToolCalls.run(sessionId);
     deleteTurns.run(sessionId);
@@ -270,20 +262,10 @@ export function createIngester(db: Database) {
 
   function resetFileSession(path: string): void {
     const row = selectFileSession.get(path);
-    if (row) writeTransaction(db, () => resetSession(row.session_id));
+    if (row) writeTransaction(db, () => clearSession(row.session_id));
   }
 
-  function claimMovedRow(spec: FileSpec): Cursor | null {
-    const name = basename(spec.path);
-    const moved = selectSessionFiles
-      .all(spec.sessionId, spec.kind)
-      .find((row) => basename(row.path) === name && !existsSync(row.path));
-    if (!moved) return null;
-    writeTransaction(db, () => movePath.run(spec.path, moved.path));
-    return moved;
-  }
-
-  function applyChunk(spec: FileSpec, parsed: ParsedChunk, bytes: number, lines: number): void {
+  function applyChunk(spec: FileSpec, parsed: ParsedChunk, to: Position): void {
     insertSourceFile.run(spec.path, spec.tool, spec.kind, spec.sessionId);
     const s = foldSession(parsed.session);
     upsertSession.run({
@@ -425,42 +407,53 @@ export function createIngester(db: Database) {
          cursor_state = ?,
          ingested_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
        WHERE path = ?`,
-      [bytes, lines, parsed.cursorState, spec.path],
+      [to.bytes, to.lines, to.state, spec.path],
     );
   }
 
-  function ingestFile(spec: FileSpec): FileResult {
-    const stat = readingSource("source_unreadable", spec.path, () => statSync(spec.path));
-
-    const existing = selectCursor.get(spec.path) ?? claimMovedRow(spec);
-    const reset = existing !== null && stat.size < existing.bytes;
-    const cursor = existing === null || reset ? START : existing;
-    const nothing = { read: false, bytes: 0, lines: 0, reset, dropped: [] };
-    const chunk =
-      stat.size === cursor.bytes
-        ? null
-        : readingSource("source_unreadable", spec.path, () => readChunk(spec.path, cursor.bytes));
-    if (!chunk || chunk.bytes === 0) {
-      if (reset) writeTransaction(db, () => resetSession(spec.sessionId));
-      return nothing;
-    }
-
-    const parsed = spec.parse(chunk.lines, cursor.lines + 1, cursor.state);
+  function commit(spec: FileSpec, reset: boolean, parsed: ParsedChunk, to: Position): void {
     writeTransaction(db, () => {
-      if (reset) resetSession(spec.sessionId);
-      applyChunk(spec, parsed, cursor.bytes + chunk.bytes, cursor.lines + chunk.lines.length);
+      if (reset) clearSession(spec.sessionId);
+      applyChunk(spec, parsed, to);
     });
-
-    return {
-      read: true,
-      bytes: chunk.bytes,
-      lines: chunk.lines.length,
-      reset,
-      dropped: parsed.dropped,
-    };
   }
 
-  return { ingestFile, resetFileSession };
+  return {
+    cursorOf: (path: string): Cursor | null => selectCursor.get(path),
+    sessionFiles: (sessionId: SessionId, kind: Kind): readonly Cursor[] =>
+      selectSessionFiles.all(sessionId, kind),
+    moveCursor: (to: string, from: string) => writeTransaction(db, () => movePath.run(to, from)),
+    resetSession: (sessionId: SessionId) => writeTransaction(db, () => clearSession(sessionId)),
+    commit,
+    resetFileSession,
+  };
 }
 
 export type Ingester = ReturnType<typeof createIngester>;
+
+function claimMovedCursor(ingester: Ingester, spec: FileSpec): Cursor | null {
+  const name = basename(spec.path);
+  const moved = ingester
+    .sessionFiles(spec.sessionId, spec.kind)
+    .find((row) => basename(row.path) === name && !existsSync(row.path));
+  if (moved === undefined) return null;
+  ingester.moveCursor(spec.path, moved.path);
+  return moved;
+}
+
+export function ingestFile(ingester: Ingester, spec: FileSpec): FileResult {
+  const { size } = readingSource("source_unreadable", spec.path, () => statSync(spec.path));
+  const { reset, from } = planRead(ingester.cursorOf(spec.path) ?? claimMovedCursor(ingester, spec), size);
+  const chunk =
+    from === null
+      ? null
+      : readingSource("source_unreadable", spec.path, () => readChunk(spec.path, size, from.bytes));
+  if (from === null || chunk === null) {
+    if (reset) ingester.resetSession(spec.sessionId);
+    return { read: false, reset, dropped: [] };
+  }
+  const parsed = spec.parse(chunk.lines, from.lines + 1, from.state);
+  const to = advance(from, chunk, parsed.cursorState);
+  ingester.commit(spec, reset, parsed, to);
+  return { read: true, reset, dropped: parsed.dropped };
+}
