@@ -15,7 +15,7 @@ Step 3 comes before the first tag. Steps 1 and 2 need the first release's files,
 `package.json` already reads `0.1.0`, so the first release is a tag, not `scripts/release.sh`.
 
 1. `git tag -m v0.1.0 v0.1.0 && git push origin v0.1.0`, and watch the workflow. The npm job fails on a package not yet set up for trusted publishing: do setup steps 1 and 2 from the release's files, then re-run the job.
-2. In `cniska/homebrew-tap`, merge the `agent-record-formula` branch, which adds `Formula/agent-record.rb` and its README section. Dispatch the bump by re-running the `homebrew` job, or run `scripts/bump-formula.py` there by hand, so the formula pins the release's URLs and checksums; then `brew install cniska/tap/agent-record` installs it.
+2. In `cniska/homebrew-tap`, on the `agent-record-formula` branch, which adds `Formula/agent-record.rb` and its README section, repin the formula to the release before merging, so `main` never pins checksums of a build no release holds: download the release's `SHA256SUMS.txt`, run `python3 scripts/bump-formula.py Formula/agent-record.rb cniska/agent-record SHA256SUMS.txt v0.1.0`, commit, then merge. `brew install cniska/tap/agent-record` installs it. From the next release on, the `homebrew` job's dispatch repins it.
 3. Land the channel lines in `README.md`'s Install section, above the clone steps:
 
    ```bash
