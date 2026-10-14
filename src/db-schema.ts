@@ -4,7 +4,7 @@ import { HOWS } from "./ingest-skill-load";
 import { KINDS, TOOLS } from "./ingest-tools";
 
 const sqlList = (values: readonly string[]): string => values.map((value) => `'${value}'`).join(",");
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS source_file (
@@ -203,7 +203,11 @@ CREATE TABLE IF NOT EXISTS hook_event (
   tool            TEXT,
   tool_use        TEXT,
   rule            TEXT,
-  PRIMARY KEY (src_file, src_line)
+  PRIMARY KEY (src_file, src_line),
+  CHECK (event <> 'gate' OR (gate IS NOT NULL AND decision IS NOT NULL AND reason IS NOT NULL)),
+  CHECK (event <> 'verdict' OR (verdict IS NOT NULL AND repo IS NOT NULL AND fingerprint IS NOT NULL)),
+  CHECK (event <> 'permission_prompt' OR tool IS NOT NULL),
+  CHECK (event <> 'permission_denied' OR (tool IS NOT NULL AND reason IS NOT NULL))
 );
 CREATE INDEX IF NOT EXISTS hook_event_ts ON hook_event(ts);
 

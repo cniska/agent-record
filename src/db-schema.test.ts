@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
 import { TOOLS } from "./ingest-tools";
 
-const PINNED = "8 5f75e5398c2f75fc19eaed05bcb9aa7147a20bb1539743d8bd2e561cb714ce00";
+const PINNED = "9 7379b30919ddb7cdba4627032b59c3b0142885f142302972ddbe1a41750324f0";
 
 function schema(): Database {
   const db = new Database(":memory:");
@@ -175,6 +175,33 @@ test("a skill load hangs off exactly one message or tool call", () => {
     expect(() => load("m1", "t1")).toThrow(/CHECK constraint failed/);
     expect(() => load(null, null)).toThrow(/constraint failed/);
     expect(() => load("m1", null)).not.toThrow();
+  } finally {
+    db.close();
+  }
+});
+
+test("a hook event holds the fields its kind requires", () => {
+  const db = schema();
+  try {
+    db.run("INSERT INTO event_file (path, bytes_ingested, lines_ingested) VALUES ('/e.jsonl', 0, 0)");
+    let line = 0;
+    const insert = (event: string, fields: Readonly<Record<string, string>>) => {
+      line += 1;
+      const columns = Object.keys(fields);
+      db.run(
+        `INSERT INTO hook_event (src_file, src_line, ts, event, session${columns.map((c) => `, ${c}`).join("")})
+         VALUES ('/e.jsonl', ?, '2026-10-14T08:00:00.000Z', ?, 's1'${columns.map(() => ", ?").join("")})`,
+        [line, event, ...Object.values(fields)],
+      );
+    };
+    expect(() => insert("gate", { gate: "commit", decision: "deny" })).toThrow(/CHECK constraint failed/);
+    expect(() => insert("verdict", { verdict: "accept", repo: "/r" })).toThrow(/CHECK constraint failed/);
+    expect(() => insert("permission_prompt", {})).toThrow(/CHECK constraint failed/);
+    expect(() => insert("permission_denied", { tool: "Bash" })).toThrow(/CHECK constraint failed/);
+    expect(() => insert("gate", { gate: "commit", decision: "deny", reason: "repo_unclear" })).not.toThrow();
+    expect(() => insert("verdict", { verdict: "accept", repo: "/r", fingerprint: "f" })).not.toThrow();
+    expect(() => insert("permission_prompt", { tool: "Bash" })).not.toThrow();
+    expect(() => insert("permission_denied", { tool: "Bash", reason: "rule" })).not.toThrow();
   } finally {
     db.close();
   }
