@@ -1,5 +1,5 @@
 import { type Cell, type Query, refuseQuery } from "./query-contract";
-import { described, repoShown, viewRecord } from "./query-signal-view";
+import { described, inScope, repoShown, tasksLoading, viewRecord } from "./query-signal-view";
 import { type Signal, type SignalEvent, signalNamed } from "./query-signals";
 
 type Grouped = {
@@ -55,16 +55,19 @@ function kindsOf(signal: Signal, events: readonly SignalEvent[]): string {
     .join(", ");
 }
 
-export const signal: Query<"by"> = {
+export const signal: Query<"by" | "skill"> = {
   name: "signal",
-  summary: "count one friction signal per week, or per week and repo or route",
-  usage: "agent-record query signal <name> [--by <week|repo|route>] [--rows <n>]",
-  flags: ["by"],
+  summary:
+    "count one friction signal per week, or per week and repo or route, or in the tasks that loaded a skill",
+  usage: "agent-record query signal <name> [--by <week|repo|route>] [--skill <name>] [--rows <n>]",
+  flags: ["by", "skill"],
   run: (db, ctx) => {
     const chosen = signalNamed(ctx.arg);
     const by = groupingOf(ctx.flags.by);
     const { timeline, labels } = viewRecord(db);
-    const events = chosen.events(timeline);
+    const skill = ctx.flags.skill ?? null;
+    const scope = skill === null ? null : tasksLoading(timeline, skill);
+    const events = chosen.events(timeline).filter(inScope(scope));
     const groups = new Map<string, { readonly key: readonly Cell[]; readonly events: SignalEvent[] }>();
     for (const event of events) {
       const key = GROUPED_BY[by].key(event, labels, ctx.home);
@@ -85,7 +88,9 @@ export const signal: Query<"by"> = {
     return {
       columns: [...GROUPED_BY[by].columns, ...RATE_COLUMNS],
       rows,
-      denominator: `${described(chosen)}; ${events.length} events over ${weeks} weeks (Monday, UTC)`,
+      denominator:
+        `${described(chosen)}; ${events.length} events over ${weeks} weeks (Monday, UTC)` +
+        (skill === null ? "" : `, in the tasks that loaded ${skill}`),
       note: chosen.note,
     };
   },

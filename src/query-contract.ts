@@ -35,6 +35,7 @@ export const refuseQuery = refuser<{
   readonly unknown_commit: { readonly prefix: string };
   readonly ambiguous_commit: { readonly prefix: string; readonly matches: readonly string[] };
   readonly from_before_commit: { readonly from: string; readonly sha: string; readonly at: string };
+  readonly unknown_skill: { readonly skill: string; readonly skills: readonly string[] };
 }>({
   unknown_query: {
     message: ({ name }) => `no query named ${name}`,
@@ -74,5 +75,9 @@ export const refuseQuery = refuser<{
   from_before_commit: {
     message: ({ from, sha, at }) => `--from ${from} is before commit ${sha} at ${at}`,
     resolve: ({ at }) => `--from <ts> at or after ${at}`,
+  },
+  unknown_skill: {
+    message: ({ skill }) => `no load of a skill named ${skill} is in the record`,
+    resolve: ({ skills }) => `--skill <name>, named without its plugin, one of: ${skills.join(", ")}`,
   },
 });

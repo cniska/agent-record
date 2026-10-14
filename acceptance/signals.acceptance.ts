@@ -376,3 +376,83 @@ test("AC-50 skill-usage counts each skill version loaded per task, an agent's pr
     ["2026-09-14", 3, 3, 1, "plan 002f7b2a/aaa 2, task 1, review 43e4e411/aaa 1"],
   ]);
 });
+
+test("AC-51 --skill keeps the tasks that loaded a skill and before-after names the versions on each side", () => {
+  const repo = appRepo([{ subject: "change the plan skill", at: "2026-09-18T00:00:00Z" }]);
+  const plan = {
+    skill: "acme:plan",
+    dir: "/Users/x/.claude/plugins/cache/m/acme/aaa/skills/plan",
+    body: "# Plan\n\nWrite the plan.",
+  };
+  const home = synced([
+    {
+      id: "first",
+      cwd: repo,
+      steps: [
+        { owner: "add the parser", at: "2026-09-16T09:00:00Z" },
+        { ...plan, at: "2026-09-16T09:01:00Z" },
+        ran("git commit -m a && git push", "2026-09-16T09:30:00Z", "2026-09-16T09:30:00Z"),
+      ],
+    },
+    {
+      id: "second",
+      cwd: repo,
+      steps: [
+        { owner: "add the printer", at: "2026-09-21T09:00:00Z" },
+        { ...plan, at: "2026-09-21T09:01:00Z" },
+        ran("git commit -m b", "2026-09-21T09:30:00Z", "2026-09-21T09:30:00Z"),
+      ],
+    },
+    {
+      id: "third",
+      cwd: repo,
+      steps: [
+        { owner: "add the linter", at: "2026-09-23T09:00:00Z" },
+        ran("git commit -m c && git push", "2026-09-23T09:30:00Z", "2026-09-23T09:30:00Z"),
+        later("2026-09-23T12:00:00Z"),
+      ],
+    },
+  ]);
+
+  const scoped = query(home, ["signal", "stranded-work", "--skill", "plan"]);
+  expect(scoped.rows).toEqual([
+    ["2026-09-21", 1, 1, 1, "stranded 1"],
+    ["2026-09-14", 0, 0, 1, "pushed 1"],
+  ]);
+  expect(scoped.denominator).toEndWith(", in the tasks that loaded plan");
+
+  const sha = succeeded(
+    runCli(home, ["sql", "SELECT sha FROM repo_commit WHERE subject = 'change the plan skill'"]),
+    "sql",
+    QUERY_RESULT,
+  ).rows[0]?.[0];
+  if (typeof sha !== "string") throw new Error("the fixture commit is in the record");
+  const prefix = sha.slice(0, 8);
+
+  const stale = query(home, ["before-after", prefix, "--skill", "plan"]);
+  expect(stale.rows.find(([name]) => name === "stranded-work")?.filter((_, i) => i !== 1)).toEqual([
+    "stranded-work",
+    0,
+    1,
+    0,
+    1,
+    1,
+    1,
+  ]);
+  expect(stale.denominator).toEndWith(
+    "; in the tasks that loaded plan, versions before 002f7b2a/aaa 1, after 002f7b2a/aaa 1",
+  );
+  expect(stale.note).toEndWith(
+    "Not installed yet: the after window ran only versions of plan the before window ran.",
+  );
+
+  const unloaded = query(home, ["before-after", prefix, "--skill", "plan", "--from", "2026-09-22T00:00:00Z"]);
+  expect(unloaded.denominator).toEndWith("versions before 002f7b2a/aaa 1, after none");
+  expect(unloaded.note).toEndWith("No task of the after window loaded plan.");
+
+  const codes = [
+    ["signal", "stranded-work", "--skill", "acme:plan"],
+    ["before-after", prefix, "--skill", "review"],
+  ].map((args) => refused(runCli(home, ["query", ...args]), "query").code);
+  expect(codes).toEqual(["unknown_skill", "unknown_skill"]);
+});

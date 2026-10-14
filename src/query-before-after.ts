@@ -1,7 +1,8 @@
 import { countFlag, timeFlag } from "./query";
 import { type Query, refuseQuery } from "./query-contract";
-import { viewRecord } from "./query-signal-view";
-import { SIGNALS, type SignalEvent } from "./query-signals";
+import { inScope, tasksLoading, viewRecord } from "./query-signal-view";
+import { SIGNALS, versionOf } from "./query-signals";
+import type { Placed, SkillLoaded } from "./query-timeline";
 import { EpochMs } from "./timestamp";
 
 const DEFAULT_DAYS = 14;
@@ -10,17 +11,38 @@ const DAY_MS = 86_400_000;
 
 type Found = { readonly sha: string; readonly ts: string };
 
-const eventsWithin = (events: readonly SignalEvent[], from: number, until: number): readonly SignalEvent[] =>
-  events.filter((event) => {
-    const at = Date.parse(event.at);
+const within = <Item extends Placed>(items: readonly Item[], from: number, until: number): readonly Item[] =>
+  items.filter((item) => {
+    const at = Date.parse(item.at);
     return at >= from && at < until;
   });
 
-export const beforeAfter: Query<"days" | "from"> = {
+function versionCounts(loads: readonly SkillLoaded[]): ReadonlyMap<string, number> {
+  const counts = new Map<string, number>();
+  for (const load of loads) counts.set(versionOf(load), (counts.get(versionOf(load)) ?? 0) + 1);
+  return counts;
+}
+
+const listed = (counts: ReadonlyMap<string, number>): string =>
+  counts.size === 0
+    ? "none"
+    : [...counts]
+        .sort(([, a], [, b]) => b - a)
+        .map(([version, count]) => `${version} ${count}`)
+        .join(", ");
+
+function installNote(skill: string, before: ReadonlyMap<string, number>, after: ReadonlyMap<string, number>) {
+  if (after.size === 0) return `No task of the after window loaded ${skill}.`;
+  if (before.size === 0 || [...after.keys()].some((version) => !before.has(version))) return null;
+  return `Not installed yet: the after window ran only versions of ${skill} the before window ran.`;
+}
+
+export const beforeAfter: Query<"days" | "from" | "skill"> = {
   name: "before-after",
   summary: "compare every signal over the days before a commit with the days after it",
-  usage: "agent-record query before-after <sha-prefix> [--days <n>] [--from <ts>] [--rows <n>]",
-  flags: ["days", "from"],
+  usage:
+    "agent-record query before-after <sha-prefix> [--days <n>] [--from <ts>] [--skill <name>] [--rows <n>]",
+  flags: ["days", "from", "skill"],
   run: (db, ctx) => {
     const prefix = ctx.arg.toLowerCase();
     const days = ctx.flags.days === undefined ? DEFAULT_DAYS : countFlag("days", ctx.flags.days);
@@ -39,13 +61,15 @@ export const beforeAfter: Query<"days" | "from"> = {
     }
     const span = days * DAY_MS;
     const { timeline } = viewRecord(db);
+    const skill = ctx.flags.skill ?? null;
+    const scope = skill === null ? null : tasksLoading(timeline, skill);
     const newest = timeline.newest === null ? at : Date.parse(timeline.newest);
     const start = from === null ? at : Date.parse(from);
     const end = Math.max(start, Math.min(start + span, newest + 1));
     const rows = SIGNALS.map((chosen) => {
-      const events = chosen.events(timeline);
-      const before = chosen.rate(eventsWithin(events, at - span, at));
-      const after = chosen.rate(eventsWithin(events, start, end));
+      const events = chosen.events(timeline).filter(inScope(scope));
+      const before = chosen.rate(within(events, at - span, at));
+      const after = chosen.rate(within(events, start, end));
       return [
         chosen.name,
         chosen.value,
@@ -57,16 +81,35 @@ export const beforeAfter: Query<"days" | "from"> = {
         after.of,
       ];
     });
+    const partial =
+      end - start < span
+        ? `The after window is ${Math.round((end - start) / DAY_MS)} of ${days} days so far; compare the rates, not the counts.`
+        : null;
+    const windows =
+      `commit ${commit.sha} at ${commit.ts}; before ${EpochMs.parse(at - span)} to ${commit.ts}, ` +
+      `after ${EpochMs.parse(start)} to ${EpochMs.parse(end)}`;
+    const columns = [
+      "signal",
+      "value",
+      "before",
+      "after",
+      "before_count",
+      "before_of",
+      "after_count",
+      "after_of",
+    ];
+    if (skill === null) return { columns, rows, denominator: windows, note: partial };
+    const loads = timeline.skillLoads.filter((load) => load.skill === skill);
+    const ranBefore = versionCounts(within(loads, at - span, at));
+    const ranAfter = versionCounts(within(loads, start, end));
+    const notes = [partial, installNote(skill, ranBefore, ranAfter)].filter((note) => note !== null);
     return {
-      columns: ["signal", "value", "before", "after", "before_count", "before_of", "after_count", "after_of"],
+      columns,
       rows,
       denominator:
-        `commit ${commit.sha} at ${commit.ts}; before ${EpochMs.parse(at - span)} to ${commit.ts}, ` +
-        `after ${EpochMs.parse(start)} to ${EpochMs.parse(end)}`,
-      note:
-        end - start < span
-          ? `The after window is ${Math.round((end - start) / DAY_MS)} of ${days} days so far; compare the rates, not the counts.`
-          : null,
+        `${windows}; in the tasks that loaded ${skill}, ` +
+        `versions before ${listed(ranBefore)}, after ${listed(ranAfter)}`,
+      note: notes.length === 0 ? null : notes.join(" "),
     };
   },
 };

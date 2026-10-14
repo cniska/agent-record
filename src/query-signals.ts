@@ -76,6 +76,7 @@ function event<Kind extends string>(
 ): SignalEvent<Kind> {
   return {
     at: placed.at,
+    task: placed.task,
     sessionId: placed.sessionId,
     repo: placed.repo,
     route: placed.route,

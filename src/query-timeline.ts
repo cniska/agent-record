@@ -1,4 +1,5 @@
 import { basename, extname } from "node:path";
+import { z } from "zod";
 import {
   type Blocked,
   blocksOf,
@@ -14,8 +15,13 @@ import { EpochMs } from "./timestamp";
 
 const NO_ROUTE = "none";
 
+const TaskKey = z.string().brand<"TaskKey">();
+
+export type TaskKey = z.infer<typeof TaskKey>;
+
 export type Placed = {
   readonly at: string;
+  readonly task: TaskKey;
   readonly sessionId: string;
   readonly repo: string | null;
   readonly route: string;
@@ -143,14 +149,19 @@ export function timelineOf(record: SignalRecord): Timeline {
   const repoOf = repoFinder(record.checkouts);
   const repoOfRoot = (root: string) => repoOf(sessions.get(root)?.project ?? null);
   const { prompts, ownerTyped, pending } = promptsByRoot(record);
-  const taskKey = (root: string, at: number): string => `${root}#${taskIndex(prompts.get(root) ?? [], at)}`;
+  const keyOf = (root: string, index: number): TaskKey => TaskKey.parse(`${root}#${index}`);
+  const taskKey = (root: string, at: number): TaskKey => keyOf(root, taskIndex(prompts.get(root) ?? [], at));
 
-  const routes = new Map<string, string>();
+  const routes = new Map<TaskKey, string>();
   for (const read of record.routeReads) {
     const key = taskKey(rootOf(read.sessionId), ms(read.at));
     if (!routes.has(key)) routes.set(key, basename(read.path, extname(read.path)));
   }
-  const routeOf = (key: string): string => routes.get(key) ?? NO_ROUTE;
+  const routeOf = (key: TaskKey): string => routes.get(key) ?? NO_ROUTE;
+  const inTask = (root: string, at: number): { readonly task: TaskKey; readonly route: string } => {
+    const task = taskKey(root, at);
+    return { task, route: routeOf(task) };
+  };
 
   const runs: Run[] = record.gitRuns
     .flatMap((run) => {
@@ -165,7 +176,7 @@ export function timelineOf(record: SignalRecord): Timeline {
 
   const interrupts: Interrupt[] = pending.map((said) => {
     const root = rootOf(said.sessionId);
-    return { ...said, sessionId: root, repo: repoOfRoot(root), route: routeOf(taskKey(root, ms(said.at))) };
+    return { ...said, sessionId: root, repo: repoOfRoot(root), ...inTask(root, ms(said.at)) };
   });
 
   const firstHook = record.hookEvents[0]?.at ?? null;
@@ -174,12 +185,13 @@ export function timelineOf(record: SignalRecord): Timeline {
 
   const keyedTasks = [...prompts.entries()].flatMap(([root, list]) =>
     list.map((prompt, index) => {
-      const key = `${root}#${index}`;
+      const key = keyOf(root, index);
       const last = lastOfTask.get(key) ?? null;
       const task: TaskOutcome = {
         at: prompt.at,
         sessionId: root,
         repo: last === null ? repoOfRoot(root) : last.repo,
+        task: key,
         route: routeOf(key),
         ownerTyped: ownerTyped.has(root),
         hookLogged: hookLogged(root, prompt.at),
@@ -196,7 +208,7 @@ export function timelineOf(record: SignalRecord): Timeline {
     at: run.at,
     sessionId: run.root,
     repo: run.repo,
-    route: routeOf(taskKey(run.root, run.ms)),
+    ...inTask(run.root, run.ms),
     onOriginAt: iso(onOrigin(run)),
     lastOfSession: lastOfRoot.get(run.root) === run,
   }));
@@ -209,7 +221,7 @@ export function timelineOf(record: SignalRecord): Timeline {
         at: session.start,
         sessionId: root,
         repo: repoOfRoot(root),
-        route: routeOf(taskKey(root, ms(session.start))),
+        ...inTask(root, ms(session.start)),
       },
     ];
   });
@@ -220,7 +232,7 @@ export function timelineOf(record: SignalRecord): Timeline {
       at: load.at,
       sessionId: root,
       repo: repoOfRoot(root),
-      route: routeOf(taskKey(root, ms(load.at))),
+      ...inTask(root, ms(load.at)),
       skill: load.skill,
       sha256: load.sha256,
       install: load.install,
@@ -234,7 +246,7 @@ export function timelineOf(record: SignalRecord): Timeline {
       at: row.at,
       sessionId: root,
       repo: named === null ? repoOfRoot(root) : repoOf(named),
-      route: routeOf(taskKey(root, ms(row.at))),
+      ...inTask(root, ms(row.at)),
       kind,
     };
   };
