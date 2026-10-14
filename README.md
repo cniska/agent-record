@@ -31,15 +31,17 @@ claude plugin install cniska-record@cniska
 
 ## Why
 
-A session's context ends at compaction, at a handoff, or when another agent takes over, and the tool may later delete its transcript. agent-record keeps every session file as the tool wrote it, in an archive that outlasts the tool's own copy and is mirrored off the machine. It reads those files beside the commits of the repos they worked in.
+Git keeps what landed. Everything else an agent did lives in each tool's own session files, split by tool and by project, and the tools delete them: Claude Code after 30 days by default (`cleanupPeriodDays`). agent-record keeps those files and joins them to the commits they made, so you can ask:
 
-A memory tool decides what an agent should remember: it distills sessions into facts or summaries and puts them into the agent's context. agent-record distills nothing and puts none of it into a context. An agent or the owner asks it, and it answers from what happened:
+- **Why is this code like this?** Go from a commit to the session that made it and read what you asked for and corrected there. Git has the diff, not the conversation.
+- **What did we already try?** A dropped approach never reaches git. Before redoing work, read what was tried and dropped, months back and in another repo.
+- **What do I keep correcting?** Your corrections, failed commands retried unchanged, checks an agent skipped: patterns that show only when counted over hundreds of sessions.
+- **Which ways of working hold up?** Git has a feature's commit and the fixes that followed it; the record ties them to the sessions that made them, in every repo, so you can see which approaches needed the fewest fixes and read how they were built.
+- **Where does work stall?** How long a task takes from your prompt to origin, and which commits sat unpushed; git has no prompt to time from.
 
-- What was decided before?
-- What happened after a handoff?
-- Why did the owner switch agents mid-task?
-- How does the owner actually work? The answers are evidence for codifying that workflow.
-- Did a workflow change help? `query signal` counts the friction the owner feels per week, and `query before-after` compares it on either side of the commit that made the change.
+`rg` over the transcripts is fine for a phrase from last week. It cannot search what the tools have deleted, and it cannot count or join: grouping corrections, tying a session to its commits, or checking whether the files a session touched have changed since, so you know whether what it decided still holds. The named queries cover the common questions; `agent-record sql` asks any other.
+
+The questions lead to a workflow that improves itself (kaizen). A reviewing agent, such as the [workflow-review](https://github.com/cniska/agent-skills/tree/main/skills/workflow/workflow-review) skill, finds the friction that repeats; a change to a skill, gate or hook removes it; and the record shows whether that friction dropped after the commit and under the new skill version.
 
 The [search-sessions](https://github.com/cniska/agent-skills/tree/main/skills/search-sessions) skill in [cniska/agent-skills](https://github.com/cniska/agent-skills) asks it first.
 
