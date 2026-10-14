@@ -5,8 +5,6 @@ import { Timestamp } from "./timestamp";
 
 export const HOWS = ["model", "user", "read", "preload"] as const;
 
-export type How = (typeof HOWS)[number];
-
 const SkillBodyFields = z.strictObject({
   bodyChars: z.number(),
   bodySha256: z.string(),
@@ -23,7 +21,7 @@ export const SkillLoadRow = z.discriminatedUnion("kind", [
       ts: Timestamp,
       model: z.string().nullable(),
       skillName: z.string(),
-      how: z.enum(HOWS),
+      how: z.enum(HOWS).extract(["model", "read"]),
     })
     .readonly(),
   SkillBodyFields.extend({ kind: z.literal("called-body"), toolCallId: ToolCallId }).readonly(),
