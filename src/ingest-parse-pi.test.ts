@@ -228,4 +228,12 @@ describe("a Pi or omp session", () => {
     expect(parsed.dropped).toEqual([10]);
     expect(parsed.usage.map((u) => u.responseId)).not.toContain("resp_9");
   });
+
+  test("reports a session line with no working directory and a title line with an empty title as dropped", () => {
+    const session = JSON.stringify({ type: "session", id: "s-1" });
+    const title = JSON.stringify({ type: "title", title: "" });
+    const parsed = parsePiChunk([session, title], 2);
+    expect(parsed.dropped).toEqual([2, 3]);
+    expect(parsed.session.map((facts) => facts.cwd ?? facts.title)).toEqual([]);
+  });
 });

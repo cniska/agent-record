@@ -298,4 +298,18 @@ describe("parseCodexChunk", () => {
     expect(parsed.dropped).toEqual([]);
     expect(parsed.messages).toMatchObject([{ id: `${THREAD}:4`, text: "hi" }]);
   });
+
+  test("reports a token record with no response id and a finished turn with no turn id as dropped", () => {
+    const at = "2026-09-16T10:00:00.000Z";
+    const usage = JSON.stringify({
+      type: "token_usage_record",
+      timestamp: at,
+      payload: { usage: { input_tokens: 5 } },
+    });
+    const finished = JSON.stringify({ type: "event_msg", timestamp: at, payload: { type: "task_complete" } });
+    const parsed = parseCodexChunk([usage, finished], 1, FRESH);
+    expect(parsed.dropped).toEqual([1, 2]);
+    expect(parsed.usage).toEqual([]);
+    expect(parsed.turns).toEqual([]);
+  });
 });

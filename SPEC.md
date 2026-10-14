@@ -28,7 +28,7 @@ A coding agent's context ends at compaction, at a handoff, or when another agent
 - **FR-7** — The record is read from the archive only, never from a tool's own files.
 - **FR-8** — Each sync reads only the bytes an archive copy gained since the last sync.
 - **FR-9** — A line still being written, with no newline yet, is not read until it is complete.
-- **FR-10** — A line that cannot be parsed is skipped, the rest of its file is read, and the sync reports the file and line number.
+- **FR-10** — A line of a kind the record keeps that cannot be parsed, or that lacks a field its rows need (an id or a time the line records), is skipped, the rest of its file is read, and the sync reports the file and line number. A line of a kind the record does not keep is skipped without a report.
 - **FR-11** — A file that cannot be read or archived does not stop the sync: the other files are read, and the sync's result lists each failure as a refusal naming its fix.
 - **FR-12** — A subagent session is recorded with its parent session. A subagent whose parent is not in the record is recorded without one, and the sync reports it.
 - **FR-13** — The record holds, per session: its tool, parent, agent type, working directory, project, branch, tool version, entry point, first and last time (the earliest and latest timestamp on any line read from its files), and title; per message: its role, time, model, text and source line; per turn: its start, end, duration, status and model; per model response: its token counts; per tool call: its tool, command or file, the git subcommands its command ran, its outcome and its times.

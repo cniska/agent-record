@@ -127,4 +127,11 @@ describe("a grok update line", () => {
     const line = event({ sessionUpdate: "tool_call", toolCallId: "call-1" }, "tool-1");
     expect(parseGrokChunk([JSON.stringify(line)], 1).cursorState).toBeNull();
   });
+
+  test("reports a message line with no event id as dropped", () => {
+    const line = event({ sessionUpdate: "agent_message_chunk", content: { type: "text", text: "hi" } }, "");
+    const parsed = parseGrokChunk([JSON.stringify(line)], 3);
+    expect(parsed.dropped).toEqual([3]);
+    expect(parsed.messages).toEqual([]);
+  });
 });

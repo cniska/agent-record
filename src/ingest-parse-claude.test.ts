@@ -285,4 +285,25 @@ describe("parseClaudeChunk", () => {
   test("keeps no cursor state", () => {
     expect(parsed.cursorState).toBeNull();
   });
+
+  test("reports an assistant line with no message id, and a title line with an empty title, as dropped", () => {
+    const stamp = "2026-09-16T10:04:00.000Z";
+    const chunk = parseClaudeChunk(
+      [
+        JSON.stringify({ type: "assistant", uuid: "a-5", timestamp: stamp, message: { content: "hi" } }),
+        JSON.stringify({
+          type: "assistant",
+          uuid: "a-6",
+          timestamp: stamp,
+          message: { id: "", content: "hi" },
+        }),
+        JSON.stringify({ type: "ai-title", aiTitle: "" }),
+        JSON.stringify({ type: "custom-title", customTitle: "" }),
+      ],
+      1,
+    );
+    expect(chunk.dropped).toEqual([1, 2, 3, 4]);
+    expect(chunk.messages).toEqual([]);
+    expect(chunk.session.map((facts) => facts.title)).not.toContain("");
+  });
 });
