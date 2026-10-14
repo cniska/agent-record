@@ -1,6 +1,6 @@
 # agent-record
 
-A local record of what every coding-agent session on this machine did, kept verbatim, for agents to search and the owner to measure from. It is not memory, since it never distills sessions or puts them into an agent's context, and it gates nothing; agent-gates does.
+A local record of what every coding-agent session on this machine did, kept verbatim, for agents to search and the owner to measure from. It is not memory — it never distills sessions or puts them into an agent's context — and it gates nothing; agent-gates does.
 
 - `agent-record sync` reads the session files of Claude Code, Codex, Grok, pi and omp into one SQLite database, with the commits of the repos those sessions worked in and the cniska-skills plugin's hook event log.
 - `agent-record query` and `agent-record sql` read it. Search comes first: `query search` finds where earlier work was said, decided or ran into friction, and `query thread` shows what happened around it.
