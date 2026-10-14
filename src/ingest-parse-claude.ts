@@ -388,7 +388,7 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
         if (body) {
           const { name, ...fields } = body;
           if (line.sourceToolUseID)
-            skillLoads.push({ kind: "called-body", toolUseId: line.sourceToolUseID, ...fields });
+            skillLoads.push({ kind: "called-body", toolCallId: line.sourceToolUseID, ...fields });
           else if (line.parentUuid)
             skillLoads.push({ kind: "typed-body", parentUuid: line.parentUuid, skillName: name, ...fields });
         }

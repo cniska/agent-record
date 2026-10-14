@@ -250,7 +250,7 @@ export function createIngester(db: Database, home: string) {
      SELECT $sessionId, id, ts_call, model, skill_name, 'model',
        $bodyChars, $bodySha256, $skillPath
      FROM tool_call
-     WHERE id = $toolUseId AND tool_name = 'Skill' AND ts_call IS NOT NULL AND skill_name IS NOT NULL
+     WHERE id = $toolCallId AND tool_name = 'Skill' AND ts_call IS NOT NULL AND skill_name IS NOT NULL
      ${skillLoadConflict}`,
   );
 
@@ -435,7 +435,7 @@ export function createIngester(db: Database, home: string) {
         case "called-body":
           insertCalledSkillBody.run({
             $sessionId: spec.sessionId,
-            $toolUseId: l.toolUseId,
+            $toolCallId: l.toolCallId,
             $bodyChars: l.bodyChars,
             $bodySha256: l.bodySha256,
             $skillPath: l.skillPath,

@@ -25,7 +25,7 @@ export const SkillLoadRow = z.discriminatedUnion("kind", [
       how: z.enum(HOWS),
     })
     .readonly(),
-  SkillBodyFields.extend({ kind: z.literal("called-body"), toolUseId: ToolCallId }).readonly(),
+  SkillBodyFields.extend({ kind: z.literal("called-body"), toolCallId: ToolCallId }).readonly(),
   SkillBodyFields.extend({
     kind: z.literal("typed-body"),
     parentUuid: MessageId,
