@@ -66,15 +66,40 @@ describe("counting the owner's interrupts per task", () => {
       session("sub", "2026-10-14T09:01:00.000Z", { parentId: "s" }),
     ],
     ownerMessages: [
-      { sessionId: "s", at: "2026-10-14T09:00:00.000Z", text: "add the parser", agentBefore: null },
-      { sessionId: "s", at: "2026-10-14T09:10:00.000Z", text: "the second", agentBefore: ASKED },
-      { sessionId: "s", at: "2026-10-14T09:20:00.000Z", text: "no, the other file", agentBefore: TOLD },
-      { sessionId: "s", at: "2026-10-14T09:30:00.000Z", text: "now add the printer", agentBefore: TOLD },
+      {
+        sessionId: "s",
+        at: "2026-10-14T09:00:00.000Z",
+        text: "add the parser",
+        agentBefore: null,
+        midTurn: false,
+      },
+      {
+        sessionId: "s",
+        at: "2026-10-14T09:10:00.000Z",
+        text: "the second",
+        agentBefore: ASKED,
+        midTurn: false,
+      },
+      {
+        sessionId: "s",
+        at: "2026-10-14T09:20:00.000Z",
+        text: "no, the other file",
+        agentBefore: TOLD,
+        midTurn: false,
+      },
+      {
+        sessionId: "s",
+        at: "2026-10-14T09:30:00.000Z",
+        text: "now add the printer",
+        agentBefore: TOLD,
+        midTurn: false,
+      },
       {
         sessionId: "s",
         at: "2026-10-14T09:40:00.000Z",
         text: "<command-name>/clear</command-name>",
         agentBefore: TOLD,
+        midTurn: false,
       },
     ],
     rejections: [{ sessionId: "sub", at: "2026-10-14T09:35:00.000Z" }],
@@ -93,6 +118,33 @@ describe("counting the owner's interrupts per task", () => {
 
   test("divides the interrupts by the tasks of the sessions the owner typed in", () => {
     expect(rateOf("owner-interrupts", record)).toEqual({ value: 1.5, count: 3, of: 2 });
+  });
+});
+
+describe("counting a message the owner typed while a turn ran", () => {
+  const typed = (at: string, text: string, agentBefore: string | null, midTurn: boolean) => ({
+    sessionId: "s",
+    at,
+    text,
+    agentBefore,
+    midTurn,
+  });
+  const record = recordOf({
+    sessions: [session("s", "2026-10-14T09:00:00.000Z")],
+    ownerMessages: [
+      typed("2026-10-14T09:00:00.000Z", "add the parser", null, false),
+      typed("2026-10-14T09:01:00.000Z", "and the printer too", null, true),
+      typed("2026-10-14T09:02:00.000Z", "use the lexer as well", TOLD, true),
+      typed("2026-10-14T09:03:00.000Z", "no, commit msgs should be lowercase", TOLD, true),
+    ],
+  });
+
+  test("counts it within the running task, never as a task's start", () => {
+    expect(eventsOf("owner-interrupts", record).map((e) => [e.kind, e.at])).toEqual([
+      ["correct", "2026-10-14T09:03:00.000Z"],
+      ["task", "2026-10-14T09:00:00.000Z"],
+    ]);
+    expect(rateOf("owner-interrupts", record)).toEqual({ value: 1, count: 1, of: 1 });
   });
 });
 
@@ -317,7 +369,9 @@ describe("counting blocks by source per task", () => {
         session("a", "2026-10-14T09:00:00.000Z"),
         session("codex", "2026-10-14T09:30:00.000Z", { tool: "codex" }),
       ],
-      ownerMessages: [{ sessionId: "a", at: timed(2), text: "now add the printer", agentBefore: TOLD }],
+      ownerMessages: [
+        { sessionId: "a", at: timed(2), text: "now add the printer", agentBefore: TOLD, midTurn: false },
+      ],
       hookEvents: [
         { at: timed(1), event: "permission_prompt", sessionId: "a", agent: null },
         { at: timed(3), event: "permission_prompt", sessionId: "a", agent: null },
@@ -347,7 +401,13 @@ describe("counting skill loads per task by version", () => {
       session("sub", "2026-10-14T09:05:00.000Z", { parentId: "s" }),
     ],
     ownerMessages: [
-      { sessionId: "s", at: "2026-10-14T09:30:00.000Z", text: "now add the printer", agentBefore: TOLD },
+      {
+        sessionId: "s",
+        at: "2026-10-14T09:30:00.000Z",
+        text: "now add the printer",
+        agentBefore: TOLD,
+        midTurn: false,
+      },
     ],
     skillLoads: [
       {
@@ -518,8 +578,8 @@ describe("costing each step of every loop by its tokens and minutes", () => {
       session("e", timed(25), { parentId: "a", agentType: "Explore" }),
     ],
     ownerMessages: [
-      { sessionId: "a", at: timed(0), text: "add the parser", agentBefore: null },
-      { sessionId: "a", at: timed(40), text: "now add the printer", agentBefore: TOLD },
+      { sessionId: "a", at: timed(0), text: "add the parser", agentBefore: null, midTurn: false },
+      { sessionId: "a", at: timed(40), text: "now add the printer", agentBefore: TOLD, midTurn: false },
     ],
     subagentReturns: [{ sessionId: "a", at: timed(30) }],
     skillLoads: [
@@ -565,11 +625,23 @@ describe("costing each step of every loop by its tokens and minutes", () => {
 });
 
 describe("counting the owner's asks for another model's read per task", () => {
-  const said = (at: string, text: string) => ({ sessionId: "s", at, text, agentBefore: TOLD });
+  const said = (at: string, text: string) => ({
+    sessionId: "s",
+    at,
+    text,
+    agentBefore: TOLD,
+    midTurn: false,
+  });
   const record = recordOf({
     sessions: [session("s", "2026-10-14T09:00:00.000Z")],
     ownerMessages: [
-      { sessionId: "s", at: "2026-10-14T09:00:00.000Z", text: "add the parser", agentBefore: null },
+      {
+        sessionId: "s",
+        at: "2026-10-14T09:00:00.000Z",
+        text: "add the parser",
+        agentBefore: null,
+        midTurn: false,
+      },
       said("2026-10-14T09:10:00.000Z", "ask fable to design this"),
       said("2026-10-14T09:20:00.000Z", "what does fable think?"),
       said("2026-10-14T09:30:00.000Z", "what did fable's review say"),

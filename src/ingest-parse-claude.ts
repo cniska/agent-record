@@ -15,6 +15,7 @@ import {
 import {
   type CompactionRow,
   type MessageRow,
+  MID_TURN_PROMPT,
   NO_FACTS,
   type ParsedChunk,
   type SessionFacts,
@@ -218,8 +219,6 @@ const ClaudeCompactLine = z
 const OWNER_ORIGIN = "human";
 
 const OWNER_QUEUED = `attachment/queued_command/${OWNER_ORIGIN}`;
-
-const QUEUED_PROMPT = "queued";
 
 function claudeKind(value: unknown): string {
   const type = typeOf(value);
@@ -496,7 +495,7 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
           role: "user",
           model: null,
           turnId: null,
-          promptSource: QUEUED_PROMPT,
+          promptSource: MID_TURN_PROMPT,
           originKind: OWNER_ORIGIN,
           isMeta: false,
           isSkillBody: false,

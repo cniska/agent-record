@@ -1,6 +1,8 @@
 import type { Database } from "bun:sqlite";
 import { invariant, unreachable } from "./assert";
 import type { Decision, Gate, HookEvent, Verdict } from "./ingest-event-kinds";
+import { MID_TURN_PROMPT } from "./ingest-session-records";
+import type { HOWS } from "./ingest-skill-load";
 import type { Tool } from "./ingest-tools";
 import { ESCAPE_REACH_DAYS } from "./query-escaped-defects";
 import { AGENT_TAIL_CHARS, INTERRUPTED } from "./query-interrupt";
@@ -20,6 +22,7 @@ type OwnerMessageRow = {
   readonly at: string;
   readonly text: string;
   readonly agentBefore: string | null;
+  readonly midTurn: boolean;
 };
 
 export type TimedRow = { readonly sessionId: string; readonly at: string };
@@ -152,7 +155,7 @@ const AGENT_BEFORE = `(SELECT substr(a.text, -${AGENT_TAIL_CHARS}) FROM message 
 const SUCCEEDED = `c.ts_result IS NOT NULL AND coalesce(c.is_error, 0) = 0
   AND coalesce(c.is_interrupted, 0) = 0 AND coalesce(c.exit_code, 0) = 0`;
 
-const PRELOAD = "preload";
+const PRELOAD = "preload" satisfies (typeof HOWS)[number];
 
 const SUBAGENT_TOOL = "Agent";
 
@@ -164,12 +167,14 @@ export function readSignalRecord(db: Database): SignalRecord {
     )
     .all();
   const ownerMessages = db
-    .query<OwnerMessageRow, []>(
-      `SELECT m.session_id AS sessionId, m.ts AS at, m.text, ${AGENT_BEFORE} AS agentBefore
+    .query<Omit<OwnerMessageRow, "midTurn"> & { readonly midTurn: number }, [string]>(
+      `SELECT m.session_id AS sessionId, m.ts AS at, m.text, ${AGENT_BEFORE} AS agentBefore,
+              m.prompt_source IS ? AS midTurn
        FROM message m JOIN session s ON s.id = m.session_id
        WHERE ${OWNER} ORDER BY m.ts`,
     )
-    .all();
+    .all(MID_TURN_PROMPT)
+    .map((message) => ({ ...message, midTurn: message.midTurn === 1 }));
   const rejections = db
     .query<TimedRow, []>(
       `SELECT session_id AS sessionId, ts AS at FROM message WHERE denial_kind = 'user-rejected' ORDER BY ts`,

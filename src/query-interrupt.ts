@@ -5,6 +5,7 @@ export type Cause = (typeof CAUSES)[number];
 type Said =
   | { readonly kind: "interrupt"; readonly cause: Cause }
   | { readonly kind: "task" }
+  | { readonly kind: "within" }
   | { readonly kind: "command" };
 
 export const AGENT_TAIL_CHARS = 300;
@@ -25,13 +26,14 @@ const QUESTION = "?";
 
 const interrupt = (cause: Cause): Said => ({ kind: "interrupt", cause });
 
-export function classify(text: string, agentBefore: string | null): Said {
+export function classify(text: string, agentBefore: string | null, midTurn: boolean): Said {
   const said = text.trim();
+  const unexplained: Said = midTurn ? { kind: "within" } : { kind: "task" };
   if (said.startsWith(INTERRUPTED)) return interrupt("stop");
   if (COMMAND.test(said)) return { kind: "command" };
-  if (agentBefore === null) return { kind: "task" };
+  if (agentBefore === null) return unexplained;
   if (agentBefore.slice(-AGENT_TAIL_CHARS).includes(QUESTION)) return interrupt("answer");
   if (PUSH_BACK.test(said)) return interrupt("correct");
   if (said.length < SHORT_CHARS && GO_AHEAD.test(said)) return interrupt("unblock");
-  return { kind: "task" };
+  return unexplained;
 }

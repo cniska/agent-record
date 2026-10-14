@@ -1,5 +1,6 @@
 import { basename, extname } from "node:path";
 import { z } from "zod";
+import { unreachable } from "./assert";
 import { type Escape, escapesOf, type Gated, gateCommits, isAccepted } from "./query-escaped-defects";
 import {
   type Blocked,
@@ -131,11 +132,24 @@ function promptsByRoot(record: SignalRecord): {
   const ownerTyped = new Set<string>();
   const pending: Pending[] = [];
   for (const message of record.ownerMessages) {
-    const said = classify(message.text, message.agentBefore);
-    if (said.kind === "command") continue;
-    ownerTyped.add(message.sessionId);
-    if (said.kind === "interrupt") pending.push({ ...message, cause: said.cause });
-    else if (message.agentBefore !== null) starts.push({ root: message.sessionId, at: message.at });
+    const said = classify(message.text, message.agentBefore, message.midTurn);
+    switch (said.kind) {
+      case "command":
+        break;
+      case "interrupt":
+        ownerTyped.add(message.sessionId);
+        pending.push({ ...message, cause: said.cause });
+        break;
+      case "task":
+        ownerTyped.add(message.sessionId);
+        if (message.agentBefore !== null) starts.push({ root: message.sessionId, at: message.at });
+        break;
+      case "within":
+        ownerTyped.add(message.sessionId);
+        break;
+      default:
+        unreachable(said);
+    }
   }
   for (const rejection of record.rejections) pending.push({ ...rejection, cause: "permission", text: null });
   const prompts = new Map(
@@ -200,7 +214,10 @@ export function timelineOf(record: SignalRecord): Timeline {
   });
 
   const secondReadAsks: Ask[] = record.ownerMessages.flatMap((message) => {
-    if (classify(message.text, message.agentBefore).kind === "command" || !asksSecondRead(message.text))
+    if (
+      classify(message.text, message.agentBefore, message.midTurn).kind === "command" ||
+      !asksSecondRead(message.text)
+    )
       return [];
     const root = rootOf(message.sessionId);
     return [

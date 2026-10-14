@@ -30,6 +30,8 @@ export const NO_FACTS: SessionFacts = {
   title: null,
 };
 
+export const MID_TURN_PROMPT = "mid_turn";
+
 export const MessageRow = z
   .strictObject({
     id: MessageId,

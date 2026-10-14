@@ -705,7 +705,7 @@ test("AC-57 second-read-asks counts the owner's asks for another model's read pe
   ]);
 });
 
-test("AC-58 a message the owner queued while a turn ran is searched and counted as an owner message, through sync and rebuild", () => {
+test("AC-58 a message the owner queued while a turn ran is searched and counted within its task, through sync and rebuild", () => {
   const home = synced([
     {
       id: "queue",
@@ -719,7 +719,8 @@ test("AC-58 a message the owner queued while a turn ran is searched and counted 
           at: "2026-09-16T09:03:00Z",
           from: "harness",
         },
-        { agent: "Lowercased.", at: "2026-09-16T09:04:00Z" },
+        { queued: "and add the printer too", at: "2026-09-16T09:04:00Z", from: "owner" },
+        { agent: "Lowercased.", at: "2026-09-16T09:05:00Z" },
       ],
     },
   ]);
@@ -737,6 +738,9 @@ test("AC-58 a message the owner queued while a turn ran is searched and counted 
   expect(interrupts.map(([at, kind, , , , , text]) => [at, kind, text])).toEqual([
     ["2026-09-16T09:02:00.000Z", "correct", "no, commit msgs should be lowercase"],
     ["2026-09-16T09:00:00.000Z", "task", null],
+  ]);
+  expect(query(home, ["signal", "owner-interrupts"]).rows).toEqual([
+    ["2026-09-14", 1, 1, 1, "task 1, correct 1"],
   ]);
 
   rebuild(home);

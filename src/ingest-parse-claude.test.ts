@@ -160,7 +160,7 @@ describe("parseClaudeChunk", () => {
         ts: "2026-09-16T10:03:00.000Z",
         role: "user",
         originKind: "human",
-        promptSource: "queued",
+        promptSource: "mid_turn",
         isMeta: false,
         text: "commit msgs should be lowercase",
         srcLine: 7,
