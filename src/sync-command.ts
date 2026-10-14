@@ -1,4 +1,4 @@
-import { type Command, Ran } from "./cli-contract";
+import type { Command } from "./cli-contract";
 import { parseFlags } from "./cli-flags";
 import { withDb } from "./db";
 import { withLock } from "./db-lock";
@@ -13,6 +13,6 @@ export const syncCommand: Command = {
   run(args) {
     parseFlags(args, [], syncCommand.usage);
     const report = withLock(() => stampingOutcome(() => withDb(dbPath(), sync)));
-    return new Ran(report, 0);
+    return { value: report, exitCode: 0 };
   },
 };

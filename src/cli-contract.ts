@@ -4,15 +4,10 @@ export type Command = {
   name: string;
   usage: string;
   summary: string;
-  run(args: string[]): Ran;
+  run(args: string[]): CommandResult;
 };
 
-export class Ran {
-  constructor(
-    readonly value: unknown,
-    readonly exitCode: 0 | 1,
-  ) {}
-}
+export type CommandResult = { readonly value: unknown; readonly exitCode: 0 | 1 };
 
 const TAKES = { 0: "no arguments", 1: "1 argument" } as const;
 

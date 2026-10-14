@@ -1,4 +1,4 @@
-import { type Command, Ran } from "./cli-contract";
+import type { Command } from "./cli-contract";
 import { parseArg, parseFlags } from "./cli-flags";
 import { refuseQuery } from "./query-contract";
 import { listQueries, runQuery } from "./query-ops";
@@ -13,12 +13,12 @@ export const queryCommand: Command = {
     const [name, ...rest] = args;
     if (name === undefined || name === "list") {
       parseFlags(rest, [], queryCommand.usage);
-      return new Ran(listQueries(), 0);
+      return { value: listQueries(), exitCode: 0 };
     }
     const query = findQuery(name);
     if (query === undefined) throw refuseQuery("unknown_query", { name });
     const { arg, flags } = parseArg(rest, ["rows", ...query.flags], query.usage);
     const { rows, ...own } = flags;
-    return new Ran(runQuery(query, { arg, flags: own, maxRows: rowsOf(rows) }), 0);
+    return { value: runQuery(query, { arg, flags: own, maxRows: rowsOf(rows) }), exitCode: 0 };
   },
 };

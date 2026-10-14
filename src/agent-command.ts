@@ -1,5 +1,5 @@
 import { bootoutCommand, bootstrapCommand, installAgent } from "./agent-launchd";
-import { type Command, Ran, refuseUsage } from "./cli-contract";
+import { type Command, refuseUsage } from "./cli-contract";
 import { parseArg } from "./cli-flags";
 
 export const agentCommand: Command = {
@@ -10,7 +10,10 @@ export const agentCommand: Command = {
     const { arg: verb } = parseArg(args, [], agentCommand.usage);
     if (verb !== "install") throw refuseUsage("unknown_verb", { usage: agentCommand.usage, verb });
     const { path, state } = installAgent();
-    if (state === "current") return new Ran({ path, unchanged: true }, 0);
-    return new Ran({ path, unchanged: false, next: bootstrapCommand(path), remove: bootoutCommand() }, 0);
+    if (state === "current") return { value: { path, unchanged: true }, exitCode: 0 };
+    return {
+      value: { path, unchanged: false, next: bootstrapCommand(path), remove: bootoutCommand() },
+      exitCode: 0,
+    };
   },
 };

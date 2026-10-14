@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { type Command, Ran } from "./cli-contract";
+import type { Command, CommandResult } from "./cli-contract";
 import { parseArg } from "./cli-flags";
 import { sqliteCode } from "./db-error";
 import { readingRecord } from "./db-read";
@@ -43,7 +43,7 @@ function readRows(db: Database, statement: string, maxRows: number): Rows {
   }
 }
 
-function answer(path: string, statement: string, maxRows: number): Ran {
+function answer(path: string, statement: string, maxRows: number): CommandResult {
   return readingRecord(path, (db) => {
     const { columns, rows } = readRows(db, statement, maxRows);
     const result = {
@@ -52,7 +52,7 @@ function answer(path: string, statement: string, maxRows: number): Ran {
       rows,
       note: rows.length === 0 ? "the statement ran and matched nothing" : null,
     };
-    return new Ran(capResult(result, maxRows), 0);
+    return { value: capResult(result, maxRows), exitCode: 0 };
   });
 }
 

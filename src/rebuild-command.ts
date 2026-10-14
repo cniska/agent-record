@@ -1,4 +1,4 @@
-import { type Command, Ran } from "./cli-contract";
+import type { Command } from "./cli-contract";
 import { parseFlags } from "./cli-flags";
 import { withDb } from "./db";
 import { withLock } from "./db-lock";
@@ -13,6 +13,6 @@ export const rebuildCommand: Command = {
   run(args) {
     parseFlags(args, [], rebuildCommand.usage);
     const report = withLock(() => stampingOutcome(() => withDb(dbPath(), rebuild, { forRebuild: true })));
-    return new Ran(report, 0);
+    return { value: report, exitCode: 0 };
   },
 };

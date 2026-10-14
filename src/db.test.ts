@@ -24,11 +24,11 @@ function scratchPath(): string {
   return join(root, "sessions.db");
 }
 
-interface Writer {
+type Writer = {
   proc: Bun.Subprocess<"pipe", "pipe", "pipe">;
   expectLine(line: string): Promise<void>;
   send(): void;
-}
+};
 
 function spawnWriter(
   mode: "hold" | "write" | "read-write" | "open" | "close" | "initialize",
