@@ -47,80 +47,54 @@ describe("a Pi or omp session", () => {
 
     expect(toolCalls).toEqual<object[]>([
       {
+        kind: "call",
         id: "call_1",
+        ts: "2026-01-01T10:01:05.000Z",
         messageId: null,
-        model: "model-a",
-        attributionSkill: null,
-        tsCall: "2026-01-01T10:01:05.000Z",
-        tsResult: null,
         toolName: "read",
         skillName: null,
         filePath: "README.md",
         command: null,
-        isError: null,
-        isInterrupted: null,
-        exitCode: null,
-        durationMs: null,
-        resultBytes: null,
-        srcLineCall: 6,
-        srcLineResult: null,
-      },
-      {
-        id: "call_2",
-        messageId: null,
         model: "model-a",
         attributionSkill: null,
-        tsCall: "2026-01-01T10:01:05.000Z",
-        tsResult: null,
+        srcLine: 6,
+      },
+      {
+        kind: "call",
+        id: "call_2",
+        ts: "2026-01-01T10:01:05.000Z",
+        messageId: null,
         toolName: "bash",
         skillName: null,
         filePath: null,
         command: "bun test",
-        isError: null,
-        isInterrupted: null,
-        exitCode: null,
-        durationMs: null,
-        resultBytes: null,
-        srcLineCall: 6,
-        srcLineResult: null,
+        model: "model-a",
+        attributionSkill: null,
+        srcLine: 6,
       },
       {
+        kind: "result",
         id: "call_1",
-        messageId: null,
-        model: null,
-        attributionSkill: null,
-        tsCall: null,
-        tsResult: "2026-01-01T10:01:06.000Z",
+        ts: "2026-01-01T10:01:06.000Z",
         toolName: "read",
-        skillName: null,
-        filePath: null,
-        command: null,
         isError: false,
         isInterrupted: null,
         exitCode: null,
         durationMs: null,
         resultBytes: null,
-        srcLineCall: null,
-        srcLineResult: 7,
+        srcLine: 7,
       },
       {
+        kind: "result",
         id: "call_2",
-        messageId: null,
-        model: null,
-        attributionSkill: null,
-        tsCall: null,
-        tsResult: "2026-01-01T10:01:08.000Z",
+        ts: "2026-01-01T10:01:08.000Z",
         toolName: "bash",
-        skillName: null,
-        filePath: null,
-        command: null,
         isError: true,
         isInterrupted: null,
         exitCode: null,
         durationMs: null,
         resultBytes: null,
-        srcLineCall: null,
-        srcLineResult: 8,
+        srcLine: 8,
       },
     ]);
   });
@@ -176,6 +150,23 @@ describe("a Pi or omp session", () => {
     expect(call?.toolName).toBeNull();
   });
 
+  test("reports a tool result with no call id or no time as dropped", () => {
+    const orphan = JSON.stringify({
+      type: "message",
+      id: "r-orphan",
+      timestamp: "2026-01-01T10:05:00.000Z",
+      message: { role: "toolResult", toolName: "bash", isError: false },
+    });
+    const untimed = JSON.stringify({
+      type: "message",
+      id: "r-untimed",
+      message: { role: "toolResult", toolCallId: "call_1", toolName: "read", isError: false },
+    });
+    const parsed = parsePiChunk([orphan, untimed], 6);
+    expect(parsed.dropped).toEqual([6, 7]);
+    expect(parsed.toolCalls).toEqual([]);
+  });
+
   test("drops a message line whose id is empty", () => {
     const unnamed = JSON.stringify({
       type: "message",
@@ -186,6 +177,36 @@ describe("a Pi or omp session", () => {
     const parsed = parsePiChunk([unnamed], 4);
     expect(parsed.dropped).toEqual([4]);
     expect(parsed.messages).toEqual([]);
+  });
+
+  test("reports an assistant line with a tool call that has no id, or with no time, as dropped", () => {
+    const anonymous = JSON.stringify({
+      type: "message",
+      id: "a-anon",
+      timestamp: "2026-01-01T10:05:00.000Z",
+      message: { role: "assistant", content: [{ type: "toolCall", name: "bash", arguments: {} }] },
+    });
+    const untimed = JSON.stringify({
+      type: "message",
+      id: "a-untimed",
+      message: { role: "assistant", content: [{ type: "toolCall", id: "call_4", name: "bash" }] },
+    });
+    const parsed = parsePiChunk([anonymous, untimed], 3);
+    expect(parsed.dropped).toEqual([3, 4]);
+    expect(parsed.toolCalls).toEqual([]);
+  });
+
+  test("keeps a line whose empty id is one it does not record", () => {
+    const session = JSON.stringify({ type: "session", id: "", cwd: "/home/dev/widgets" });
+    const result = JSON.stringify({
+      type: "message",
+      id: "",
+      timestamp: "2026-01-01T10:05:00.000Z",
+      message: { role: "toolResult", toolCallId: "call_1", toolName: "read", responseId: "" },
+    });
+    const parsed = parsePiChunk([session, result], 1);
+    expect(parsed.dropped).toEqual([]);
+    expect(parsed.toolCalls.map((call) => call.id)).toEqual<string[]>(["call_1"]);
   });
 
   test("keeps no cursor state", () => {

@@ -242,6 +242,46 @@ describe("parseClaudeChunk", () => {
     expect(chunk.messages).toEqual([]);
   });
 
+  test("reports a line with a tool use or tool result that has no id as dropped", () => {
+    const stamp = "2026-09-16T10:03:00.000Z";
+    const chunk = parseClaudeChunk(
+      [
+        JSON.stringify({
+          type: "assistant",
+          uuid: "a-3",
+          timestamp: stamp,
+          message: { id: "msg-3", content: [{ type: "tool_use", name: "Bash", input: {} }] },
+        }),
+        JSON.stringify({
+          type: "user",
+          uuid: "u-3",
+          timestamp: stamp,
+          message: { content: [{ type: "tool_result", content: "ok" }] },
+        }),
+      ],
+      1,
+    );
+    expect(chunk.dropped).toEqual([1, 2]);
+    expect(chunk.toolCalls).toEqual([]);
+  });
+
+  test("keeps a line whose empty id is one it does not record", () => {
+    const chunk = parseClaudeChunk(
+      [
+        JSON.stringify({
+          type: "user",
+          uuid: "u-4",
+          timestamp: "2026-09-16T10:03:00.000Z",
+          message: { id: "", content: "hello" },
+        }),
+        JSON.stringify({ type: "summary", uuid: "", leafUuid: "u-4" }),
+      ],
+      1,
+    );
+    expect(chunk.dropped).toEqual([]);
+    expect(chunk.messages.map((m) => m.text)).toEqual(["hello"]);
+  });
+
   test("keeps no cursor state", () => {
     expect(parsed.cursorState).toBeNull();
   });

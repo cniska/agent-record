@@ -192,7 +192,32 @@ describe("parseCodexChunk", () => {
       });
     const parsed = parseCodexChunk([completed("1"), completed(1)], 1, FRESH);
     expect(parsed.dropped).toEqual([1]);
-    expect(parsed.toolCalls).toMatchObject([{ id: "item-1", exitCode: 1 }]);
+    expect(parsed.toolCalls).toMatchObject([
+      { kind: "call", id: "item-1" },
+      { kind: "result", id: "item-1", exitCode: 1 },
+    ]);
+  });
+
+  test("reports a completed tool item with no id as dropped", () => {
+    const anonymous = JSON.stringify({
+      type: "event_msg",
+      timestamp: "2026-09-16T10:00:00.000Z",
+      payload: { type: "item_completed", item: { type: "CommandExecution", command: "ls" } },
+    });
+    const parsed = parseCodexChunk([anonymous], 3, FRESH);
+    expect(parsed.dropped).toEqual([3]);
+    expect(parsed.toolCalls).toEqual([]);
+  });
+
+  test("keeps a line whose empty id is one it does not record", () => {
+    const usage = JSON.stringify({
+      type: "token_usage_record",
+      timestamp: "2026-09-16T10:00:00.000Z",
+      payload: { id: "", response_id: "resp-7", usage: { input_tokens: 5 } },
+    });
+    const parsed = parseCodexChunk([usage], 1, FRESH);
+    expect(parsed.dropped).toEqual([]);
+    expect(parsed.usage.map((u) => u.responseId)).toEqual<string[]>(["resp-7"]);
   });
 
   test("ties a skill file read by a command to the tool call that read it", () => {
@@ -214,7 +239,10 @@ describe("parseCodexChunk", () => {
         how: "read",
       },
     ]);
-    expect(parsed.toolCalls).toMatchObject([{ id: "item-7" }]);
+    expect(parsed.toolCalls).toMatchObject([
+      { kind: "call", id: "item-7", command: "cat skills/plan/SKILL.md" },
+      { kind: "result", id: "item-7" },
+    ]);
   });
 
   test("keeps lines whose model, turn id, usage and status are null", () => {
@@ -238,7 +266,10 @@ describe("parseCodexChunk", () => {
     );
     expect(parsed.dropped).toEqual([]);
     expect(parsed.usage).toMatchObject([{ responseId: "r-1", outputTokens: 0 }]);
-    expect(parsed.toolCalls).toMatchObject([{ id: "i-1", isError: null }]);
+    expect(parsed.toolCalls).toMatchObject([
+      { kind: "call", id: "i-1" },
+      { kind: "result", id: "i-1", isError: null },
+    ]);
   });
 
   test("keeps a message line whose content is null", () => {

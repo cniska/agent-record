@@ -1,12 +1,13 @@
 import type { Database } from "bun:sqlite";
 import { existsSync, statSync } from "node:fs";
 import { basename } from "node:path";
+import { unreachable } from "./assert";
 import { writeTransaction } from "./db";
 import { gitSubcommands } from "./git-operations";
 import { readChunk } from "./ingest-chunk";
-import type { SessionId } from "./ingest-ids";
+import type { SessionId, ToolCallId } from "./ingest-ids";
 import { advance, type Position, planRead } from "./ingest-read-plan";
-import type { ChunkParser, ParsedChunk, SessionFacts } from "./ingest-session-records";
+import type { ChunkParser, ParsedChunk, SessionFacts, ToolCallRow } from "./ingest-session-records";
 import { readingSource } from "./ingest-source-read";
 import type { Kind, Tool } from "./ingest-tools";
 import type { Timestamp } from "./timestamp";
@@ -73,6 +74,11 @@ function foldSession(facts: readonly SessionFacts[]): FoldedSession {
     if (f.title) out.title = f.title;
   }
   return out;
+}
+
+function bitOf(value: boolean | null): number | null {
+  if (value === null) return null;
+  return value ? 1 : 0;
 }
 
 export function createIngester(db: Database) {
@@ -169,31 +175,49 @@ export function createIngester(db: Database) {
        time_to_first_token_ms = coalesce(excluded.time_to_first_token_ms, turn.time_to_first_token_ms)`,
   );
 
-  const upsertToolCall = db.prepare(
-    `INSERT INTO tool_call (id, session_id, message_id, model, attribution_skill, ts_call, ts_result,
-       tool_name, skill_name, file_path, command, is_error, is_interrupted, exit_code, duration_ms,
-       result_bytes, src_file, src_line_call, src_line_result)
-     VALUES ($id, $sessionId, $messageId, $model, $attributionSkill, $tsCall, $tsResult,
-       $toolName, $skillName, $filePath, $command, $isError, $isInterrupted, $exitCode, $durationMs,
-       $resultBytes, $srcFile, $srcLineCall, $srcLineResult)
+  const upsertCall = db.prepare(
+    `INSERT INTO tool_call (id, session_id, message_id, model, attribution_skill, ts_call,
+       tool_name, skill_name, file_path, command, src_file, src_line_call)
+     VALUES ($id, $sessionId, $messageId, $model, $attributionSkill, $ts,
+       $toolName, $skillName, $filePath, $command, $srcFile, $srcLine)
      ON CONFLICT(id) DO UPDATE SET
        message_id        = coalesce(excluded.message_id, tool_call.message_id),
        model             = coalesce(excluded.model, tool_call.model),
        attribution_skill = coalesce(excluded.attribution_skill, tool_call.attribution_skill),
-       ts_call           = coalesce(excluded.ts_call, tool_call.ts_call),
-       ts_result         = coalesce(excluded.ts_result, tool_call.ts_result),
+       ts_call           = excluded.ts_call,
        tool_name         = coalesce(excluded.tool_name, tool_call.tool_name),
        skill_name        = coalesce(excluded.skill_name, tool_call.skill_name),
        file_path         = coalesce(excluded.file_path, tool_call.file_path),
        command           = coalesce(excluded.command, tool_call.command),
-       is_error          = coalesce(excluded.is_error, tool_call.is_error),
-       is_interrupted    = coalesce(excluded.is_interrupted, tool_call.is_interrupted),
-       exit_code         = coalesce(excluded.exit_code, tool_call.exit_code),
-       duration_ms       = coalesce(excluded.duration_ms, tool_call.duration_ms),
-       result_bytes      = coalesce(excluded.result_bytes, tool_call.result_bytes),
        src_file          = excluded.src_file,
-       src_line_call     = coalesce(excluded.src_line_call, tool_call.src_line_call),
-       src_line_result   = coalesce(excluded.src_line_result, tool_call.src_line_result)`,
+       src_line_call     = excluded.src_line_call`,
+  );
+
+  const upsertDetail = db.prepare(
+    `INSERT INTO tool_call (id, session_id, tool_name, file_path, command, src_file)
+     VALUES ($id, $sessionId, $toolName, $filePath, $command, $srcFile)
+     ON CONFLICT(id) DO UPDATE SET
+       tool_name = coalesce(excluded.tool_name, tool_call.tool_name),
+       file_path = coalesce(excluded.file_path, tool_call.file_path),
+       command   = coalesce(excluded.command, tool_call.command),
+       src_file  = excluded.src_file`,
+  );
+
+  const upsertResult = db.prepare(
+    `INSERT INTO tool_call (id, session_id, ts_result, tool_name, is_error, is_interrupted, exit_code,
+       duration_ms, result_bytes, src_file, src_line_result)
+     VALUES ($id, $sessionId, $ts, $toolName, $isError, $isInterrupted, $exitCode,
+       $durationMs, $resultBytes, $srcFile, $srcLine)
+     ON CONFLICT(id) DO UPDATE SET
+       ts_result       = excluded.ts_result,
+       tool_name       = coalesce(excluded.tool_name, tool_call.tool_name),
+       is_error        = coalesce(excluded.is_error, tool_call.is_error),
+       is_interrupted  = coalesce(excluded.is_interrupted, tool_call.is_interrupted),
+       exit_code       = coalesce(excluded.exit_code, tool_call.exit_code),
+       duration_ms     = coalesce(excluded.duration_ms, tool_call.duration_ms),
+       result_bytes    = coalesce(excluded.result_bytes, tool_call.result_bytes),
+       src_file        = excluded.src_file,
+       src_line_result = excluded.src_line_result`,
   );
 
   const clearGitCommands = db.prepare("DELETE FROM git_command WHERE tool_call_id = ?");
@@ -263,6 +287,61 @@ export function createIngester(db: Database) {
   function resetFileSession(path: string): void {
     const row = selectFileSession.get(path);
     if (row) writeTransaction(db, () => clearSession(row.session_id));
+  }
+
+  function writeToolCall(t: ToolCallRow, spec: FileSpec): void {
+    switch (t.kind) {
+      case "call":
+        upsertCall.run({
+          $id: t.id,
+          $sessionId: spec.sessionId,
+          $messageId: t.messageId,
+          $model: t.model,
+          $attributionSkill: t.attributionSkill,
+          $ts: t.ts,
+          $toolName: t.toolName,
+          $skillName: t.skillName,
+          $filePath: t.filePath,
+          $command: t.command,
+          $srcFile: spec.path,
+          $srcLine: t.srcLine,
+        });
+        return;
+      case "detail":
+        upsertDetail.run({
+          $id: t.id,
+          $sessionId: spec.sessionId,
+          $toolName: t.toolName,
+          $filePath: t.filePath,
+          $command: t.command,
+          $srcFile: spec.path,
+        });
+        return;
+      case "result":
+        upsertResult.run({
+          $id: t.id,
+          $sessionId: spec.sessionId,
+          $ts: t.ts,
+          $toolName: t.toolName,
+          $isError: bitOf(t.isError),
+          $isInterrupted: bitOf(t.isInterrupted),
+          $exitCode: t.exitCode,
+          $durationMs: t.durationMs,
+          $resultBytes: t.resultBytes,
+          $srcFile: spec.path,
+          $srcLine: t.srcLine,
+        });
+        return;
+      default:
+        unreachable(t);
+    }
+  }
+
+  function writeGitCommands(id: ToolCallId, command: string): void {
+    clearGitCommands.run(id);
+    for (const [position, subcommand] of gitSubcommands(command).entries()) {
+      insertGitCommand.run(id, position, subcommand);
+    }
   }
 
   function applyChunk(spec: FileSpec, parsed: ParsedChunk, to: Position): void {
@@ -338,36 +417,8 @@ export function createIngester(db: Database) {
     }
 
     for (const t of parsed.toolCalls) {
-      upsertToolCall.run({
-        $id: t.id,
-        $sessionId: spec.sessionId,
-        $messageId: t.messageId,
-        $model: t.model,
-        $attributionSkill: t.attributionSkill,
-        $tsCall: t.tsCall,
-        $tsResult: t.tsResult,
-        $toolName: t.toolName,
-        $skillName: t.skillName,
-        $filePath: t.filePath,
-        $command: t.command,
-        $isError: t.isError === null ? null : t.isError ? 1 : 0,
-        $isInterrupted: t.isInterrupted === null ? null : t.isInterrupted ? 1 : 0,
-        $exitCode: t.exitCode,
-        $durationMs: t.durationMs,
-        $resultBytes: t.resultBytes,
-        $srcFile: spec.path,
-        $srcLineCall: t.srcLineCall,
-        $srcLineResult: t.srcLineResult,
-      });
-
-      if (t.command) {
-        clearGitCommands.run(t.id);
-        let position = 0;
-        for (const subcommand of gitSubcommands(t.command)) {
-          insertGitCommand.run(t.id, position, subcommand);
-          position += 1;
-        }
-      }
+      writeToolCall(t, spec);
+      if (t.kind !== "result" && t.command) writeGitCommands(t.id, t.command);
     }
 
     for (const l of parsed.skillLoads) {

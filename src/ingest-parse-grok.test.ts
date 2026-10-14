@@ -49,6 +49,80 @@ describe("a grok update line", () => {
     expect(parsed.messages).toEqual([]);
   });
 
+  test("reports a tool line with no call id or no time as dropped", () => {
+    const call = event({ sessionUpdate: "tool_call", rawInput: { command: "ls" } }, "tool-anon");
+    const update = event({ sessionUpdate: "tool_call_update", status: "completed" }, "tool-anon-done");
+    const untimed = {
+      method: "session/update",
+      params: { sessionId: SESSION, update: { sessionUpdate: "tool_call", toolCallId: "call-u" } },
+    };
+    const parsed = parseGrokChunk(
+      [call, update, untimed].map((line) => JSON.stringify(line)),
+      4,
+    );
+    expect(parsed.dropped).toEqual([4, 5, 6]);
+    expect(parsed.toolCalls).toEqual([]);
+  });
+
+  test("an unfinished update fills in the call's details, and a finished one also its result", () => {
+    const running = event(
+      {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "call-5",
+        status: "in_progress",
+        rawInput: { command: "ls" },
+      },
+      "tool-5-run",
+    );
+    const done = event(
+      {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "call-5",
+        status: "failed",
+        locations: [{ path: "a.ts" }],
+      },
+      "tool-5-done",
+    );
+    const parsed = parseGrokChunk([JSON.stringify(running), JSON.stringify(done)], 1);
+    expect(parsed.toolCalls).toEqual<object[]>([
+      { kind: "detail", id: "call-5", toolName: null, filePath: null, command: "ls" },
+      { kind: "detail", id: "call-5", toolName: null, filePath: "a.ts", command: null },
+      {
+        kind: "result",
+        id: "call-5",
+        ts: "2023-11-14T22:13:20.000Z",
+        toolName: null,
+        isError: true,
+        isInterrupted: null,
+        exitCode: null,
+        durationMs: null,
+        resultBytes: null,
+        srcLine: 2,
+      },
+    ]);
+  });
+
+  test("reports a message line with no time as dropped", () => {
+    const untimed = {
+      method: "session/update",
+      params: {
+        sessionId: SESSION,
+        update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "hi" } },
+        _meta: { eventId: "msg-untimed" },
+      },
+    };
+    const parsed = parseGrokChunk([JSON.stringify(untimed)], 2);
+    expect(parsed.dropped).toEqual([2]);
+    expect(parsed.messages).toEqual([]);
+  });
+
+  test("keeps a tool line whose event id is empty, since it does not record one", () => {
+    const line = event({ sessionUpdate: "tool_call", toolCallId: "call-3" }, "");
+    const parsed = parseGrokChunk([JSON.stringify(line)], 1);
+    expect(parsed.dropped).toEqual([]);
+    expect(parsed.toolCalls.map((call) => call.id)).toEqual<string[]>(["call-3"]);
+  });
+
   test("keeps no cursor state", () => {
     const line = event({ sessionUpdate: "tool_call", toolCallId: "call-1" }, "tool-1");
     expect(parseGrokChunk([JSON.stringify(line)], 1).cursorState).toBeNull();

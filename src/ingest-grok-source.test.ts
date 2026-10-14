@@ -164,6 +164,61 @@ describe("grok sessions", () => {
     }
   });
 
+  test("a call's command and path that arrive in later updates reach its row", () => {
+    const env = scratchEnv(newRoot());
+    writeSession(
+      env,
+      PARENT,
+      [
+        event({ sessionUpdate: "tool_call", toolCallId: "call-3" }, "tool-3"),
+        event(
+          {
+            sessionUpdate: "tool_call_update",
+            toolCallId: "call-3",
+            status: "in_progress",
+            rawInput: { command: "git status" },
+          },
+          "tool-3-run",
+          AT + 1,
+        ),
+        event(
+          {
+            sessionUpdate: "tool_call_update",
+            toolCallId: "call-3",
+            status: "completed",
+            locations: [{ path: "a.ts" }],
+          },
+          "tool-3-done",
+          AT + 2,
+        ),
+      ],
+      parentSummary(),
+    );
+    const db = openDb(dbPath(env));
+    try {
+      sync(db, env);
+      expect(
+        db
+          .prepare(
+            "SELECT command, file_path, ts_call, ts_result, src_line_call, src_line_result FROM tool_call",
+          )
+          .all(),
+      ).toEqual([
+        {
+          command: "git status",
+          file_path: "a.ts",
+          ts_call: "2023-11-14T22:13:20.000Z",
+          ts_result: "2023-11-14T22:13:20.002Z",
+          src_line_call: 1,
+          src_line_result: 3,
+        },
+      ]);
+      expect(db.prepare("SELECT subcommand FROM git_command").all()).toEqual([{ subcommand: "status" }]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("keeps prompts and tool names, and drops thinking and tool results", () => {
     const env = scratchEnv(newRoot());
     const path = seed(env);

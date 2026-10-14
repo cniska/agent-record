@@ -1,67 +1,135 @@
 import { z } from "zod";
+import { unreachable } from "./assert";
 import { MessageId, ResponseId, ToolCallId } from "./ingest-ids";
-import { lineOf, nonEmpty } from "./ingest-parse";
+import { byKind, lineOf, nonEmpty, TextPart, textAt, typeOf, UnkeptLine, UnkeptPart } from "./ingest-parse";
 import {
   type MessageRow,
   NO_FACTS,
-  NO_TOOL_CALL,
   type ParsedChunk,
+  plainMessage,
   type SessionFacts,
   type ToolCallRow,
   type UsageRow,
 } from "./ingest-session-records";
 import { Timestamp } from "./timestamp";
 
-const PiContent = z.looseObject({
-  type: z.string().optional(),
-  text: z.string().optional(),
-  id: ToolCallId.optional(),
-  name: z.string().optional(),
-  arguments: z.record(z.string(), z.unknown()).optional(),
+const PiToolCall = z
+  .looseObject({
+    type: z.literal("toolCall"),
+    id: ToolCallId,
+    name: z.string().optional(),
+    arguments: z.record(z.string(), z.unknown()).optional(),
+  })
+  .transform((part) => ({
+    kind: "toolCall" as const,
+    id: part.id,
+    name: part.name,
+    arguments: part.arguments,
+  }));
+
+const PiUserPart = byKind(typeOf, { text: TextPart }, UnkeptPart);
+
+const PiAssistantPart = byKind(typeOf, { text: TextPart, toolCall: PiToolCall }, UnkeptPart);
+
+const PiUsage = z.looseObject({
+  input: z.number().optional(),
+  output: z.number().optional(),
+  cacheRead: z.number().optional(),
+  cacheWrite: z.number().optional(),
 });
 
-const PiMessage = z.looseObject({
-  role: z.string().optional(),
-  content: z.array(PiContent).optional(),
-  model: z.string().optional(),
-  usage: z
-    .looseObject({
-      input: z.number().optional(),
-      output: z.number().optional(),
-      cacheRead: z.number().optional(),
-      cacheWrite: z.number().optional(),
-    })
-    .optional(),
-  responseId: ResponseId.optional(),
-  toolCallId: ToolCallId.optional(),
-  toolName: z.string().optional(),
-  isError: z.boolean().optional(),
-});
-type PiMessage = z.infer<typeof PiMessage>;
+const PiUserLine = z
+  .looseObject({
+    id: MessageId,
+    timestamp: Timestamp,
+    message: z.looseObject({ content: z.array(PiUserPart).optional(), model: z.string().optional() }),
+  })
+  .transform((line) => ({
+    kind: "user" as const,
+    ts: line.timestamp,
+    id: line.id,
+    parts: line.message.content ?? [],
+    model: line.message.model ?? null,
+  }));
 
-const PiLine = z.looseObject({
-  type: z.string().optional(),
-  id: MessageId.optional(),
-  timestamp: Timestamp.optional(),
-  cwd: z.string().optional(),
-  title: z.string().optional(),
-  message: PiMessage.optional(),
-});
+const PiAssistantLine = z
+  .looseObject({
+    id: MessageId,
+    timestamp: Timestamp,
+    message: z.looseObject({
+      content: z.array(PiAssistantPart).optional(),
+      model: z.string().optional(),
+      usage: PiUsage.optional(),
+      responseId: ResponseId.optional(),
+    }),
+  })
+  .transform((line) => ({
+    kind: "assistant" as const,
+    ts: line.timestamp,
+    id: line.id,
+    parts: line.message.content ?? [],
+    model: line.message.model ?? null,
+    usage: line.message.usage ?? null,
+    responseId: line.message.responseId ?? null,
+  }));
+type PiAssistantLine = z.infer<typeof PiAssistantLine>;
 
-function textOf(content: PiMessage["content"]): string | null {
-  return nonEmpty(
-    (content ?? []).flatMap((part) => (part.type === "text" && part.text ? [part.text] : [])).join("\n"),
-  );
+const PiToolResultLine = z
+  .looseObject({
+    timestamp: Timestamp,
+    message: z.looseObject({
+      toolCallId: ToolCallId,
+      toolName: z.string().optional(),
+      isError: z.boolean().optional(),
+    }),
+  })
+  .transform(({ timestamp, message }) => ({
+    kind: "toolResult" as const,
+    ts: timestamp,
+    toolCallId: message.toolCallId,
+    toolName: nonEmpty(message.toolName),
+    isError: message.isError ?? null,
+  }));
+type PiToolResultLine = z.infer<typeof PiToolResultLine>;
+
+const PiSessionLine = z
+  .looseObject({ timestamp: Timestamp.optional(), cwd: z.string() })
+  .transform((line) => ({ kind: "session" as const, ts: line.timestamp ?? null, cwd: line.cwd }));
+
+const PiTitleLine = z
+  .looseObject({ timestamp: Timestamp.optional(), title: z.string().min(1) })
+  .transform((line) => ({ kind: "title" as const, ts: line.timestamp ?? null, title: line.title }));
+
+function piKind(value: unknown): string {
+  const type = typeOf(value);
+  return type === "message" ? `message/${textAt(value, "message", "role")}` : type;
 }
 
-function usageOf(message: PiMessage, ts: Timestamp, messageId: MessageId | null): UsageRow[] {
-  const { usage, responseId } = message;
-  if (usage === undefined || responseId === undefined) return [];
+const PiLine = byKind(
+  piKind,
+  {
+    session: PiSessionLine,
+    title: PiTitleLine,
+    title_change: PiTitleLine,
+    "message/user": PiUserLine,
+    "message/assistant": PiAssistantLine,
+    "message/toolResult": PiToolResultLine,
+  },
+  UnkeptLine,
+);
+
+function textOf(parts: PiAssistantLine["parts"]): string | null {
+  return nonEmpty(parts.flatMap((part) => (part.kind === "text" && part.text ? [part.text] : [])).join("\n"));
+}
+
+function usageOf(line: PiAssistantLine, messageId: MessageId | null): UsageRow[] {
+  const { usage, responseId } = line;
+  if (usage === null || responseId === null) return [];
   return [
     {
       responseId,
-      ts,
-      model: message.model ?? null,
+      ts: line.ts,
+      model: line.model,
       inputTokens: usage.input ?? 0,
       cacheReadTokens: usage.cacheRead ?? 0,
       cacheWriteTokens: usage.cacheWrite ?? 0,
@@ -72,22 +140,40 @@ function usageOf(message: PiMessage, ts: Timestamp, messageId: MessageId | null)
   ];
 }
 
-function callsOf(message: PiMessage, ts: Timestamp, srcLine: number): ToolCallRow[] {
-  return (message.content ?? []).flatMap((part): ToolCallRow[] => {
-    if (part.type !== "toolCall" || part.id === undefined) return [];
+function callsOf(line: PiAssistantLine, srcLine: number): ToolCallRow[] {
+  return line.parts.flatMap((part): ToolCallRow[] => {
+    if (part.kind !== "toolCall") return [];
     return [
       {
-        ...NO_TOOL_CALL,
+        kind: "call",
         id: part.id,
-        tsCall: ts,
+        ts: line.ts,
+        messageId: null,
         toolName: nonEmpty(part.name),
+        skillName: null,
         filePath: nonEmpty(part.arguments?.path),
         command: nonEmpty(part.arguments?.command),
-        model: message.model ?? null,
-        srcLineCall: srcLine,
+        model: line.model,
+        attributionSkill: null,
+        srcLine,
       },
     ];
   });
+}
+
+function resultOf(line: PiToolResultLine, srcLine: number): ToolCallRow {
+  return {
+    kind: "result",
+    id: line.toolCallId,
+    ts: line.ts,
+    toolName: line.toolName,
+    isError: line.isError,
+    isInterrupted: null,
+    exitCode: null,
+    durationMs: null,
+    resultBytes: null,
+    srcLine,
+  };
 }
 
 export function parsePiChunk(lines: readonly string[], firstLineNumber: number): ParsedChunk {
@@ -105,60 +191,34 @@ export function parsePiChunk(lines: readonly string[], firstLineNumber: number):
       dropped.push(srcLine);
       continue;
     }
-    const ts = line.timestamp ?? null;
-    if (ts) session.push({ ...NO_FACTS, ts });
-    switch (line.type) {
+    if (line.ts) session.push({ ...NO_FACTS, ts: line.ts });
+    switch (line.kind) {
       case "session":
-        session.push({ ...NO_FACTS, cwd: line.cwd ?? null });
-        continue;
+        session.push({ ...NO_FACTS, cwd: line.cwd });
+        break;
       case "title":
-      case "title_change":
-        if (line.title) session.push({ ...NO_FACTS, title: line.title });
-        continue;
-      case "message":
+        session.push({ ...NO_FACTS, title: line.title });
+        break;
+      case "user": {
+        const text = textOf(line.parts);
+        if (text) messages.push(plainMessage({ ...line, role: "user", text, srcLine }));
+        break;
+      }
+      case "assistant": {
+        const text = textOf(line.parts);
+        if (text) messages.push(plainMessage({ ...line, role: "assistant", text, srcLine }));
+        usage.push(...usageOf(line, text ? line.id : null));
+        toolCalls.push(...callsOf(line, srcLine));
+        break;
+      }
+      case "toolResult":
+        toolCalls.push(resultOf(line, srcLine));
+        break;
+      case "unkept":
         break;
       default:
-        continue;
+        unreachable(line);
     }
-    const { message, id } = line;
-    if (message === undefined || id === undefined || ts === null) continue;
-    if (message.role === "toolResult") {
-      if (message.toolCallId === undefined) continue;
-      toolCalls.push({
-        ...NO_TOOL_CALL,
-        id: message.toolCallId,
-        tsResult: ts,
-        toolName: nonEmpty(message.toolName),
-        isError: message.isError ?? null,
-        srcLineResult: srcLine,
-      });
-      continue;
-    }
-    if (message.role !== "user" && message.role !== "assistant") continue;
-    const text = textOf(message.content);
-    if (text) {
-      messages.push({
-        id,
-        ts,
-        role: message.role,
-        model: message.model ?? null,
-        turnId: null,
-        promptSource: null,
-        originKind: null,
-        isMeta: false,
-        isSkillBody: false,
-        attributionSkill: null,
-        slashCommand: null,
-        denialKind: null,
-        userFeedback: null,
-        text,
-        srcLine,
-        extra: null,
-      });
-    }
-    if (message.role !== "assistant") continue;
-    usage.push(...usageOf(message, ts, text ? id : null));
-    toolCalls.push(...callsOf(message, ts, srcLine));
   }
 
   return { session, messages, usage, turns: [], toolCalls, skillLoads: [], dropped, cursorState: null };

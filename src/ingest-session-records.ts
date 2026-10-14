@@ -54,6 +54,34 @@ export const MessageRow = z
   .readonly();
 export type MessageRow = z.infer<typeof MessageRow>;
 
+export function plainMessage({
+  id,
+  ts,
+  role,
+  model,
+  text,
+  srcLine,
+}: Pick<MessageRow, "id" | "ts" | "role" | "model" | "text" | "srcLine">): MessageRow {
+  return {
+    id,
+    ts,
+    role,
+    model,
+    text,
+    srcLine,
+    turnId: null,
+    promptSource: null,
+    originKind: null,
+    isMeta: false,
+    isSkillBody: false,
+    attributionSkill: null,
+    slashCommand: null,
+    denialKind: null,
+    userFeedback: null,
+    extra: null,
+  };
+}
+
 export const UsageRow = z
   .strictObject({
     responseId: ResponseId,
@@ -83,47 +111,49 @@ export const TurnRow = z
   .readonly();
 export type TurnRow = z.infer<typeof TurnRow>;
 
-export const ToolCallRow = z
+const ToolCall = z
   .strictObject({
+    kind: z.literal("call"),
     id: ToolCallId,
+    ts: Timestamp,
     messageId: MessageId.nullable(),
-    model: nullableString,
-    attributionSkill: nullableString,
-    tsCall: nullableTime,
-    tsResult: nullableTime,
     toolName: nullableString,
     skillName: nullableString,
     filePath: nullableString,
     command: nullableString,
+    model: nullableString,
+    attributionSkill: nullableString,
+    srcLine: z.number(),
+  })
+  .readonly();
+
+const ToolCallDetail = z
+  .strictObject({
+    kind: z.literal("detail"),
+    id: ToolCallId,
+    toolName: nullableString,
+    filePath: nullableString,
+    command: nullableString,
+  })
+  .readonly();
+
+const ToolResult = z
+  .strictObject({
+    kind: z.literal("result"),
+    id: ToolCallId,
+    ts: Timestamp,
+    toolName: nullableString,
     isError: z.boolean().nullable(),
     isInterrupted: z.boolean().nullable(),
     exitCode: nullableNumber,
     durationMs: nullableNumber,
     resultBytes: nullableNumber,
-    srcLineCall: nullableNumber,
-    srcLineResult: nullableNumber,
+    srcLine: z.number(),
   })
   .readonly();
-export type ToolCallRow = z.infer<typeof ToolCallRow>;
 
-export const NO_TOOL_CALL: Omit<ToolCallRow, "id"> = {
-  messageId: null,
-  model: null,
-  attributionSkill: null,
-  tsCall: null,
-  tsResult: null,
-  toolName: null,
-  skillName: null,
-  filePath: null,
-  command: null,
-  isError: null,
-  isInterrupted: null,
-  exitCode: null,
-  durationMs: null,
-  resultBytes: null,
-  srcLineCall: null,
-  srcLineResult: null,
-};
+export const ToolCallRow = z.discriminatedUnion("kind", [ToolCall, ToolCallDetail, ToolResult]);
+export type ToolCallRow = z.infer<typeof ToolCallRow>;
 
 export const ParsedChunk = z
   .strictObject({

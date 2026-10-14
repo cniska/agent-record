@@ -1,10 +1,20 @@
 import { z } from "zod";
+import { unreachable } from "./assert";
 import { MessageId, ResponseId, ToolCallId, TurnId } from "./ingest-ids";
-import { jsonOrNull, lineOf, nonEmpty } from "./ingest-parse";
+import {
+  byKind,
+  jsonOrNull,
+  lineOf,
+  nonEmpty,
+  TextPart,
+  textAt,
+  typeOf,
+  UnkeptLine,
+  UnkeptPart,
+} from "./ingest-parse";
 import {
   type MessageRow,
   NO_FACTS,
-  NO_TOOL_CALL,
   type ParsedChunk,
   type SessionFacts,
   type ToolCallRow,
@@ -17,82 +27,194 @@ import { Timestamp, timestampMinus } from "./timestamp";
 
 const SKILL_BODY_PREFIX = "Base directory for this skill:";
 
-const ContentBlock = z.looseObject({
-  type: z.string().optional(),
-  text: z.string().optional(),
-  id: ToolCallId.optional(),
-  name: z.string().optional(),
-  input: z.record(z.string(), z.unknown()).nullish(),
-  tool_use_id: ToolCallId.optional(),
-  is_error: z.boolean().optional(),
-  content: z.unknown().optional(),
-});
-type ContentBlock = z.infer<typeof ContentBlock>;
+const ClaudeToolUse = z
+  .looseObject({
+    type: z.literal("tool_use"),
+    id: ToolCallId,
+    name: z.string().min(1),
+    input: z.record(z.string(), z.unknown()).nullish(),
+  })
+  .transform((block) => ({
+    kind: "tool_use" as const,
+    id: block.id,
+    name: block.name,
+    input: block.input ?? {},
+  }));
 
-const ClaudeToolUseResult = z.looseObject({
+const ClaudeToolResult = z
+  .looseObject({
+    type: z.literal("tool_result"),
+    tool_use_id: ToolCallId,
+    is_error: z.boolean().optional(),
+    content: z.unknown().optional(),
+  })
+  .transform((block) => ({
+    kind: "tool_result" as const,
+    id: block.tool_use_id,
+    isError: block.is_error === true,
+    content: block.content,
+  }));
+
+const ClaudeAssistantBlock = byKind(typeOf, { text: TextPart, tool_use: ClaudeToolUse }, UnkeptPart);
+
+const ClaudeUserBlock = byKind(typeOf, { text: TextPart, tool_result: ClaudeToolResult }, UnkeptPart);
+
+const ClaudeToolUseResult = z.object({
   stdout: z.string().optional(),
   stderr: z.string().optional(),
   interrupted: z.boolean().optional(),
 });
 type ClaudeToolUseResult = z.infer<typeof ClaudeToolUseResult>;
 
-const ClaudeUsage = z.looseObject({
+const ClaudeUsage = z.object({
   input_tokens: z.number().optional(),
   output_tokens: z.number().optional(),
   cache_read_input_tokens: z.number().optional(),
   cache_creation_input_tokens: z.number().optional(),
 });
 
-const ClaudeLine = z.looseObject({
-  type: z.string().optional(),
-  uuid: MessageId.optional(),
-  timestamp: Timestamp.optional(),
+const CLAUDE_CONVERSED = {
+  timestamp: Timestamp,
   cwd: z.string().optional(),
   gitBranch: z.string().optional(),
   version: z.string().optional(),
   entrypoint: z.string().optional(),
   isSidechain: z.boolean().optional(),
-  isMeta: z.boolean().nullish(),
   session_id: z.string().optional(),
-  promptSource: z.string().optional(),
-  promptId: TurnId.optional(),
-  permissionMode: z.string().optional(),
-  origin: z.looseObject({ kind: z.string().optional() }).optional(),
-  attributionSkill: z.string().nullish(),
-  requestId: z.string().optional(),
-  effort: z.string().optional(),
   agentId: z.string().optional(),
-  parentUuid: MessageId.nullish(),
-  sourceToolUseID: ToolCallId.nullish(),
-  interruptedMessageId: z.string().nullish(),
-  toolDenialKind: z.string().nullish(),
-  userFeedback: z.unknown().optional(),
-  aiTitle: z.string().optional(),
-  customTitle: z.string().optional(),
-  subtype: z.string().optional(),
-  durationMs: z.number().optional(),
-  messageCount: z.number().optional(),
-  toolUseResult: z
-    .union([
-      ClaudeToolUseResult,
-      z.string().transform(() => undefined),
-      z.array(z.unknown()).transform(() => undefined),
-    ])
-    .optional(),
-  message: z
-    .looseObject({
-      id: MessageId.optional(),
-      model: z.string().optional(),
-      content: z.union([z.string(), z.array(ContentBlock.nullable())]).optional(),
-      usage: ClaudeUsage.nullish(),
-    })
-    .optional(),
-});
+};
 
-function visibleText(content: string | (ContentBlock | null)[] | undefined): string | null {
+function conversed(line: z.output<z.ZodObject<typeof CLAUDE_CONVERSED>>) {
+  return {
+    ts: line.timestamp,
+    cwd: line.cwd,
+    gitBranch: line.gitBranch,
+    version: line.version,
+    entrypoint: line.entrypoint,
+    isSidechain: line.isSidechain,
+    session_id: line.session_id,
+    agentId: line.agentId,
+  };
+}
+
+const ClaudeAssistantLine = z
+  .looseObject({
+    ...CLAUDE_CONVERSED,
+    uuid: z.string().optional(),
+    attributionSkill: z.string().nullish(),
+    requestId: z.string().optional(),
+    effort: z.string().optional(),
+    message: z.object({
+      id: MessageId,
+      model: z.string().optional(),
+      content: z.union([z.string(), z.array(ClaudeAssistantBlock.nullable())]).optional(),
+      usage: ClaudeUsage.nullish(),
+    }),
+  })
+  .transform((line) => ({
+    kind: "assistant" as const,
+    ...conversed(line),
+    uuid: line.uuid,
+    attributionSkill: line.attributionSkill,
+    requestId: line.requestId,
+    effort: line.effort,
+    message: {
+      id: line.message.id,
+      model: line.message.model,
+      content: line.message.content,
+      usage: line.message.usage,
+    },
+  }));
+
+const ClaudeUserLine = z
+  .looseObject({
+    ...CLAUDE_CONVERSED,
+    uuid: MessageId,
+    isMeta: z.boolean().nullish(),
+    promptSource: z.string().optional(),
+    promptId: TurnId.optional(),
+    permissionMode: z.string().optional(),
+    origin: z.object({ kind: z.string().optional() }).optional(),
+    parentUuid: MessageId.nullish(),
+    sourceToolUseID: ToolCallId.nullish(),
+    interruptedMessageId: z.string().nullish(),
+    toolDenialKind: z.string().nullish(),
+    userFeedback: z.unknown().optional(),
+    toolUseResult: z
+      .union([
+        ClaudeToolUseResult,
+        z.string().transform(() => undefined),
+        z.array(z.unknown()).transform(() => undefined),
+      ])
+      .optional(),
+    message: z
+      .object({ content: z.union([z.string(), z.array(ClaudeUserBlock.nullable())]).optional() })
+      .optional(),
+  })
+  .transform((line) => ({
+    kind: "user" as const,
+    ...conversed(line),
+    uuid: line.uuid,
+    isMeta: line.isMeta,
+    promptSource: line.promptSource,
+    promptId: line.promptId,
+    permissionMode: line.permissionMode,
+    originKind: line.origin?.kind,
+    parentUuid: line.parentUuid,
+    sourceToolUseID: line.sourceToolUseID,
+    interruptedMessageId: line.interruptedMessageId,
+    toolDenialKind: line.toolDenialKind,
+    userFeedback: line.userFeedback,
+    toolUseResult: line.toolUseResult,
+    content: line.message?.content,
+  }));
+
+const ClaudeAiTitleLine = z
+  .looseObject({ timestamp: Timestamp.optional(), aiTitle: z.string().min(1) })
+  .transform((line) => ({ kind: "title" as const, ts: line.timestamp ?? null, title: line.aiTitle }));
+
+const ClaudeCustomTitleLine = z
+  .looseObject({ timestamp: Timestamp.optional(), customTitle: z.string().min(1) })
+  .transform((line) => ({ kind: "title" as const, ts: line.timestamp ?? null, title: line.customTitle }));
+
+const ClaudeTurnLine = z
+  .looseObject({
+    timestamp: Timestamp,
+    uuid: TurnId,
+    durationMs: z.number().optional(),
+    messageCount: z.number().optional(),
+  })
+  .transform((line) => ({
+    kind: "turn" as const,
+    ts: line.timestamp,
+    uuid: line.uuid,
+    durationMs: line.durationMs,
+    messageCount: line.messageCount,
+  }));
+
+function claudeKind(value: unknown): string {
+  const type = typeOf(value);
+  return type === "system" ? `system/${textAt(value, "subtype")}` : type;
+}
+
+const ClaudeLine = byKind(
+  claudeKind,
+  {
+    "ai-title": ClaudeAiTitleLine,
+    "custom-title": ClaudeCustomTitleLine,
+    "system/turn_duration": ClaudeTurnLine,
+    assistant: ClaudeAssistantLine,
+    user: ClaudeUserLine,
+  },
+  UnkeptLine,
+);
+
+type ClaudeBlock = z.infer<typeof ClaudeAssistantBlock> | z.infer<typeof ClaudeUserBlock>;
+
+function visibleText(content: string | readonly (ClaudeBlock | null)[] | undefined): string | null {
   if (typeof content === "string") return nonEmpty(content);
   if (!Array.isArray(content)) return null;
-  const parts = content.flatMap((b) => (b?.type === "text" && b.text !== undefined ? [b.text] : []));
+  const parts = content.flatMap((b) => (b?.kind === "text" && b.text !== null ? [b.text] : []));
   return parts.length > 0 ? parts.join("\n") : null;
 }
 
@@ -107,7 +229,12 @@ function resultSize(content: unknown, result: ClaudeToolUseResult | undefined): 
   return parts.length > 0 ? parts.reduce((n, p) => n + p.length, 0) : null;
 }
 
-function sessionFactsOf(line: z.infer<typeof ClaudeLine>): SessionFacts {
+function sessionFactsOf(line: {
+  readonly cwd?: string;
+  readonly gitBranch?: string;
+  readonly version?: string;
+  readonly entrypoint?: string;
+}): SessionFacts {
   return {
     ...NO_FACTS,
     cwd: line.cwd ?? null,
@@ -139,166 +266,160 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
       dropped.push(srcLine);
       continue;
     }
-    const ts = line.timestamp ?? null;
-    if (ts) session.push({ ...NO_FACTS, ts });
+    if (line.ts) session.push({ ...NO_FACTS, ts: line.ts });
 
-    if (line.type === "ai-title" || line.type === "custom-title") {
-      const title = nonEmpty(line.aiTitle) ?? nonEmpty(line.customTitle);
-      if (title) session.push({ ...NO_FACTS, title });
-      continue;
-    }
+    switch (line.kind) {
+      case "title":
+        session.push({ ...NO_FACTS, title: line.title });
+        break;
 
-    if (line.type === "system" && line.subtype === "turn_duration" && line.uuid) {
-      if (!ts) {
-        dropped.push(srcLine);
-        continue;
-      }
-      turns.push({
-        turnId: TurnId.parse(line.uuid),
-        tsStart: line.durationMs == null ? null : timestampMinus(ts, line.durationMs),
-        tsEnd: ts,
-        durationMs: line.durationMs ?? null,
-        messageCount: line.messageCount ?? null,
-        status: "completed",
-        model: null,
-        timeToFirstTokenMs: null,
-      });
-      continue;
-    }
+      case "turn":
+        turns.push({
+          turnId: line.uuid,
+          tsStart: line.durationMs === undefined ? null : timestampMinus(line.ts, line.durationMs),
+          tsEnd: line.ts,
+          durationMs: line.durationMs ?? null,
+          messageCount: line.messageCount ?? null,
+          status: "completed",
+          model: null,
+          timeToFirstTokenMs: null,
+        });
+        break;
 
-    if (line.type === "assistant" && line.message?.id) {
-      if (!ts) {
-        dropped.push(srcLine);
-        continue;
-      }
-      const model = nonEmpty(line.message.model);
-      session.push(sessionFactsOf(line));
-      messages.push({
-        id: line.message.id,
-        ts,
-        role: "assistant",
-        model,
-        turnId: null,
-        promptSource: null,
-        originKind: null,
-        isMeta: false,
-        isSkillBody: false,
-        attributionSkill: nonEmpty(line.attributionSkill),
-        slashCommand: null,
-        denialKind: null,
-        userFeedback: null,
-        text: visibleText(line.message.content),
-        srcLine,
-        extra: jsonOrNull({
-          requestId: line.requestId,
-          effort: line.effort,
-          isSidechain: line.isSidechain,
-          agentId: line.agentId,
-          uuid: line.uuid,
-          session_id: line.session_id,
-        }),
-      });
-      if (Array.isArray(line.message.content)) {
-        for (const block of line.message.content) {
-          if (block?.type !== "tool_use" || !block.id || !block.name) continue;
-          const input = block.input ?? {};
-          const chosen = input.skill;
-          if (block.name === "Skill" && typeof chosen === "string") {
-            skillLoads.push({
-              toolCallId: block.id,
+      case "assistant": {
+        const { ts, message } = line;
+        const model = nonEmpty(message.model);
+        const attributionSkill = nonEmpty(line.attributionSkill);
+        session.push(sessionFactsOf(line));
+        messages.push({
+          id: message.id,
+          ts,
+          role: "assistant",
+          model,
+          turnId: null,
+          promptSource: null,
+          originKind: null,
+          isMeta: false,
+          isSkillBody: false,
+          attributionSkill,
+          slashCommand: null,
+          denialKind: null,
+          userFeedback: null,
+          text: visibleText(message.content),
+          srcLine,
+          extra: jsonOrNull({
+            requestId: line.requestId,
+            effort: line.effort,
+            isSidechain: line.isSidechain,
+            agentId: line.agentId,
+            uuid: line.uuid,
+            session_id: line.session_id,
+          }),
+        });
+        if (Array.isArray(message.content)) {
+          for (const block of message.content) {
+            if (block?.kind !== "tool_use") continue;
+            const { input } = block;
+            const chosen = input.skill;
+            if (block.name === "Skill" && typeof chosen === "string") {
+              skillLoads.push({ toolCallId: block.id, ts, model, skillName: chosen, how: "model" });
+            }
+            toolCalls.push({
+              kind: "call",
+              id: block.id,
               ts,
+              messageId: message.id,
+              toolName: block.name,
+              skillName: typeof input.skill === "string" ? input.skill : null,
+              filePath: typeof input.file_path === "string" ? input.file_path : null,
+              command: typeof input.command === "string" ? input.command : null,
               model,
-              skillName: chosen,
-              how: "model",
+              attributionSkill,
+              srcLine,
             });
           }
-          toolCalls.push({
-            ...NO_TOOL_CALL,
-            id: block.id,
-            messageId: line.message.id,
+        }
+        const u = message.usage;
+        if (u) {
+          usage.push({
+            responseId: ResponseId.parse(message.id),
+            messageId: message.id,
+            ts,
             model,
-            attributionSkill: nonEmpty(line.attributionSkill),
-            tsCall: ts,
-            toolName: block.name,
-            skillName: typeof input.skill === "string" ? input.skill : null,
-            filePath: typeof input.file_path === "string" ? input.file_path : null,
-            command: typeof input.command === "string" ? input.command : null,
-            srcLineCall: srcLine,
+            inputTokens: u.input_tokens ?? 0,
+            cacheReadTokens: u.cache_read_input_tokens ?? 0,
+            cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
+            outputTokens: u.output_tokens ?? 0,
+            attributionSkill,
           });
         }
+        break;
       }
-      const u = line.message.usage;
-      if (u) {
-        usage.push({
-          responseId: ResponseId.parse(line.message.id),
-          messageId: line.message.id,
-          ts,
-          model,
-          inputTokens: u.input_tokens ?? 0,
-          cacheReadTokens: u.cache_read_input_tokens ?? 0,
-          cacheWriteTokens: u.cache_creation_input_tokens ?? 0,
-          outputTokens: u.output_tokens ?? 0,
-          attributionSkill: nonEmpty(line.attributionSkill),
-        });
-      }
-      continue;
-    }
 
-    if (line.type === "user" && line.uuid) {
-      if (!ts) {
-        dropped.push(srcLine);
-        continue;
-      }
-      const text = visibleText(line.message?.content);
-      if (Array.isArray(line.message?.content)) {
-        for (const block of line.message.content) {
-          if (block?.type !== "tool_result" || !block.tool_use_id) continue;
-          const r = line.toolUseResult;
-          toolCalls.push({
-            ...NO_TOOL_CALL,
-            id: block.tool_use_id,
-            tsResult: ts,
-            isError: block.is_error === true,
-            isInterrupted: r?.interrupted === true,
-            resultBytes: resultSize(block.content, r),
-            srcLineResult: srcLine,
-          });
+      case "user": {
+        const { ts } = line;
+        const { content } = line;
+        const text = visibleText(content);
+        if (Array.isArray(content)) {
+          for (const block of content) {
+            if (block?.kind !== "tool_result") continue;
+            const r = line.toolUseResult;
+            toolCalls.push({
+              kind: "result",
+              id: block.id,
+              ts,
+              toolName: null,
+              isError: block.isError,
+              isInterrupted: r?.interrupted === true,
+              exitCode: null,
+              durationMs: null,
+              resultBytes: resultSize(block.content, r),
+              srcLine,
+            });
+          }
         }
+        session.push(sessionFactsOf(line));
+        const body = line.isMeta === true && text ? parseSkillBody(text) : null;
+        if (body) {
+          const { name, ...fields } = body;
+          if (line.sourceToolUseID) skillLoads.push({ toolUseId: line.sourceToolUseID, ...fields });
+          else if (line.parentUuid)
+            skillLoads.push({ parentUuid: line.parentUuid, skillName: name, ...fields });
+        }
+        messages.push({
+          id: line.uuid,
+          ts,
+          role: "user",
+          model: null,
+          turnId: line.promptId ?? null,
+          promptSource: nonEmpty(line.promptSource),
+          originKind: nonEmpty(line.originKind),
+          isMeta: line.isMeta === true,
+          isSkillBody: line.isMeta === true && text !== null && text.startsWith(SKILL_BODY_PREFIX),
+          attributionSkill: null,
+          slashCommand: text ? skillFromCommand(text) : null,
+          denialKind: nonEmpty(line.toolDenialKind),
+          userFeedback: feedbackText(line.userFeedback),
+          text: body ? null : text,
+          srcLine,
+          extra: jsonOrNull({
+            isSidechain: line.isSidechain,
+            agentId: line.agentId,
+            permissionMode: line.permissionMode,
+            sourceToolUseID: line.sourceToolUseID,
+            parentUuid: line.parentUuid,
+            session_id: line.session_id,
+            interruptedMessageId: nonEmpty(line.interruptedMessageId),
+          }),
+        });
+        break;
       }
-      session.push(sessionFactsOf(line));
-      const body = line.isMeta === true && text ? parseSkillBody(text) : null;
-      if (body) {
-        const { name, ...fields } = body;
-        if (line.sourceToolUseID) skillLoads.push({ toolUseId: line.sourceToolUseID, ...fields });
-        else if (line.parentUuid)
-          skillLoads.push({ parentUuid: line.parentUuid, skillName: name, ...fields });
-      }
-      messages.push({
-        id: line.uuid,
-        ts,
-        role: "user",
-        model: null,
-        turnId: line.promptId ?? null,
-        promptSource: nonEmpty(line.promptSource),
-        originKind: nonEmpty(line.origin?.kind),
-        isMeta: line.isMeta === true,
-        isSkillBody: line.isMeta === true && text !== null && text.startsWith(SKILL_BODY_PREFIX),
-        attributionSkill: null,
-        slashCommand: text ? skillFromCommand(text) : null,
-        denialKind: nonEmpty(line.toolDenialKind),
-        userFeedback: feedbackText(line.userFeedback),
-        text: body ? null : text,
-        srcLine,
-        extra: jsonOrNull({
-          isSidechain: line.isSidechain,
-          agentId: line.agentId,
-          permissionMode: line.permissionMode,
-          sourceToolUseID: line.sourceToolUseID,
-          parentUuid: line.parentUuid,
-          session_id: line.session_id,
-          interruptedMessageId: nonEmpty(line.interruptedMessageId),
-        }),
-      });
+
+      case "unkept":
+        break;
+
+      default:
+        unreachable(line);
     }
   }
 
