@@ -7,6 +7,7 @@ A local record of coding-agent sessions and the queries over it. [`SPEC.md`](SPE
 - `bun run check` is the check: lint, typecheck and tests. It passes before every commit.
 - The record carries one schema version as `PRAGMA user_version` (`src/db-schema.ts`). A change to the tables bumps it; every reader and writer refuses another version and names `agent-record rebuild` as the repair.
 - Ingest reads only the archive (`src/ingest-archive.ts`), never a tool's own files, so `rebuild` loses nothing a tool has since deleted.
+- A module reaches another only through its contract, its commands and the files `src/modules.test.ts` publishes; publish a file there, or move it, rather than reach past it.
 - Fix the cause, never work around it, and add no debt.
 - A bug fix lands with a test watched failing first.
 - No test waits real time: a wait or a clock is passed in, as `now` is.
