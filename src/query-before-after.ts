@@ -104,8 +104,7 @@ export const beforeAfter: Query<"days" | "from" | "skill"> = {
     return {
       columns,
       rows,
-      denominator:
-        `${windows}; ${scope.shown}, ` + `versions before ${listed(ranBefore)}, after ${listed(ranAfter)}`,
+      denominator: `${windows}; ${scope.shown}, versions before ${listed(ranBefore)}, after ${listed(ranAfter)}`,
       note: notes.length === 0 ? null : notes.join(" "),
     };
   },
