@@ -8,6 +8,7 @@ import type { SessionId, ToolCallId } from "./ingest-ids";
 import { type ReadResult, readNewLines } from "./ingest-read-new";
 import { advance, type Position } from "./ingest-read-plan";
 import type { ChunkParser, ParsedChunk, SessionFacts, ToolCallRow } from "./ingest-session-records";
+import type { SkillLoadRow } from "./ingest-skill-load";
 import type { Kind, Tool } from "./ingest-tools";
 import type { Timestamp } from "./timestamp";
 import { projectOf, worktreeOf } from "./worktree";
@@ -335,6 +336,42 @@ export function createIngester(db: Database, home: string) {
     }
   }
 
+  function writeSkillLoad(l: SkillLoadRow, spec: FileSpec): void {
+    switch (l.kind) {
+      case "called":
+        insertSkillLoad.run({
+          $sessionId: spec.sessionId,
+          $toolCallId: l.toolCallId,
+          $ts: l.ts,
+          $model: l.model,
+          $skillName: l.skillName,
+          $how: l.how,
+        });
+        return;
+      case "called-body":
+        insertCalledSkillBody.run({
+          $sessionId: spec.sessionId,
+          $toolCallId: l.toolCallId,
+          $bodyChars: l.bodyChars,
+          $bodySha256: l.bodySha256,
+          $skillPath: l.skillPath,
+        });
+        return;
+      case "typed-body":
+        insertTypedSkillBody.run({
+          $sessionId: spec.sessionId,
+          $parentUuid: l.parentUuid,
+          $skillName: l.skillName,
+          $bodyChars: l.bodyChars,
+          $bodySha256: l.bodySha256,
+          $skillPath: l.skillPath,
+        });
+        return;
+      default:
+        unreachable(l);
+    }
+  }
+
   function writeGitCommands(id: ToolCallId, command: string, cwd: string | null): void {
     clearGitCommands.run(id);
     for (const [position, { subcommand, dir }] of gitRuns(command, { cwd, home }).entries()) {
@@ -420,41 +457,7 @@ export function createIngester(db: Database, home: string) {
       if (t.kind !== "result" && t.command) writeGitCommands(t.id, t.command, cwd);
     }
 
-    for (const l of parsed.skillLoads) {
-      switch (l.kind) {
-        case "called":
-          insertSkillLoad.run({
-            $sessionId: spec.sessionId,
-            $toolCallId: l.toolCallId,
-            $ts: l.ts,
-            $model: l.model,
-            $skillName: l.skillName,
-            $how: l.how,
-          });
-          break;
-        case "called-body":
-          insertCalledSkillBody.run({
-            $sessionId: spec.sessionId,
-            $toolCallId: l.toolCallId,
-            $bodyChars: l.bodyChars,
-            $bodySha256: l.bodySha256,
-            $skillPath: l.skillPath,
-          });
-          break;
-        case "typed-body":
-          insertTypedSkillBody.run({
-            $sessionId: spec.sessionId,
-            $parentUuid: l.parentUuid,
-            $skillName: l.skillName,
-            $bodyChars: l.bodyChars,
-            $bodySha256: l.bodySha256,
-            $skillPath: l.skillPath,
-          });
-          break;
-        default:
-          unreachable(l);
-      }
-    }
+    for (const l of parsed.skillLoads) writeSkillLoad(l, spec);
 
     db.run(
       `UPDATE source_file SET bytes_ingested = ?, lines_ingested = ?,
