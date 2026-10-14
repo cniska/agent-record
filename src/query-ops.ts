@@ -8,8 +8,12 @@ export function listQueries() {
   return { queries: QUERIES.map(({ name, usage, summary }) => ({ name, usage, summary })) };
 }
 
-export function runQuery(query: Query, asked: Omit<QueryContext, "home">): CappedResult {
-  return readingRecord(dbPath(), (db) =>
+export function runQuery(
+  query: Query,
+  asked: Omit<QueryContext, "home">,
+  heldRecordWaitMs: number,
+): CappedResult {
+  return readingRecord(dbPath(), heldRecordWaitMs, (db) =>
     capResult(query.run(db, { ...asked, home: resolveHomeDir() }), asked.maxRows),
   );
 }

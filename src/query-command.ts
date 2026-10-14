@@ -9,7 +9,7 @@ export const queryCommand: Command = {
   name: "query",
   usage: "agent-record query <name> <arg> [--rows <n>] | agent-record query list",
   summary: `ask the database a named question; ${DEFAULT_MAX_ROWS} rows print unless --rows widens them`,
-  run(args) {
+  run(args, runtime) {
     const [name, ...rest] = args;
     if (name === undefined || name === "list") {
       parseFlags(rest, [], queryCommand.usage);
@@ -19,6 +19,9 @@ export const queryCommand: Command = {
     if (query === undefined) throw refuseQuery("unknown_query", { name });
     const { arg, flags } = parseArg(rest, ["rows", ...query.flags], query.usage);
     const { rows, ...own } = flags;
-    return { value: runQuery(query, { arg, flags: own, maxRows: rowsOf(rows) }), exitCode: 0 };
+    return {
+      value: runQuery(query, { arg, flags: own, maxRows: rowsOf(rows) }, runtime.heldRecordWaitMs),
+      exitCode: 0,
+    };
   },
 };

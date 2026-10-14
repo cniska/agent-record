@@ -4,6 +4,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb, recordVersion } from "./db";
+import { NO_WAIT_MS } from "./db-read.test-support";
 import { SCHEMA_VERSION } from "./db-schema";
 import { scratchEnv, writeClaudeTranscript } from "./fixtures.test-support";
 import { rebuild, sync } from "./ingest-sync";
@@ -15,7 +16,7 @@ type Scratch = { db: Database; env: { HOME: string; XDG_DATA_HOME: string } };
 function scratch(): Scratch {
   const home = mkdtempSync(join(tmpdir(), "agent-record-rebuild-"));
   const env = { HOME: home, XDG_DATA_HOME: home };
-  return { db: openDb(dbPath(env)), env };
+  return { db: openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS }), env };
 }
 
 function fill(db: Database): void {
@@ -80,7 +81,7 @@ describe("absorbing a schema change", () => {
     db.run(`PRAGMA user_version = ${SCHEMA_VERSION - 1}`);
     db.close();
 
-    const reopened = openDb(dbPath(env), { forRebuild: true });
+    const reopened = openDb(dbPath(env), { forRebuild: true, heldRecordWaitMs: NO_WAIT_MS });
     rebuild(reopened, env);
 
     expect(columnsOf(reopened, "tool_call")).toContain("file_path");
@@ -152,7 +153,7 @@ describe("a sync", () => {
   test("reads every source in the tool vocabulary's order", () => {
     const root = mkdtempSync(join(tmpdir(), "agent-record-tools-"));
     const env = scratchEnv(root);
-    const db = openDb(dbPath(env));
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     try {
       expect(sync(db, env).sources).toEqual(TOOLS.map((tool) => ({ tool, files: 0 })));
     } finally {
@@ -177,7 +178,7 @@ describe("a sync", () => {
     writeFileSync(join(root, ".claude", "skills", "review", "SKILL.md"), "# Review");
     const empty = join(root, "empty-home");
     mkdirSync(empty);
-    const db = openDb(dbPath(env));
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     const loads = () => db.query("SELECT session_id, message_id, skill_name, how FROM skill_load").all();
     try {
       sync(db, env);

@@ -5,6 +5,7 @@ import { z } from "zod";
 import {
   doctor,
   type Home,
+  holdingRecord,
   livePath,
   refused,
   removeScratch,
@@ -214,5 +215,16 @@ test("AC-20 agent install writes a missing agent, keeps the same one, and backs 
   expect(readFileSync(`${plist}.agent-record-backup`, "utf8")).toBe(different);
 });
 
-test.todo("AC-18 doctor fails a busy record with the refusal's fix", () => {});
+test("AC-18 doctor fails a busy record with the refusal's fix", () => {
+  const home = syncedHome();
+  expect(holdingRecord(home, "exclusive", () => doctorCheck(home, "record"))).toEqual({
+    exitCode: 1,
+    check: {
+      name: "record",
+      state: "fail",
+      detail: `another process holds ${home.record}, or SQLite is recovering it after a crash`,
+      fix: "run this again; if it keeps failing, close whatever holds the file",
+    },
+  });
+});
 test.todo("AC-21 the plugin hook starts sync when agent-record is on PATH and does nothing otherwise", () => {});

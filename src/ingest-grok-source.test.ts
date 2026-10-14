@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { openDb } from "./db";
+import { NO_WAIT_MS } from "./db-read.test-support";
 import { errorCode } from "./error-read";
 import { archivedPath, grokUpdate, scratchEnv } from "./fixtures.test-support";
 import { listSource, SESSION_SOURCES } from "./ingest-sources";
@@ -152,7 +153,7 @@ describe("grok sessions", () => {
       [event({ sessionUpdate: "user_message_chunk", content: { type: "text", text: "hello" } }, "user-1")],
       parentSummary({ created_at: "2023-11-14T21:00:00.000Z" }),
     );
-    const db = openDb(dbPath(env));
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     try {
       sync(db, env);
       expect(db.prepare("SELECT ts_first, ts_last FROM session WHERE id = ?").get(PARENT)).toEqual({
@@ -194,7 +195,7 @@ describe("grok sessions", () => {
       ],
       parentSummary(),
     );
-    const db = openDb(dbPath(env));
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     try {
       sync(db, env);
       expect(
@@ -222,7 +223,7 @@ describe("grok sessions", () => {
   test("keeps prompts and tool names, and drops thinking and tool results", () => {
     const env = scratchEnv(newRoot());
     const path = seed(env);
-    const db = openDb(dbPath(env));
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     try {
       const report = sync(db, env);
       expect(report.sources.find((source) => source.tool === "grok")).toEqual({ tool: "grok", files: 3 });
@@ -277,7 +278,7 @@ describe("grok sessions", () => {
   test("reading the same files again changes nothing", () => {
     const env = scratchEnv(newRoot());
     seed(env);
-    const db = openDb(dbPath(env));
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     try {
       sync(db, env);
       const again = sync(db, env);

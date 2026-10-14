@@ -23,7 +23,7 @@ export type SyncStamp =
   | { readonly kind: "unreadable"; readonly path: string }
   | SyncOutcome;
 
-export function writeSyncStamp(outcome: SyncOutcome, env: Env = process.env): void {
+function writeSyncStamp(outcome: SyncOutcome, env: Env = process.env): void {
   const path = syncStampPath(env);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(outcome)}\n`);
@@ -46,14 +46,14 @@ function finishedOf(report: SyncReport, at: Date): SyncOutcome {
   };
 }
 
-export function stampingOutcome(run: () => SyncReport, env: Env = process.env): SyncReport {
+export function stampingOutcome(run: () => SyncReport, now: () => Date, env: Env = process.env): SyncReport {
   let report: SyncReport;
   try {
     report = run();
   } catch (error) {
-    writeSyncStamp({ kind: "failed", at: new Date(), error: errorRecord(codedOf(error)) }, env);
+    writeSyncStamp({ kind: "failed", at: now(), error: errorRecord(codedOf(error)) }, env);
     throw error;
   }
-  writeSyncStamp(finishedOf(report, new Date()), env);
+  writeSyncStamp(finishedOf(report, now()), env);
   return report;
 }

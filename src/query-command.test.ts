@@ -6,6 +6,7 @@ import { join } from "node:path";
 import {
   asDataHome,
   fingerprint,
+  NO_WAIT,
   recordWithCommit,
   refusal,
   stampSchemaVersion,
@@ -38,10 +39,13 @@ describe("agent-record query", () => {
     const empty = mkdtempSync(join(tmpdir(), "agent-record-db-read-"));
     try {
       const before = recordOf(path);
-      for (const query of QUERIES) await asDataHome(home, () => queryCommand.run([query.name, "stay"]));
+      for (const query of QUERIES)
+        await asDataHome(home, () => queryCommand.run([query.name, "stay"], NO_WAIT));
       expect(recordOf(path)).toEqual(before);
 
-      await expect(asDataHome(empty, () => queryCommand.run(["search", "stay"]))).rejects.toMatchObject({
+      await expect(
+        asDataHome(empty, () => queryCommand.run(["search", "stay"], NO_WAIT)),
+      ).rejects.toMatchObject({
         code: "no_database",
       });
       expect(existsSync(dbPath({ XDG_DATA_HOME: empty }))).toBe(false);
@@ -57,9 +61,9 @@ describe("agent-record query", () => {
       try {
         stampSchemaVersion(path, version);
         const before = fingerprint(path);
-        expect(await asDataHome(home, () => refusal(() => queryCommand.run(["search", "stay"])))).toEqual(
-          expect.objectContaining({ code: "record_version" }),
-        );
+        expect(
+          await asDataHome(home, () => refusal(() => queryCommand.run(["search", "stay"], NO_WAIT))),
+        ).toEqual(expect.objectContaining({ code: "record_version" }));
         expect(fingerprint(path)).toBe(before);
       } finally {
         rmSync(home, { recursive: true, force: true });
@@ -80,9 +84,9 @@ describe("agent-record query", () => {
     try {
       writer.run("PRAGMA locking_mode = EXCLUSIVE");
       writer.run("DELETE FROM repo_commit");
-      expect(await asDataHome(home, () => refusal(() => queryCommand.run(["search", "stay"])))).toEqual(
-        expect.objectContaining({ kind: "refusal", code: "record_busy", meta: { path } }),
-      );
+      expect(
+        await asDataHome(home, () => refusal(() => queryCommand.run(["search", "stay"], NO_WAIT))),
+      ).toEqual(expect.objectContaining({ kind: "refusal", code: "record_busy", meta: { path } }));
     } finally {
       writer.close();
       rmSync(home, { recursive: true, force: true });

@@ -6,21 +6,32 @@ import { dirname, join } from "node:path";
 import { agentLoaded, agentPlistPath, installAgent } from "./agent-launchd";
 import { openDb } from "./db";
 import { refuseRecord } from "./db-contract";
+import { NO_WAIT_MS } from "./db-read.test-support";
 import { recordDoctor } from "./doctor";
 import { runCli, scratchEnv } from "./fixtures.test-support";
 import { sync } from "./ingest-sync";
 import { claudeProjectsDir, dbPath, type Env, syncStampPath } from "./paths";
-import { stampingOutcome, writeSyncStamp } from "./sync-stamp";
+import { stampingOutcome } from "./sync-stamp";
 
-const NOW = Date.parse("2026-10-11T12:00:00Z");
+const NOW = new Date("2026-10-11T12:00:00Z");
+const PROBES = { now: () => NOW, heldRecordWaitMs: NO_WAIT_MS };
 const roots: string[] = [];
 
 afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
-function finished(at: string) {
-  return { kind: "finished", at: new Date(at), failures: null } as const;
+function syncFinishedAt(env: Env, at: string): void {
+  const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
+  try {
+    stampingOutcome(
+      () => sync(db, env),
+      () => new Date(at),
+      env,
+    );
+  } finally {
+    db.close();
+  }
 }
 
 function newEnv(): Env {
@@ -30,11 +41,11 @@ function newEnv(): Env {
 }
 
 function writeRecord(env: Env): void {
-  openDb(dbPath(env)).close();
+  openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS }).close();
 }
 
 function check(env: Env, name: string, loaded = false) {
-  return recordDoctor(env, { agentLoaded: () => loaded, now: NOW }).checks.find((c) => c.name === name);
+  return recordDoctor(env, { ...PROBES, agentLoaded: () => loaded }).checks.find((c) => c.name === name);
 }
 
 describe("agent-record doctor", () => {
@@ -89,14 +100,14 @@ describe("agent-record doctor", () => {
 
   test("warns once the last finished sync is over a day old, and passes inside a day", () => {
     const env = newEnv();
-    writeSyncStamp(finished("2026-10-10T11:00:00Z"), env);
+    syncFinishedAt(env, "2026-10-10T11:00:00Z");
     expect(check(env, "sync")).toEqual({
       name: "sync",
       state: "warn",
       detail: "last sync finished 25 hours ago",
       fix: "agent-record sync, and fix any error it reports",
     });
-    writeSyncStamp(finished("2026-10-10T13:00:00Z"), env);
+    syncFinishedAt(env, "2026-10-10T13:00:00Z");
     expect(check(env, "sync")).toEqual({
       name: "sync",
       state: "ok",
@@ -109,9 +120,13 @@ describe("agent-record doctor", () => {
     const env = newEnv();
     const held = refuseRecord("lock_held", { path: "/r/sessions.db", pid: 42 });
     expect(() =>
-      stampingOutcome(() => {
-        throw held;
-      }, env),
+      stampingOutcome(
+        () => {
+          throw held;
+        },
+        () => NOW,
+        env,
+      ),
     ).toThrow(held);
     expect(check(env, "sync")).toEqual({
       name: "sync",
@@ -156,7 +171,7 @@ describe("agent-record doctor", () => {
     const scratch = newEnv();
     const env = { ...scratch, PATH: scratch.HOME };
     installAgent(env);
-    expect(recordDoctor(env, { agentLoaded, now: NOW }).checks.find((c) => c.name === "agent")).toEqual({
+    expect(recordDoctor(env, { ...PROBES, agentLoaded }).checks.find((c) => c.name === "agent")).toEqual({
       name: "agent",
       state: "warn",
       detail: `launchctl print gui/${process.getuid?.()}/dev.agentrecord.sync could not start launchctl: Executable not found in $PATH: "launchctl"`,
@@ -166,10 +181,10 @@ describe("agent-record doctor", () => {
 
   test("counts the failing checks", () => {
     const env = newEnv();
-    expect(recordDoctor(env, { agentLoaded: () => true, now: NOW }).failing).toBe(2);
+    expect(recordDoctor(env, { ...PROBES, agentLoaded: () => true }).failing).toBe(2);
     writeRecord(env);
-    writeSyncStamp(finished("2026-10-11T12:00:00Z"), env);
-    expect(recordDoctor(env, { agentLoaded: () => true, now: NOW }).failing).toBe(0);
+    syncFinishedAt(env, "2026-10-11T12:00:00Z");
+    expect(recordDoctor(env, { ...PROBES, agentLoaded: () => true }).failing).toBe(0);
   });
 });
 
@@ -188,9 +203,13 @@ describe("agent-record doctor through the CLI", () => {
     mkdirSync(join(subagents, "agent-a1.meta.json"), { recursive: true });
     writeFileSync(join(subagents, "agent-a1.jsonl"), "\n");
 
-    const db = openDb(dbPath(env));
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     try {
-      const report = stampingOutcome(() => sync(db, env), env);
+      const report = stampingOutcome(
+        () => sync(db, env),
+        () => NOW,
+        env,
+      );
       expect(report.failures).toHaveLength(1);
       expect(check(env, "sync")).toEqual({
         name: "sync",

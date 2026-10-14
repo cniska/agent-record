@@ -160,7 +160,7 @@ A coding agent's context ends at compaction, at a handoff, or when another agent
 - **D-1** — The `agent-record` CLI, run by Bun from a checkout and linked onto PATH by `mise install`.
 - **D-2** — The `cniska-record` Claude Code plugin in `plugin/`.
 - **D-3** — `README.md` (install, commands, where the record lives), `AGENTS.md` (repository rules), `src/README.md` (module map), and this spec.
-- **D-4** — The test suite, run by `bun run check`, and the acceptance suite in `acceptance/`, run by `bun run acceptance`. The acceptance suite drives only the CLI; its only reaches past it, each in `acceptance/cli.ts`, plant state no command makes without waiting real time (the record's schema version, the last-sync stamp, a held lock) or stand in for the OS (a `launchctl` on PATH).
+- **D-4** — The test suite, run by `bun run check`, and the acceptance suite in `acceptance/`, run by `bun run acceptance`. The acceptance suite drives only the CLI; its only reaches past it, each in `acceptance/cli.ts`, plant state no command makes without waiting real time (the record's schema version, the last-sync stamp, a held lock, a held record) or stand in for the OS (a `launchctl` on PATH). It runs the CLI through `acceptance/cli-no-wait.ts`, which waits for no held record, so a busy record is refused at once.
 
 ## 7. Constraints (fixed)
 
@@ -178,7 +178,7 @@ A coding agent's context ends at compaction, at a handoff, or when another agent
 - Which locations count as scratch (bounded by FR-21).
 - The default row count, the number of words `search` takes, the files per repo `prior-art` ranks, and the stale-sync threshold, provided each result says what it cut (FR-36, FR-39, FR-42, FR-47).
 - How search ranks within equal matched-word counts (bounded by FR-37).
-- How long a writer waits for another writer before it is refused (bounded by FR-55).
+- How long a command waits for a held record before it is refused (bounded by FR-55).
 - The shape of the reference `search` gives and `thread` takes (bounded by FR-37, FR-40).
 
 ### Policies chosen (not open)

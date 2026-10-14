@@ -7,9 +7,9 @@ export const doctorCommand: Command = {
   name: "doctor",
   usage: "agent-record doctor",
   summary: "judge whether the record is current and readable, naming the fix for each problem",
-  run(args) {
+  run(args, runtime) {
     parseFlags(args, [], doctorCommand.usage);
-    const report = recordDoctor(process.env, { agentLoaded, now: Date.now() });
+    const report = recordDoctor(process.env, { ...runtime, agentLoaded });
     return { value: report, exitCode: report.failing === 0 ? 0 : 1 };
   },
 };

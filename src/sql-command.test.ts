@@ -6,6 +6,7 @@ import { join } from "node:path";
 import {
   asDataHome,
   fingerprint,
+  NO_WAIT,
   recordWithCommit,
   refusal,
   stampSchemaVersion,
@@ -32,7 +33,7 @@ describe("agent-record sql", () => {
     try {
       const before = fingerprint(path);
       for (const statement of WRITES) {
-        const refused = await asDataHome(home, () => refusal(() => sqlCommand.run([statement])));
+        const refused = await asDataHome(home, () => refusal(() => sqlCommand.run([statement], NO_WAIT)));
         expect({ statement, refused }).toEqual({
           statement,
           refused: expect.objectContaining({
@@ -52,7 +53,7 @@ describe("agent-record sql", () => {
   test("refuses a statement SQLite cannot run, naming SQLite's complaint", async () => {
     const { home } = recordWithCommit();
     try {
-      expect(await asDataHome(home, () => refusal(() => sqlCommand.run(["SELEC 1"])))).toEqual(
+      expect(await asDataHome(home, () => refusal(() => sqlCommand.run(["SELEC 1"], NO_WAIT)))).toEqual(
         expect.objectContaining({
           kind: "refusal",
           code: "sql_invalid",
@@ -68,7 +69,9 @@ describe("agent-record sql", () => {
   test("prints columns and rows like a query", async () => {
     const { home } = recordWithCommit();
     try {
-      const { value } = await asDataHome(home, () => sqlCommand.run(["SELECT sha FROM repo_commit"]));
+      const { value } = await asDataHome(home, () =>
+        sqlCommand.run(["SELECT sha FROM repo_commit"], NO_WAIT),
+      );
       expect(value).toEqual({
         denominator: "the rows the statement returned, in the order SQLite returned them",
         columns: ["sha"],
@@ -85,7 +88,7 @@ describe("agent-record sql", () => {
     const { home } = recordWithCommit();
     try {
       const { value } = await asDataHome(home, () =>
-        sqlCommand.run(["SELECT sha, subject FROM repo_commit WHERE sha = 'none'"]),
+        sqlCommand.run(["SELECT sha, subject FROM repo_commit WHERE sha = 'none'"], NO_WAIT),
       );
       expect(value).toEqual({
         denominator: "the rows the statement returned, in the order SQLite returned them",
@@ -103,7 +106,7 @@ describe("agent-record sql", () => {
     const { home } = recordWithCommit();
     const statement = "SELECT sha, subject AS sha FROM repo_commit";
     try {
-      expect(await asDataHome(home, () => refusal(() => sqlCommand.run([statement])))).toEqual(
+      expect(await asDataHome(home, () => refusal(() => sqlCommand.run([statement], NO_WAIT)))).toEqual(
         expect.objectContaining({
           kind: "refusal",
           code: "sql_columns_repeated",
@@ -120,7 +123,7 @@ describe("agent-record sql", () => {
     const { home } = recordWithCommit();
     const statement = "SELECT sha, randomblob(4) AS salt FROM repo_commit";
     try {
-      expect(await asDataHome(home, () => refusal(() => sqlCommand.run([statement])))).toEqual(
+      expect(await asDataHome(home, () => refusal(() => sqlCommand.run([statement], NO_WAIT)))).toEqual(
         expect.objectContaining({
           kind: "refusal",
           code: "sql_blob",
@@ -139,7 +142,7 @@ describe("agent-record sql", () => {
     try {
       writer.run("PRAGMA locking_mode = EXCLUSIVE");
       writer.run("DELETE FROM repo_commit");
-      expect(await asDataHome(home, () => refusal(() => sqlCommand.run(["SELECT 1"])))).toEqual(
+      expect(await asDataHome(home, () => refusal(() => sqlCommand.run(["SELECT 1"], NO_WAIT)))).toEqual(
         expect.objectContaining({
           kind: "refusal",
           code: "record_busy",
@@ -159,7 +162,7 @@ describe("agent-record sql", () => {
     try {
       const failsAtRow50 = `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 100)
         SELECT CASE WHEN i = 50 THEN abs(-9223372036854775808) ELSE i END AS i FROM n`;
-      const { value: result } = await asDataHome(home, () => sqlCommand.run([failsAtRow50]));
+      const { value: result } = await asDataHome(home, () => sqlCommand.run([failsAtRow50], NO_WAIT));
       expect(result).toMatchObject({ more: "more rows than 40; --rows <n> to widen" });
       expect(result).toHaveProperty("rows.length", 40);
     } finally {
@@ -173,7 +176,7 @@ describe("agent-record sql", () => {
       try {
         stampSchemaVersion(path, version);
         const before = fingerprint(path);
-        expect(await asDataHome(home, () => refusal(() => sqlCommand.run(["SELECT 1"])))).toEqual(
+        expect(await asDataHome(home, () => refusal(() => sqlCommand.run(["SELECT 1"], NO_WAIT)))).toEqual(
           expect.objectContaining({ code: "record_version" }),
         );
         expect(fingerprint(path)).toBe(before);
@@ -186,7 +189,9 @@ describe("agent-record sql", () => {
   test("creates no database where there is none", async () => {
     const empty = mkdtempSync(join(tmpdir(), "agent-record-db-read-"));
     try {
-      expect(await asDataHome(empty, () => refusal(() => sqlCommand.run(["SELECT 1"])))).toMatchObject({
+      expect(
+        await asDataHome(empty, () => refusal(() => sqlCommand.run(["SELECT 1"], NO_WAIT))),
+      ).toMatchObject({
         code: "no_database",
       });
       expect(existsSync(dbPath({ XDG_DATA_HOME: empty }))).toBe(false);

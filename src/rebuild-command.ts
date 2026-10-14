@@ -10,9 +10,14 @@ export const rebuildCommand: Command = {
   name: "rebuild",
   usage: "agent-record rebuild",
   summary: "forget every cursor and read the archive from the start",
-  run(args) {
+  run(args, runtime) {
     parseFlags(args, [], rebuildCommand.usage);
-    const report = withLock(() => stampingOutcome(() => withDb(dbPath(), rebuild, { forRebuild: true })));
+    const report = withLock(() =>
+      stampingOutcome(
+        () => withDb(dbPath(), rebuild, { forRebuild: true, heldRecordWaitMs: runtime.heldRecordWaitMs }),
+        runtime.now,
+      ),
+    );
     return { value: report, exitCode: 0 };
   },
 };

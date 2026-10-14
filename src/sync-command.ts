@@ -10,9 +10,14 @@ export const syncCommand: Command = {
   name: "sync",
   usage: "agent-record sync",
   summary: "archive every new byte of every tool's session files and read them",
-  run(args) {
+  run(args, runtime) {
     parseFlags(args, [], syncCommand.usage);
-    const report = withLock(() => stampingOutcome(() => withDb(dbPath(), sync)));
+    const report = withLock(() =>
+      stampingOutcome(
+        () => withDb(dbPath(), sync, { heldRecordWaitMs: runtime.heldRecordWaitMs }),
+        runtime.now,
+      ),
+    );
     return { value: report, exitCode: 0 };
   },
 };

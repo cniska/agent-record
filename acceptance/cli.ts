@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import { z } from "zod";
 
-const CLI = join(import.meta.dir, "..", "src", "cli.ts");
+const CLI = join(import.meta.dir, "cli-no-wait.ts");
 const FIXTURES = join(import.meta.dir, "fixtures");
 const SCRATCH_OUTSIDE_TEMP = join(import.meta.dir, ".scratch");
 const BUN_CACHE_OUTSIDE_HOMES = join(tmpdir(), "agent-record-acceptance-bun-cache");
@@ -295,6 +295,17 @@ export function lockHeldBy(home: Home, pid: number): string {
   mkdirSync(lock, { recursive: true });
   writeFileSync(join(lock, "pid"), String(pid));
   return lock;
+}
+
+export function holdingRecord<T>(home: Home, hold: "write" | "exclusive", run: () => T): T {
+  using db = new Database(home.record);
+  if (hold === "exclusive") db.run("PRAGMA locking_mode = EXCLUSIVE");
+  db.run("BEGIN IMMEDIATE");
+  try {
+    return run();
+  } finally {
+    db.run("ROLLBACK");
+  }
 }
 
 export function setSchemaVersion(home: Home, version: number): void {

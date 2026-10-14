@@ -13,6 +13,7 @@ import {
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { openDb } from "./db";
+import { NO_WAIT_MS } from "./db-read.test-support";
 import {
   archivedPath,
   asUnprivileged,
@@ -44,7 +45,7 @@ afterEach(() => {
 });
 
 function run(env: Env): Database {
-  const db = openDb(dbPath(env));
+  const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
   sync(db, env);
   return db;
 }
@@ -479,7 +480,7 @@ describe("ingest", () => {
     rmSync(`${statePath}-wal`, { force: true });
     rmSync(`${statePath}-shm`, { force: true });
 
-    const db = openDb(dbPath(env));
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     try {
       expect(sync(db, env).failures).toEqual([]);
       expect(db.prepare("SELECT title FROM session WHERE id = ?").get(THREAD)).toEqual({
@@ -500,7 +501,7 @@ describe("ingest", () => {
     state.run("CREATE TABLE threads (id TEXT, name TEXT)");
     state.close();
 
-    const db = openDb(dbPath(env));
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     try {
       expect(sync(db, env).failures).toEqual([
         {
@@ -527,7 +528,7 @@ describe("ingest", () => {
     writeCodexRollout(env, "sessions", THREAD);
     chmodSync(locked, 0o000);
 
-    const db = openDb(dbPath(env));
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     try {
       expect(asUnprivileged(env, () => sync(db, env)).failures).toEqual([
         {
@@ -551,7 +552,7 @@ describe("ingest", () => {
     const env = scratchEnv(root);
     writeClaudeTranscript(env, "-Users-x-code-demo", SESSION);
 
-    const db = openDb(dbPath(env));
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     try {
       db.run(
         "CREATE TEMP TRIGGER refuse_message BEFORE INSERT ON message BEGIN SELECT RAISE(ABORT, 'no'); END",
@@ -570,7 +571,7 @@ describe("ingest", () => {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, `${[good[0], "{ truncated", ...good.slice(1)].join("\n")}\n`);
 
-    const db = openDb(dbPath(env));
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     try {
       const report = sync(db, env);
       expect(report.dropped).toEqual([{ path: archivedPath("claude", path, env), lines: [2] }]);
@@ -593,7 +594,7 @@ describe("ingest", () => {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, `${lines.join("\n")}\n`);
 
-    const db = openDb(dbPath(env));
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     try {
       const report = sync(db, env);
       expect(db.prepare("SELECT ts FROM message WHERE id = 'msg-1'").get()).toEqual({
@@ -664,7 +665,7 @@ describe("ingest", () => {
     const liveMeta = join(agentDir, `agent-${agentId}.meta.json`);
     writeFileSync(liveMeta, JSON.stringify({ agentType: 5 }));
     const meta = archivedPath("claude", liveMeta, env);
-    const db = openDb(dbPath(env));
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     try {
       expect(sync(db, env).failures).toEqual([
         {
@@ -702,14 +703,14 @@ describe("ingest", () => {
     const kept = claudeTranscriptLines(SESSION).slice(0, 2);
     writeFileSync(path, `${kept.map((l) => JSON.stringify(l)).join("\n")}\n`);
 
-    const db = openDb(dbPath(env));
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     try {
       expect(sync(db, env).failures).toEqual([]);
       expect(sync(db, env).failures).toEqual([]);
       const reread = db
         .prepare<{ n: number }, [string]>("SELECT count(*) AS n FROM message WHERE session_id = ?")
         .get(SESSION)?.n;
-      const fresh = openDb(join(root, "fresh.db"));
+      const fresh = openDb(join(root, "fresh.db"), { heldRecordWaitMs: NO_WAIT_MS });
       const expected = (() => {
         const other = scratchEnv(join(root, "fresh"));
         writeFileSync(
@@ -746,7 +747,7 @@ describe("ingest", () => {
           .join("\n")}\n`,
       );
     }
-    const db = openDb(dbPath(env));
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     try {
       expect(sync(db, env).dropped).toEqual([]);
       const rows = db
@@ -777,7 +778,7 @@ describe("ingest", () => {
         .map((l) => JSON.stringify(l))
         .join("\n")}\n`,
     );
-    const db = openDb(dbPath(env));
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     try {
       const report = sync(db, env);
       const id = `orphan1@${SESSION}`;
@@ -1211,7 +1212,7 @@ describe("skill loads", () => {
   test("stores nothing for a body whose Skill call is missing", () => {
     const env = scratchEnv(newRoot());
     writeClaudeTranscript(env, "-Users-x-code-demo", SESSION);
-    const db = openDb(dbPath(env));
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     try {
       expect(sync(db, env).failures).toEqual([]);
       expect(skillLoads(db)).toEqual([]);
@@ -1233,7 +1234,7 @@ describe("skill loads", () => {
       typedBody("u-untimed-body", "u-untimed", "/Users/x/code/acme/plugin/skills/plan"),
       parentless,
     ]);
-    const db = openDb(dbPath(env));
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     try {
       expect(sync(db, env).failures).toEqual([]);
       expect(skillLoads(db)).toEqual([]);
@@ -1255,7 +1256,7 @@ describe("skill loads", () => {
       call("toolu-agent", "Agent", { skill: "acme:plan" }),
       { ...skillBody, uuid: "u-agent-body", sourceToolUseID: "toolu-agent" },
     ]);
-    const db = openDb(dbPath(env));
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     try {
       expect(sync(db, env).failures).toEqual([]);
       expect(skillLoads(db)).toEqual([]);

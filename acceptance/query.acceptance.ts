@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import {
   type Home,
+  holdingRecord,
   QUERY_RESULT,
   refused,
   removeScratch,
@@ -221,4 +222,17 @@ test("AC-16 prior-art folds worktrees onto their checkout, newest first, and say
     '5 tracked files match "src/parse-", in 1 of 1 checkouts indexed; the 3 most recently touched under each where are ranked',
   );
 });
-test.todo("AC-23 a query answers beside a writer and is refused as busy under an exclusive lock", () => {});
+test("AC-23 a query answers beside a writer and is refused as busy under an exclusive lock", () => {
+  const home = syncedFixtureHome();
+  const args = ["search", "parser"];
+  const answered = query(home, args);
+
+  expect(holdingRecord(home, "write", () => query(home, args))).toEqual(answered);
+  const error = holdingRecord(home, "exclusive", () => refused(runCli(home, ["query", ...args]), "query"));
+  expect({ kind: error.kind, code: error.code, meta: error.meta, resolve: error.resolve }).toEqual({
+    kind: "refusal",
+    code: "record_busy",
+    meta: { path: home.record },
+    resolve: "run this again; if it keeps failing, close whatever holds the file",
+  });
+});

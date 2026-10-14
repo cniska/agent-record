@@ -1,5 +1,6 @@
 import { type AgentPlan, bootoutCommand, bootstrapCommand, planAgent } from "./agent-launchd";
 import { unreachable } from "./assert";
+import type { Runtime } from "./cli-contract";
 import { CodedError, isRefusal } from "./coded-error";
 import { readingRecord } from "./db-read";
 import { SCHEMA_VERSION } from "./db-schema";
@@ -19,7 +20,7 @@ type Health = {
 
 type DoctorReport = { readonly checks: readonly Health[]; readonly failing: number };
 
-export type DoctorProbes = { readonly agentLoaded: (env: Env) => boolean; readonly now: number };
+export type DoctorProbes = Runtime & { readonly agentLoaded: (env: Env) => boolean };
 
 function refusalOr<T>(probe: () => T): T | CodedError {
   try {
@@ -30,14 +31,14 @@ function refusalOr<T>(probe: () => T): T | CodedError {
   }
 }
 
-function recordHealth(env: Env): Health {
+function recordHealth(env: Env, heldRecordWaitMs: number): Health {
   const name = "record";
-  const read = refusalOr(() => readingRecord(dbPath(env), () => null));
+  const read = refusalOr(() => readingRecord(dbPath(env), heldRecordWaitMs, () => null));
   if (read instanceof CodedError) return { name, state: "fail", detail: read.message, fix: read.resolve };
   return { name, state: "ok", detail: `schema version ${SCHEMA_VERSION}`, fix: null };
 }
 
-function syncHealth(stamp: SyncStamp, now: number): Health {
+function syncHealth(stamp: SyncStamp, now: Date): Health {
   const name = "sync";
   switch (stamp.kind) {
     case "never":
@@ -61,7 +62,7 @@ function syncHealth(stamp: SyncStamp, now: number): Health {
           fix: `${SYNC}, and read the failures it reports`,
         };
       }
-      const age = now - stamp.at.getTime();
+      const age = now.getTime() - stamp.at.getTime();
       const detail = `last sync finished ${Math.round(age / HOUR_MS)} hours ago`;
       if (age > SYNC_STOPPED_AFTER_MS)
         return { name, state: "warn", detail, fix: `${SYNC}, and fix any error it reports` };
@@ -107,10 +108,10 @@ function agentHealth(plan: AgentPlan, loaded: () => boolean): Health {
   }
 }
 
-export function recordDoctor(env: Env, { agentLoaded, now }: DoctorProbes): DoctorReport {
+export function recordDoctor(env: Env, { agentLoaded, now, heldRecordWaitMs }: DoctorProbes): DoctorReport {
   const checks = [
-    recordHealth(env),
-    syncHealth(readSyncStamp(env), now),
+    recordHealth(env, heldRecordWaitMs),
+    syncHealth(readSyncStamp(env), now()),
     agentHealth(planAgent(env), () => agentLoaded(env)),
   ];
   return { checks, failing: checks.filter(({ state }) => state === "fail").length };

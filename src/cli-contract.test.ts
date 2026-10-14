@@ -48,8 +48,12 @@ function sources(): string[] {
 }
 
 describe("the command contract", () => {
-  test("cli.ts only dispatches through the list of commands", () => {
-    expect([...importsOf(readFileSync(join(SRC, "cli.ts"), "utf8"))].sort()).toEqual([
+  test("cli.ts only runs the CLI with its runtime", () => {
+    expect([...importsOf(readFileSync(join(SRC, "cli.ts"), "utf8"))]).toEqual(["./cli-main"]);
+  });
+
+  test("the CLI only dispatches through the list of commands", () => {
+    expect([...importsOf(readFileSync(join(SRC, "cli-main.ts"), "utf8"))].sort()).toEqual([
       "./cli-commands",
       "./cli-contract",
       "./cli-output",

@@ -43,8 +43,8 @@ function readRows(db: Database, statement: string, maxRows: number): Rows {
   }
 }
 
-function answer(path: string, statement: string, maxRows: number): CommandResult {
-  return readingRecord(path, (db) => {
+function answer(path: string, heldRecordWaitMs: number, statement: string, maxRows: number): CommandResult {
+  return readingRecord(path, heldRecordWaitMs, (db) => {
     const { columns, rows } = readRows(db, statement, maxRows);
     const result = {
       denominator: SQL_DENOMINATOR,
@@ -60,9 +60,9 @@ export const sqlCommand: Command = {
   name: "sql",
   usage: 'agent-record sql "<select>" [--rows <n>]',
   summary: "run one read-only statement against the database",
-  run(args) {
+  run(args, runtime) {
     const { arg: statement, flags } = parseArg(args, ["rows"], sqlCommand.usage);
     const maxRows = rowsOf(flags.rows);
-    return answer(dbPath(), statement, maxRows);
+    return answer(dbPath(), runtime.heldRecordWaitMs, statement, maxRows);
   },
 };

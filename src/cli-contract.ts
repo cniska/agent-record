@@ -4,8 +4,10 @@ export type Command = {
   name: string;
   usage: string;
   summary: string;
-  run(args: string[]): CommandResult;
+  run(args: string[], runtime: Runtime): CommandResult;
 };
+
+export type Runtime = { readonly now: () => Date; readonly heldRecordWaitMs: number };
 
 export type CommandResult = { readonly value: unknown; readonly exitCode: 0 | 1 };
 

@@ -2,6 +2,8 @@ import { Database } from "bun:sqlite";
 import { invariant } from "./assert";
 import { openDb, withDb, writeTransaction } from "./db";
 
+const CONTENDED_WAIT_MS = 5000;
+
 const [mode, path, who] = process.argv.slice(2);
 invariant(mode !== undefined && path !== undefined && who !== undefined, "mode, path and who are arguments");
 function nextLine(): Promise<void> {
@@ -22,14 +24,14 @@ if (mode === "hold") {
   db.run("COMMIT");
   db.close();
 } else if (mode === "write") {
-  const db = openDb(path);
+  const db = openDb(path, { heldRecordWaitMs: CONTENDED_WAIT_MS });
   console.log("opened");
   await nextLine();
   console.log("writing");
   db.run("INSERT INTO probe (who) VALUES (?)", [who]);
   db.close();
 } else if (mode === "read-write") {
-  const db = openDb(path);
+  const db = openDb(path, { heldRecordWaitMs: CONTENDED_WAIT_MS });
   console.log("opened");
   await nextLine();
   console.log("writing");
@@ -40,18 +42,22 @@ if (mode === "hold") {
   db.close();
 } else if (mode === "open") {
   console.log("opening");
-  const db = openDb(path);
+  const db = openDb(path, { heldRecordWaitMs: CONTENDED_WAIT_MS });
   db.run("INSERT INTO probe (who) VALUES (?)", [who]);
   db.close();
 } else if (mode === "close") {
-  withDb(path, (db) => {
-    db.run("INSERT INTO probe (who) VALUES (?)", [who]);
-    console.log("closing");
-  });
+  withDb(
+    path,
+    (db) => {
+      db.run("INSERT INTO probe (who) VALUES (?)", [who]);
+      console.log("closing");
+    },
+    { heldRecordWaitMs: CONTENDED_WAIT_MS },
+  );
 } else if (mode === "initialize") {
   console.log("ready");
   await nextLine();
-  const db = openDb(path);
+  const db = openDb(path, { heldRecordWaitMs: CONTENDED_WAIT_MS });
   db.close();
 } else {
   throw new Error(`unknown mode ${mode}`);

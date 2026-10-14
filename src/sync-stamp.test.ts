@@ -7,6 +7,8 @@ import { scratchEnv } from "./fixtures.test-support";
 import { syncStampPath } from "./paths";
 import { stampingOutcome } from "./sync-stamp";
 
+const AT = new Date("2026-10-11T12:00:00Z");
+
 describe("stamping a sync's outcome", () => {
   test("records the error a run threw, and throws it on", () => {
     const root = mkdtempSync(join(tmpdir(), "agent-record-stamp-"));
@@ -14,12 +16,17 @@ describe("stamping a sync's outcome", () => {
       const env = scratchEnv(root);
       const held = refuseRecord("lock_held", { path: "/r/sessions.db", pid: 42 });
       expect(() =>
-        stampingOutcome(() => {
-          throw held;
-        }, env),
+        stampingOutcome(
+          () => {
+            throw held;
+          },
+          () => AT,
+          env,
+        ),
       ).toThrow(held);
       expect(JSON.parse(readFileSync(syncStampPath(env), "utf8"))).toMatchObject({
         kind: "failed",
+        at: "2026-10-11T12:00:00.000Z",
         error: {
           kind: "refusal",
           code: "lock_held",
@@ -37,9 +44,13 @@ describe("stamping a sync's outcome", () => {
     try {
       const env = scratchEnv(root);
       expect(() =>
-        stampingOutcome(() => {
-          throw new Error("disk vanished");
-        }, env),
+        stampingOutcome(
+          () => {
+            throw new Error("disk vanished");
+          },
+          () => AT,
+          env,
+        ),
       ).toThrow("disk vanished");
       expect(JSON.parse(readFileSync(syncStampPath(env), "utf8"))).toMatchObject({
         kind: "failed",

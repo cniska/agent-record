@@ -6,6 +6,7 @@ import {
   DOCTOR_RESULT,
   doctor,
   type Home,
+  holdingRecord,
   okLine,
   QUERY_RESULT,
   rebuild,
@@ -225,4 +226,13 @@ test("AC-29 a record that is not a database is refused by every command naming t
   expect(readFileSync(home.record, "utf8")).toBe("not a database\n");
 });
 
-test.todo("AC-29 a busy record is refused by every command with a code and fix, never command_failed", () => {});
+test("AC-29 a busy record is refused by every command with a code and fix, never command_failed", () => {
+  const home = syncedHome();
+  const fix = "run this again; if it keeps failing, close whatever holds the file";
+  for (const { command, args } of [...READERS_AND_WRITER, { command: "rebuild", args: ["rebuild"] }]) {
+    const error = holdingRecord(home, "exclusive", () => refused(runCli(home, args), command));
+    expect({ command, kind: error.kind, code: error.code, meta: error.meta, resolve: error.resolve }).toEqual(
+      { command, kind: "refusal", code: "record_busy", meta: { path: home.record }, resolve: fix },
+    );
+  }
+});

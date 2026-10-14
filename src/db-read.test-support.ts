@@ -2,13 +2,18 @@ import { Database } from "bun:sqlite";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Runtime } from "./cli-contract";
 import { openDb } from "./db";
 import { dbPath } from "./paths";
+
+export const NO_WAIT_MS = 0;
+
+export const NO_WAIT: Runtime = { now: () => new Date("2026-10-11T12:00:00Z"), heldRecordWaitMs: NO_WAIT_MS };
 
 export function recordWithCommit(): { home: string; path: string } {
   const home = mkdtempSync(join(tmpdir(), "agent-record-db-read-"));
   const path = dbPath({ XDG_DATA_HOME: home });
-  const db = openDb(path);
+  const db = openDb(path, { heldRecordWaitMs: NO_WAIT_MS });
   db.run(
     "INSERT INTO repo_commit (sha, repo, label, ts, subject) VALUES ('abc123', '/repo', 'acme/demo', '2026-01-01T00:00:00Z', 'feat: stay as written')",
   );

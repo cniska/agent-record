@@ -4,6 +4,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { readingRecord } from "./db-read";
+import { NO_WAIT_MS } from "./db-read.test-support";
 import { SCHEMA_VERSION } from "./db-schema";
 
 function writtenDatabase(): string {
@@ -23,12 +24,14 @@ describe("opening the database to read", () => {
     rmSync(`${path}-wal`, { force: true });
     rmSync(`${path}-shm`, { force: true });
 
-    expect(readingRecord(path, (db) => db.query("SELECT body FROM note").all())).toEqual([{ body: "kept" }]);
+    expect(readingRecord(path, NO_WAIT_MS, (db) => db.query("SELECT body FROM note").all())).toEqual([
+      { body: "kept" },
+    ]);
   });
 
   test("refuses a write", () => {
     expect(() =>
-      readingRecord(writtenDatabase(), (db) => db.run("INSERT INTO note VALUES ('changed')")),
+      readingRecord(writtenDatabase(), NO_WAIT_MS, (db) => db.run("INSERT INTO note VALUES ('changed')")),
     ).toThrow(expect.objectContaining({ code: "SQLITE_READONLY" }));
   });
 
@@ -36,13 +39,17 @@ describe("opening the database to read", () => {
     const path = join(mkdtempSync(join(tmpdir(), "agent-record-db-read-")), "sessions.db");
     new Database(path, { create: true }).close();
 
-    expect(() => readingRecord(path, () => null)).toThrow(expect.objectContaining({ code: "no_database" }));
+    expect(() => readingRecord(path, NO_WAIT_MS, () => null)).toThrow(
+      expect.objectContaining({ code: "no_database" }),
+    );
   });
 
   test("names a missing database without creating one", () => {
     const path = join(mkdtempSync(join(tmpdir(), "agent-record-db-read-")), "sessions.db");
 
-    expect(() => readingRecord(path, () => null)).toThrow(expect.objectContaining({ code: "no_database" }));
+    expect(() => readingRecord(path, NO_WAIT_MS, () => null)).toThrow(
+      expect.objectContaining({ code: "no_database" }),
+    );
     expect(existsSync(path)).toBe(false);
   });
 });
