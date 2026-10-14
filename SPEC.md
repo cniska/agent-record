@@ -184,6 +184,8 @@ A version of a skill is its body's hash (FR-17), with the plugin install it was 
 - Judging quality: `prior-art` ranks by recency and commit count only.
 - Restoring the git history of a checkout no longer on disk (FR-23).
 - Any platform but macOS.
+- Memory: distilling sessions, or putting them into an agent's context; an agent searches the record and reads what it finds.
+- Gating or enforcing a workflow; agent-gates owns that, and the signals only measure it.
 - Keeping earlier versions of a mirror copy, other than the one set aside when a smaller archive file replaces it (FR-63).
 - A command that restores the archive from the mirror; `README.md` documents the copy back.
 
