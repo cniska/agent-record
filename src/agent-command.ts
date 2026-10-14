@@ -6,10 +6,10 @@ export const agentCommand: Command = {
   name: "agent",
   usage: "agent-record agent install",
   summary: "write the launchd agent that syncs every 15 minutes",
-  run(args) {
+  run(args, runtime) {
     const { arg: verb } = parseArg(args, [], agentCommand.usage);
     if (verb !== "install") throw refuseUsage("unknown_verb", { usage: agentCommand.usage, verb });
-    const { path, state } = installAgent();
+    const { path, state } = installAgent(runtime);
     if (state === "current") return { value: { path, unchanged: true }, exitCode: 0 };
     return {
       value: { path, unchanged: false, next: bootstrapCommand(path), remove: bootoutCommand() },

@@ -13,13 +13,14 @@ import {
 } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 import { invariant } from "./assert";
+import type { Env } from "./env";
 import { isEnvironmentError } from "./error-read";
 import { type Failure, refuseIngest } from "./ingest-contract";
 import { readAt } from "./ingest-read-at";
 import { scan } from "./ingest-scan";
 import { SESSION_SOURCES, type SessionSource } from "./ingest-sources";
 import { TOOLS, type Tool } from "./ingest-tools";
-import { archiveDir, type Env } from "./paths";
+import { archiveDir } from "./paths";
 
 const TAIL_BYTES = 4096;
 const COMPARE_CHUNK_BYTES = 1 << 20;

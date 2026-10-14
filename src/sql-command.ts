@@ -64,6 +64,6 @@ export const sqlCommand: Command = {
   run(args, runtime) {
     const { arg: statement, flags } = parseArg(args, ["rows"], sqlCommand.usage);
     const maxRows = rowsOf(flags.rows);
-    return answer(dbPath(), runtime, statement, maxRows);
+    return answer(dbPath(runtime.env), runtime, statement, maxRows);
   },
 };

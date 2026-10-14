@@ -14,14 +14,15 @@ import { withLock } from "./db-lock";
 
 const LOCK_HELD = expect.objectContaining({ code: "lock_held" });
 
-import type { Env } from "./paths";
+import type { Env } from "./env";
+import { scratchEnv } from "./fixtures.test-support";
 
 const roots: string[] = [];
 
 function newRoot(): { env: Env; lock: string } {
   const root = mkdtempSync(join(tmpdir(), "agent-record-lock-"));
   roots.push(root);
-  return { env: { XDG_STATE_HOME: root }, lock: join(root, "agent-record", "locks", "record") };
+  return { env: scratchEnv(root), lock: join(root, "state", "agent-record", "locks", "record") };
 }
 
 afterEach(() => {
@@ -31,16 +32,16 @@ afterEach(() => {
 describe("the write lock", () => {
   test("releases after synchronous work", () => {
     const { env, lock } = newRoot();
-    expect(withLock(() => existsSync(lock), env)).toBe(true);
+    expect(withLock(env, () => existsSync(lock))).toBe(true);
     expect(existsSync(lock)).toBe(false);
   });
 
   test("releases when synchronous work throws", () => {
     const { env, lock } = newRoot();
     expect(() =>
-      withLock(() => {
+      withLock(env, () => {
         throw new Error("mid-write");
-      }, env),
+      }),
     ).toThrow("mid-write");
     expect(existsSync(lock)).toBe(false);
   });
@@ -48,10 +49,10 @@ describe("the write lock", () => {
   test("stays held until asynchronous work finishes", async () => {
     const { env, lock } = newRoot();
     let heldMidway = false;
-    const running = withLock(async () => {
+    const running = withLock(env, async () => {
       await Bun.sleep(20);
       heldMidway = existsSync(lock);
-    }, env);
+    });
 
     expect(existsSync(lock)).toBe(true);
     await running;
@@ -61,21 +62,21 @@ describe("the write lock", () => {
 
   test("a second run is refused while asynchronous work is still in flight", async () => {
     const { env, lock } = newRoot();
-    const running = withLock(async () => {
+    const running = withLock(env, async () => {
       await Bun.sleep(20);
-    }, env);
+    });
 
-    expect(() => withLock(() => null, env)).toThrow(LOCK_HELD);
+    expect(() => withLock(env, () => null)).toThrow(LOCK_HELD);
     await running;
     expect(existsSync(lock)).toBe(false);
   });
 
   test("releases when asynchronous work rejects", async () => {
     const { env, lock } = newRoot();
-    const running = withLock(async () => {
+    const running = withLock(env, async () => {
       await Bun.sleep(5);
       throw new Error("mid-write");
-    }, env);
+    });
 
     await expect(running).rejects.toThrow("mid-write");
     expect(existsSync(lock)).toBe(false);
@@ -85,29 +86,29 @@ describe("the write lock", () => {
     const { env, lock } = newRoot();
     mkdirSync(lock, { recursive: true });
     writeFileSync(join(lock, "pid"), "999999");
-    expect(withLock(() => existsSync(lock), env)).toBe(true);
+    expect(withLock(env, () => existsSync(lock))).toBe(true);
     expect(existsSync(lock)).toBe(false);
   });
 
   test("the lock names its holder for as long as it is held", () => {
     const { env, lock } = newRoot();
-    withLock(() => {
+    withLock(env, () => {
       expect(readFileSync(join(lock, "pid"), "utf8")).toBe(String(process.pid));
-    }, env);
+    });
   });
 
   test("a lock directory with no pid file is not a holder", () => {
     const { env, lock } = newRoot();
     mkdirSync(lock, { recursive: true });
     writeFileSync(join(lock, "stray"), "");
-    expect(withLock(() => "ran", env)).toBe("ran");
+    expect(withLock(env, () => "ran")).toBe("ran");
   });
 
   test("an empty pid file is not a holder", () => {
     const { env, lock } = newRoot();
     mkdirSync(lock, { recursive: true });
     writeFileSync(join(lock, "pid"), "");
-    expect(withLock(() => "ran", env)).toBe("ran");
+    expect(withLock(env, () => "ran")).toBe("ran");
   });
 
   test("a pid file that cannot be read is refused, not taken over", () => {
@@ -115,9 +116,9 @@ describe("the write lock", () => {
     mkdirSync(join(lock, "pid"), { recursive: true });
     let ran = false;
     expect(() =>
-      withLock(() => {
+      withLock(env, () => {
         ran = true;
-      }, env),
+      }),
     ).toThrow(
       expect.objectContaining({
         kind: "refusal",
@@ -134,7 +135,7 @@ describe("the write lock", () => {
     const { env, lock } = newRoot();
     mkdirSync(lock, { recursive: true });
     writeFileSync(join(lock, "pid"), String(process.pid));
-    expect(() => withLock(() => "ran", env)).toThrow(LOCK_HELD);
+    expect(() => withLock(env, () => "ran")).toThrow(LOCK_HELD);
     expect(readdirSync(dirname(lock))).toEqual(["record"]);
   });
 });

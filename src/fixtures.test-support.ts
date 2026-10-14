@@ -1,18 +1,15 @@
 import { lchownSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, relative, sep } from "node:path";
 import { z } from "zod";
-import { invariant } from "./assert";
+import type { Env } from "./env";
 import { archiveRootOf } from "./ingest-archive";
 import { SESSION_SOURCES } from "./ingest-sources";
 import type { Tool } from "./ingest-tools";
-import { claudeProjectsDir, codexDir, type Env } from "./paths";
+import { claudeProjectsDir, codexDir } from "./paths";
 
 export function scratchEnv(root: string): Env {
-  return {
-    HOME: root,
-    XDG_DATA_HOME: join(root, "data"),
-    XDG_STATE_HOME: join(root, "state"),
-  };
+  return { home: root, dataHome: join(root, "data"), stateHome: join(root, "state"), tmpDir: tmpdir() };
 }
 
 const UNPRIVILEGED_UID = 65534;
@@ -20,8 +17,7 @@ const UNPRIVILEGED_UID = 65534;
 export function asUnprivileged<T>(env: Env, run: () => T): T {
   const { getuid, seteuid } = process;
   if (getuid?.() !== 0 || !seteuid) return run();
-  const root = env.HOME;
-  invariant(root !== undefined, "a scratch env has a HOME");
+  const root = env.home;
   const tree = readdirSync(root, { recursive: true }).map((path) => join(root, String(path)));
   for (const path of [root, ...tree]) lchownSync(path, UNPRIVILEGED_UID, -1);
   seteuid(UNPRIVILEGED_UID);
@@ -441,7 +437,7 @@ export function runCli(
   args: readonly string[],
 ): { exitCode: number; stdout: string; stderr: string } {
   const ran = Bun.spawnSync([process.execPath, join(import.meta.dir, "cli.ts"), ...args], {
-    env: { ...process.env, ...env },
+    env: { ...process.env, HOME: env.home, XDG_DATA_HOME: env.dataHome, XDG_STATE_HOME: env.stateHome },
   });
   return { exitCode: ran.exitCode, stdout: ran.stdout.toString(), stderr: ran.stderr.toString() };
 }

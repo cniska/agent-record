@@ -41,6 +41,44 @@ function writesStdout(text: string): boolean {
   );
 }
 
+const ENVIRONMENT_FUNCTIONS: ReadonlySet<string> = new Set(["tmpdir", "homedir", "userInfo"]);
+const GLOBAL_ENVIRONMENT: ReadonlyMap<string, ReadonlySet<string>> = new Map([
+  ["process", new Set(["env", "execPath"])],
+  ["Bun", new Set(["env"])],
+]);
+
+function readsGlobalEnvironment(node: Node): boolean {
+  for (const [global, properties] of GLOBAL_ENVIRONMENT) {
+    if ([...properties].some((property) => isMember(node, global, property))) return true;
+    if (
+      node.type === "VariableDeclarator" &&
+      node.init?.type === "Identifier" &&
+      node.init.name === global &&
+      node.id.type === "ObjectPattern" &&
+      node.id.properties.some(
+        (property) =>
+          property.type === "ObjectProperty" &&
+          property.key.type === "Identifier" &&
+          properties.has(property.key.name),
+      )
+    )
+      return true;
+  }
+  return false;
+}
+
+function readsEnvironment(text: string): boolean {
+  return [...nodesOf(text)].some(
+    (node) =>
+      readsGlobalEnvironment(node) ||
+      (node.type === "MemberExpression" &&
+        node.object.type === "MetaProperty" &&
+        node.property.type === "Identifier" &&
+        node.property.name === "dir") ||
+      (node.type === "Identifier" && ENVIRONMENT_FUNCTIONS.has(node.name)),
+  );
+}
+
 function sources(): string[] {
   return readdirSync(SRC, { recursive: true })
     .map(String)
@@ -49,7 +87,32 @@ function sources(): string[] {
 
 describe("the command contract", () => {
   test("cli.ts only runs the CLI with its runtime", () => {
-    expect([...importsOf(readFileSync(join(SRC, "cli.ts"), "utf8"))]).toEqual(["./cli-main"]);
+    expect([...importsOf(readFileSync(join(SRC, "cli.ts"), "utf8"))].sort()).toEqual([
+      "./cli-main",
+      "./env",
+      "node:path",
+    ]);
+  });
+
+  test("only cli.ts reads the environment, and env.ts parses it", () => {
+    const readers = sources().filter((path) => readsEnvironment(readFileSync(join(SRC, path), "utf8")));
+    expect(readers.sort()).toEqual(["cli.ts", "env.ts"]);
+  });
+
+  test("the environment check finds each way to read it, and not one named in a string", () => {
+    for (const text of [
+      "const home = process.env.HOME;",
+      "const { env } = process;",
+      "run(process.execPath);",
+      "const home = Bun.env.HOME;",
+      "const user = userInfo();",
+      'const up = resolve(import.meta.dir, "..");',
+      'import { tmpdir } from "node:os";',
+      "const home = os.homedir();",
+    ]) {
+      expect(readsEnvironment(text)).toBe(true);
+    }
+    expect(readsEnvironment('const note = "process.env and tmpdir()"; process.argv.slice(2);')).toBe(false);
   });
 
   test("the CLI only dispatches through the list of commands", () => {

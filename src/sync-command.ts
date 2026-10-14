@@ -12,7 +12,10 @@ export const syncCommand: Command = {
   summary: "archive every new byte of every tool's session files and read them",
   run(args, runtime) {
     parseFlags(args, [], syncCommand.usage);
-    const report = withLock(() => stampingOutcome(() => withDb(dbPath(), runtime, sync), runtime.now));
+    const { env } = runtime;
+    const report = withLock(env, () =>
+      stampingOutcome(runtime, () => withDb(dbPath(env), runtime, (db) => sync(db, env))),
+    );
     return { value: report, exitCode: 0 };
   },
 };

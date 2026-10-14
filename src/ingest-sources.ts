@@ -1,3 +1,4 @@
+import type { Env } from "./env";
 import type { SourceFile } from "./ingest";
 import { CLAUDE_SESSIONS, claudeSidecars, listClaudeSessions } from "./ingest-claude-source";
 import {
@@ -13,14 +14,7 @@ import type { SessionId } from "./ingest-ids";
 import { listPiSessions, PI_SESSIONS } from "./ingest-pi-source";
 import { scan } from "./ingest-scan";
 import type { Tool } from "./ingest-tools";
-import {
-  claudeProjectsDir,
-  codexDir,
-  type Env,
-  grokSessionsDir,
-  ompSessionsDir,
-  piSessionsDir,
-} from "./paths";
+import { claudeProjectsDir, codexDir, grokSessionsDir, ompSessionsDir, piSessionsDir } from "./paths";
 
 export type SessionSource = {
   readonly root: (env: Env) => string;

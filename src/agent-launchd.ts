@@ -1,19 +1,22 @@
+import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { invariant } from "./assert";
+import type { Runtime } from "./cli-contract";
+import type { Env } from "./env";
 import { errorDetail } from "./error-read";
 import { copyBackup } from "./file-backup";
 import { refuseIngest } from "./ingest-contract";
-import { type Env, resolveHomeDir, stateDir } from "./paths";
+import { stateDir } from "./paths";
 
 export const AGENT_LABEL = "dev.agentrecord.sync";
 const INTERVAL_SECONDS = 900;
 
-export function agentPlistPath(env: Env = process.env): string {
-  return join(resolveHomeDir(env), "Library", "LaunchAgents", `${AGENT_LABEL}.plist`);
+export function agentPlistPath(env: Env): string {
+  return join(env.home, "Library", "LaunchAgents", `${AGENT_LABEL}.plist`);
 }
 
-export function syncLogPath(env: Env = process.env): string {
+export function syncLogPath(env: Env): string {
   return join(stateDir(env), "sync.log");
 }
 
@@ -21,7 +24,7 @@ function xmlText(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-export function agentPlist(bunPath: string, repoDir: string, env: Env = process.env): string {
+export function agentPlist(bunPath: string, repoDir: string, env: Env): string {
   const args = [bunPath, "run", join(repoDir, "src", "cli.ts"), "sync"];
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -57,17 +60,19 @@ function agentState(path: string, contents: string): AgentState {
   return readFileSync(path, "utf8") === contents ? "current" : "stale";
 }
 
-export function planAgent(env: Env = process.env): AgentPlan {
+export type AgentHost = Pick<Runtime, "env" | "bunPath" | "checkout">;
+
+export function planAgent({ env, bunPath, checkout }: AgentHost): AgentPlan {
   const path = agentPlistPath(env);
-  const contents = agentPlist(process.execPath, resolve(import.meta.dir, ".."), env);
+  const contents = agentPlist(bunPath, checkout, env);
   return { path, contents, state: agentState(path, contents) };
 }
 
-export function installAgent(env: Env = process.env): AgentPlan {
-  const plan = planAgent(env);
+export function installAgent(host: AgentHost): AgentPlan {
+  const plan = planAgent(host);
   if (plan.state === "current") return plan;
   mkdirSync(dirname(plan.path), { recursive: true });
-  mkdirSync(dirname(syncLogPath(env)), { recursive: true });
+  mkdirSync(dirname(syncLogPath(host.env)), { recursive: true });
   if (plan.state === "stale") copyBackup(plan.path);
   writeFileSync(plan.path, plan.contents);
   return plan;
@@ -81,16 +86,15 @@ export function bootoutCommand(): string {
   return `launchctl bootout gui/$(id -u)/${AGENT_LABEL}`;
 }
 
-export function agentLoaded(env: Env = process.env): boolean {
+export function agentLoaded(): boolean {
   const uid = process.getuid?.();
   invariant(uid !== undefined, "launchd runs only where processes have a user id");
-  const args = ["launchctl", "print", `gui/${uid}/${AGENT_LABEL}`];
-  try {
-    return Bun.spawnSync(args, { env, stdout: "ignore", stderr: "ignore" }).success;
-  } catch (error) {
+  const args = ["print", `gui/${uid}/${AGENT_LABEL}`];
+  const run = spawnSync("launchctl", args, { stdio: "ignore" });
+  if (run.error)
     throw refuseIngest("launchctl_unavailable", {
-      command: args.join(" "),
-      detail: errorDetail(error),
+      command: `launchctl ${args.join(" ")}`,
+      detail: errorDetail(run.error),
     });
-  }
+  return run.status === 0;
 }

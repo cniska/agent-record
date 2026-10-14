@@ -9,7 +9,7 @@ export const doctorCommand: Command = {
   summary: "judge whether the record is current and readable, naming the fix for each problem",
   run(args, runtime) {
     parseFlags(args, [], doctorCommand.usage);
-    const report = recordDoctor(process.env, { ...runtime, agentLoaded });
+    const report = recordDoctor({ ...runtime, agentLoaded });
     return { value: report, exitCode: report.failing === 0 ? 0 : 1 };
   },
 };

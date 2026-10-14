@@ -1,8 +1,9 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { refuseRecord } from "./db-contract";
+import type { Env } from "./env";
 import { errorCode } from "./error-read";
-import { type Env, locksDir } from "./paths";
+import { locksDir } from "./paths";
 
 const PID = /^[1-9]\d*$/;
 const OCCUPIED: ReadonlySet<unknown> = new Set(["EEXIST", "ENOTEMPTY"]);
@@ -110,6 +111,6 @@ function withPathLock<T>(path: string, fn: () => T): T {
   return result;
 }
 
-export function withLock<T>(fn: () => T, env: Env = process.env): T {
+export function withLock<T>(env: Env, fn: () => T): T {
   return withPathLock(join(locksDir(env), "record"), fn);
 }

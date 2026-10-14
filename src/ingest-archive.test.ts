@@ -14,12 +14,13 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import type { Env } from "./env";
 import { errorCode } from "./error-read";
 import { archivedPath as archived, asUnprivileged, scratchEnv } from "./fixtures.test-support";
 import { archiveSources } from "./ingest-archive";
 import { readCodexTitles } from "./ingest-codex-source";
 import { SessionId } from "./ingest-ids";
-import { archiveDir, claudeProjectsDir, codexDir, type Env, grokSessionsDir } from "./paths";
+import { archiveDir, claudeProjectsDir, codexDir, grokSessionsDir } from "./paths";
 
 const SESSION = "0b8f2c1e-7d4a-4e2b-9c3f-5a6d7e8f9a0b";
 const THREAD = "01a0a651-086e-7150-8650-cef0f4025a58";

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { type ErrorRecord, errorRecord, isRefusal } from "./coded-error";
 import { writeTransaction } from "./db";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
+import type { Env } from "./env";
 import { createIngester, type FileSpec, ingestFile, type SourceFile } from "./ingest";
 import { type ArchiveReport, archiveRootOf, archiveSources } from "./ingest-archive";
 import { type GitReport, ingestCommits, probeCheckouts, repoRoots } from "./ingest-git";
@@ -10,7 +11,6 @@ import type { SessionId } from "./ingest-ids";
 import { parentsFirst } from "./ingest-order";
 import { listSource, SESSION_SOURCES, type SessionSource } from "./ingest-sources";
 import { TOOLS, type Tool } from "./ingest-tools";
-import type { Env } from "./paths";
 import { indexRepoFiles, type RepoFileReport } from "./repo-files";
 
 export type SyncReport = {
@@ -24,7 +24,7 @@ export type SyncReport = {
   repoFiles: RepoFileReport;
 };
 
-export function sync(db: Database, env: Env = process.env): SyncReport {
+export function sync(db: Database, env: Env): SyncReport {
   const ingester = createIngester(db);
   const sessionExists = db.prepare<{ one: number }, [string]>("SELECT 1 AS one FROM session WHERE id = ?");
   const setTitle = db.prepare<void, [string, string]>(
@@ -98,7 +98,7 @@ export function sync(db: Database, env: Env = process.env): SyncReport {
     report.sources.push({ tool, files: files.length });
   }
 
-  const checkouts = probeCheckouts(repoRoots(db), fail);
+  const checkouts = probeCheckouts(repoRoots(db, env), fail);
   report.git = ingestCommits(db, checkouts, fail);
   report.repoFiles = indexRepoFiles(db, checkouts, fail);
   return report;
@@ -118,7 +118,7 @@ function dropEveryTable(db: Database): void {
   for (const name of tablesWhere(db, "1")) db.run(`DROP TABLE "${name}"`);
 }
 
-export function rebuild(db: Database, env: Env = process.env): SyncReport {
+export function rebuild(db: Database, env: Env): SyncReport {
   db.run("PRAGMA foreign_keys = OFF");
   try {
     writeTransaction(db, () => {

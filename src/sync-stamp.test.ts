@@ -16,13 +16,9 @@ describe("stamping a sync's outcome", () => {
       const env = scratchEnv(root);
       const held = refuseRecord("lock_held", { path: "/r/sessions.db", pid: 42 });
       expect(() =>
-        stampingOutcome(
-          () => {
-            throw held;
-          },
-          () => AT,
-          env,
-        ),
+        stampingOutcome({ now: () => AT, env: env }, () => {
+          throw held;
+        }),
       ).toThrow(held);
       expect(JSON.parse(readFileSync(syncStampPath(env), "utf8"))).toMatchObject({
         kind: "failed",
@@ -44,13 +40,9 @@ describe("stamping a sync's outcome", () => {
     try {
       const env = scratchEnv(root);
       expect(() =>
-        stampingOutcome(
-          () => {
-            throw new Error("disk vanished");
-          },
-          () => AT,
-          env,
-        ),
+        stampingOutcome({ now: () => AT, env: env }, () => {
+          throw new Error("disk vanished");
+        }),
       ).toThrow("disk vanished");
       expect(JSON.parse(readFileSync(syncStampPath(env), "utf8"))).toMatchObject({
         kind: "failed",

@@ -28,7 +28,7 @@ describe("agent-record sync", () => {
     const root = mkdtempSync(join(tmpdir(), "agent-record-sync-"));
     try {
       const env = scratchEnv(root);
-      const ran = withLock(() => runCli(env, ["sync"]), env);
+      const ran = withLock(env, () => runCli(env, ["sync"]));
       expect(ran.exitCode).toBe(1);
       expect(JSON.parse(ran.stderr)).toMatchObject({ error: { code: "lock_held" } });
       expect(existsSync(syncStampPath(env))).toBe(false);

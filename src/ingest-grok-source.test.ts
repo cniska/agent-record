@@ -4,11 +4,12 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { openDb } from "./db";
 import { NO_WAIT_MS } from "./db-read.test-support";
+import type { Env } from "./env";
 import { errorCode } from "./error-read";
 import { archivedPath, grokUpdate, scratchEnv } from "./fixtures.test-support";
 import { listSource, SESSION_SOURCES } from "./ingest-sources";
 import { sync } from "./ingest-sync";
-import { dbPath, type Env, grokSessionsDir } from "./paths";
+import { dbPath, grokSessionsDir } from "./paths";
 
 const PARENT = "018f3b2a-7c3e-7b2a-8f1e-6c0b9a2d4e11";
 const CHILD = "018f3b2a-7c3e-7b2a-8f1e-6c0b9a2d4e22";

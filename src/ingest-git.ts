@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { existsSync, realpathSync } from "node:fs";
 import { invariant } from "./assert";
 import { writeTransaction } from "./db";
+import type { Env } from "./env";
 import { checkoutRoot } from "./git-checkout";
 import { type Checkout, probeCheckout } from "./git-probe";
 import { originLabel } from "./git-remote";
@@ -14,13 +15,13 @@ export type GitReport = { repos: number; commits: number; files: number; unchang
 
 const OVERLAP_DAYS = 7;
 
-export function repoRoots(db: Database): readonly string[] {
+export function repoRoots(db: Database, env: Env): readonly string[] {
   const cwds = db
     .query<{ cwd: string }, []>("SELECT DISTINCT cwd FROM session WHERE cwd IS NOT NULL ORDER BY cwd")
     .all();
   const roots = new Set<string>();
   for (const { cwd } of cwds) {
-    if (!existsSync(cwd) || isScratchRepo(cwd)) continue;
+    if (!existsSync(cwd) || isScratchRepo(cwd, env)) continue;
     const root = checkoutRoot(cwd);
     if (root !== null) roots.add(realpathSync(root));
   }

@@ -1,6 +1,6 @@
 import { realpathSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import type { Env } from "./env";
 
 const TEMP_ROOTS = [
   "/tmp",
@@ -19,9 +19,9 @@ function namedAndResolved(path: string): string[] {
   }
 }
 
-const OWN_TEMP = namedAndResolved(resolve(tmpdir()));
-
-export function isScratchRepo(path: string): boolean {
+export function isScratchRepo(path: string, { tmpDir }: Pick<Env, "tmpDir">): boolean {
   const target = resolve(path);
-  return [...TEMP_ROOTS, ...OWN_TEMP].some((root) => target === root || target.startsWith(`${root}/`));
+  return [...TEMP_ROOTS, ...namedAndResolved(resolve(tmpDir))].some(
+    (root) => target === root || target.startsWith(`${root}/`),
+  );
 }

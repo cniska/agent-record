@@ -1,10 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { z } from "zod";
+import type { Runtime } from "./cli-contract";
 import { codedOf, ErrorRecord, errorRecord } from "./coded-error";
+import type { Env } from "./env";
 import { parseJson } from "./ingest-source-read";
 import type { SyncReport } from "./ingest-sync";
-import { type Env, syncStampPath } from "./paths";
+import { syncStampPath } from "./paths";
 
 const At = z.iso.datetime().transform((at) => new Date(at));
 
@@ -23,13 +25,13 @@ export type SyncStamp =
   | { readonly kind: "unreadable"; readonly path: string }
   | SyncOutcome;
 
-function writeSyncStamp(outcome: SyncOutcome, env: Env = process.env): void {
+function writeSyncStamp(outcome: SyncOutcome, env: Env): void {
   const path = syncStampPath(env);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(outcome)}\n`);
 }
 
-export function readSyncStamp(env: Env = process.env): SyncStamp {
+export function readSyncStamp(env: Env): SyncStamp {
   const path = syncStampPath(env);
   if (!existsSync(path)) return { kind: "never" };
   const read = parseJson(readFileSync(path, "utf8"), SyncOutcome);
@@ -46,7 +48,10 @@ function finishedOf(report: SyncReport, at: Date): SyncOutcome {
   };
 }
 
-export function stampingOutcome(run: () => SyncReport, now: () => Date, env: Env = process.env): SyncReport {
+export function stampingOutcome(
+  { now, env }: Pick<Runtime, "now" | "env">,
+  run: () => SyncReport,
+): SyncReport {
   let report: SyncReport;
   try {
     report = run();

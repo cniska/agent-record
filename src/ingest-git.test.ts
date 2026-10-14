@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { SCHEMA_SQL } from "./db-schema";
 import { errorCode } from "./error-read";
+import { scratchEnv } from "./fixtures.test-support";
 import { repoWithWorktree } from "./git-fixtures.test-support";
 import { ingestCommits, probeCheckouts, repoRoots } from "./ingest-git";
 import { indexRepoFiles } from "./repo-files";
@@ -172,7 +173,7 @@ describe("finding the checkouts the sessions ran in", () => {
     cwds.forEach((cwd, i) => {
       db.run("INSERT INTO session (id, tool, cwd) VALUES (?, 'claude', ?)", [`s${i}`, cwd]);
     });
-    const roots = repoRoots(db);
+    const roots = repoRoots(db, scratchEnv(tmpdir()));
     db.close();
     return roots;
   };

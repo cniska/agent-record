@@ -5,7 +5,8 @@ import { CodedError, isRefusal } from "./coded-error";
 import type { HeldRecordWait } from "./db";
 import { readingRecord } from "./db-read";
 import { SCHEMA_VERSION } from "./db-schema";
-import { dbPath, type Env } from "./paths";
+import type { Env } from "./env";
+import { dbPath } from "./paths";
 import { readSyncStamp, type SyncStamp } from "./sync-stamp";
 
 const HOUR_MS = 3_600_000;
@@ -21,7 +22,7 @@ type Health = {
 
 type DoctorReport = { readonly checks: readonly Health[]; readonly failing: number };
 
-export type DoctorProbes = Runtime & { readonly agentLoaded: (env: Env) => boolean };
+export type DoctorProbes = Runtime & { readonly agentLoaded: () => boolean };
 
 function refusalOr<T>(probe: () => T): T | CodedError {
   try {
@@ -109,12 +110,12 @@ function agentHealth(plan: AgentPlan, loaded: () => boolean): Health {
   }
 }
 
-export function recordDoctor(env: Env, probes: DoctorProbes): DoctorReport {
-  const { agentLoaded, now } = probes;
+export function recordDoctor(probes: DoctorProbes): DoctorReport {
+  const { env, agentLoaded, now } = probes;
   const checks = [
     recordHealth(env, probes),
     syncHealth(readSyncStamp(env), now()),
-    agentHealth(planAgent(env), () => agentLoaded(env)),
+    agentHealth(planAgent(probes), agentLoaded),
   ];
   return { checks, failing: checks.filter(({ state }) => state === "fail").length };
 }

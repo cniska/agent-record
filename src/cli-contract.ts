@@ -1,4 +1,5 @@
 import { refuser } from "./coded-error";
+import type { Env } from "./env";
 
 export type Command = {
   name: string;
@@ -7,7 +8,13 @@ export type Command = {
   run(args: string[], runtime: Runtime): CommandResult;
 };
 
-export type Runtime = { readonly now: () => Date; readonly heldRecordWaitMs: number };
+export type Runtime = {
+  readonly now: () => Date;
+  readonly heldRecordWaitMs: number;
+  readonly env: Env;
+  readonly bunPath: string;
+  readonly checkout: string;
+};
 
 export type CommandResult = { readonly value: unknown; readonly exitCode: 0 | 1 };
 

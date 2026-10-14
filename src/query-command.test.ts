@@ -4,14 +4,14 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  asDataHome,
   fingerprint,
-  NO_WAIT,
   recordWithCommit,
   refusal,
   stampSchemaVersion,
+  testRuntime,
 } from "./db-read.test-support";
 import { SCHEMA_VERSION } from "./db-schema";
+import { scratchEnv } from "./fixtures.test-support";
 import { dbPath } from "./paths";
 import { queryCommand } from "./query-command";
 import { QUERIES } from "./query-registry";
@@ -35,20 +35,17 @@ function recordOf(path: string): unknown {
 
 describe("agent-record query", () => {
   test("answers every query without changing the record, and creates none", async () => {
-    const { home, path } = recordWithCommit();
+    const { home, env, path } = recordWithCommit();
     const empty = mkdtempSync(join(tmpdir(), "agent-record-db-read-"));
     try {
       const before = recordOf(path);
-      for (const query of QUERIES)
-        await asDataHome(home, () => queryCommand.run([query.name, "stay"], NO_WAIT));
+      for (const query of QUERIES) queryCommand.run([query.name, "stay"], testRuntime(env));
       expect(recordOf(path)).toEqual(before);
 
-      await expect(
-        asDataHome(empty, () => queryCommand.run(["search", "stay"], NO_WAIT)),
-      ).rejects.toMatchObject({
-        code: "no_database",
-      });
-      expect(existsSync(dbPath({ XDG_DATA_HOME: empty }))).toBe(false);
+      expect(() => queryCommand.run(["search", "stay"], testRuntime(scratchEnv(empty)))).toThrow(
+        expect.objectContaining({ code: "no_database" }),
+      );
+      expect(existsSync(dbPath(scratchEnv(empty)))).toBe(false);
     } finally {
       rmSync(home, { recursive: true, force: true });
       rmSync(empty, { recursive: true, force: true });
@@ -57,13 +54,13 @@ describe("agent-record query", () => {
 
   for (const version of [SCHEMA_VERSION - 1, SCHEMA_VERSION + 1]) {
     test(`refuses a record of version ${version > SCHEMA_VERSION ? "newer" : "older"} than this one before any query, leaving it as it was`, async () => {
-      const { home, path } = recordWithCommit();
+      const { home, env, path } = recordWithCommit();
       try {
         stampSchemaVersion(path, version);
         const before = fingerprint(path);
-        expect(
-          await asDataHome(home, () => refusal(() => queryCommand.run(["search", "stay"], NO_WAIT))),
-        ).toEqual(expect.objectContaining({ code: "record_version" }));
+        expect(await refusal(() => queryCommand.run(["search", "stay"], testRuntime(env)))).toEqual(
+          expect.objectContaining({ code: "record_version" }),
+        );
         expect(fingerprint(path)).toBe(before);
       } finally {
         rmSync(home, { recursive: true, force: true });
@@ -79,14 +76,14 @@ describe("agent-record query", () => {
   });
 
   test("refuses a query while a writer holds the record, naming it busy", async () => {
-    const { home, path } = recordWithCommit();
+    const { home, env, path } = recordWithCommit();
     const writer = new Database(path);
     try {
       writer.run("PRAGMA locking_mode = EXCLUSIVE");
       writer.run("DELETE FROM repo_commit");
-      expect(
-        await asDataHome(home, () => refusal(() => queryCommand.run(["search", "stay"], NO_WAIT))),
-      ).toEqual(expect.objectContaining({ kind: "refusal", code: "record_busy", meta: { path } }));
+      expect(await refusal(() => queryCommand.run(["search", "stay"], testRuntime(env)))).toEqual(
+        expect.objectContaining({ kind: "refusal", code: "record_busy", meta: { path } }),
+      );
     } finally {
       writer.close();
       rmSync(home, { recursive: true, force: true });

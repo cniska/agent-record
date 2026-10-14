@@ -3,22 +3,35 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Runtime } from "./cli-contract";
-import { openDb } from "./db";
+import { type HeldRecordWait, openDb } from "./db";
+import type { Env } from "./env";
+import { scratchEnv } from "./fixtures.test-support";
 import { dbPath } from "./paths";
 
 export const NO_WAIT_MS = 0;
 
-export const NO_WAIT: Runtime = { now: () => new Date("2026-10-11T12:00:00Z"), heldRecordWaitMs: NO_WAIT_MS };
+export const NO_WAIT: HeldRecordWait = { heldRecordWaitMs: NO_WAIT_MS };
 
-export function recordWithCommit(): { home: string; path: string } {
+export function testRuntime(env: Env): Runtime {
+  return {
+    now: () => new Date("2026-10-11T12:00:00Z"),
+    heldRecordWaitMs: NO_WAIT_MS,
+    env,
+    bunPath: "/opt/bun/bin/bun",
+    checkout: "/code/agent-record",
+  };
+}
+
+export function recordWithCommit(): { home: string; env: Env; path: string } {
   const home = mkdtempSync(join(tmpdir(), "agent-record-db-read-"));
-  const path = dbPath({ XDG_DATA_HOME: home });
+  const env = scratchEnv(home);
+  const path = dbPath(env);
   const db = openDb(path, { heldRecordWaitMs: NO_WAIT_MS });
   db.run(
     "INSERT INTO repo_commit (sha, repo, label, ts, subject) VALUES ('abc123', '/repo', 'acme/demo', '2026-01-01T00:00:00Z', 'feat: stay as written')",
   );
   db.close();
-  return { home, path };
+  return { home, env, path };
 }
 
 export function fingerprint(path: string): string {
@@ -26,17 +39,6 @@ export function fingerprint(path: string): string {
   db.run("PRAGMA wal_checkpoint(TRUNCATE)");
   db.close();
   return new Bun.CryptoHasher("sha256").update(readFileSync(path)).digest("hex");
-}
-
-export async function asDataHome<T>(home: string, run: () => T | Promise<T>): Promise<T> {
-  const before = process.env.XDG_DATA_HOME;
-  process.env.XDG_DATA_HOME = home;
-  try {
-    return await run();
-  } finally {
-    if (before === undefined) delete process.env.XDG_DATA_HOME;
-    else process.env.XDG_DATA_HOME = before;
-  }
 }
 
 export function stampSchemaVersion(path: string, version: number): void {

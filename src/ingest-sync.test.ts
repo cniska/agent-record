@@ -6,16 +6,17 @@ import { join } from "node:path";
 import { openDb, recordVersion } from "./db";
 import { NO_WAIT_MS } from "./db-read.test-support";
 import { SCHEMA_VERSION } from "./db-schema";
+import type { Env } from "./env";
 import { scratchEnv, writeClaudeTranscript } from "./fixtures.test-support";
 import { rebuild, sync } from "./ingest-sync";
 import { TOOLS } from "./ingest-tools";
 import { archiveDir, dbPath } from "./paths";
 
-type Scratch = { db: Database; env: { HOME: string; XDG_DATA_HOME: string } };
+type Scratch = { db: Database; env: Env };
 
 function scratch(): Scratch {
   const home = mkdtempSync(join(tmpdir(), "agent-record-rebuild-"));
-  const env = { HOME: home, XDG_DATA_HOME: home };
+  const env = scratchEnv(home);
   return { db: openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS }), env };
 }
 
@@ -123,7 +124,7 @@ describe("absorbing a schema change", () => {
   test("a rebuild that throws leaves the old version stamped", () => {
     const { db, env } = scratch();
     db.run(`PRAGMA user_version = ${SCHEMA_VERSION - 1}`);
-    const broken = { HOME: env.HOME, XDG_DATA_HOME: join(env.HOME, "broken-data") };
+    const broken = { ...env, dataHome: join(env.home, "broken-data") };
     mkdirSync(archiveDir(broken), { recursive: true });
     writeFileSync(join(archiveDir(broken), "claude"), "");
 
@@ -183,7 +184,7 @@ describe("a sync", () => {
     try {
       sync(db, env);
       const synced = loads();
-      rebuild(db, { ...env, HOME: empty });
+      rebuild(db, { ...env, home: empty });
       expect(loads()).toEqual(synced);
     } finally {
       db.close();

@@ -13,6 +13,7 @@ const PUBLIC: Readonly<Record<string, readonly string[]>> = {
   "coded-error": ["coded-error"],
   db: ["db", "db-error", "db-lock", "db-read", "db-schema"],
   doctor: [],
+  env: ["env"],
   error: ["error-read"],
   file: ["file-backup"],
   git: ["git", "git-checkout", "git-operations", "git-probe", "git-remote"],

@@ -12,8 +12,11 @@ export const rebuildCommand: Command = {
   summary: "forget every cursor and read the archive from the start",
   run(args, runtime) {
     parseFlags(args, [], rebuildCommand.usage);
-    const report = withLock(() =>
-      stampingOutcome(() => withDb(dbPath(), { ...runtime, forRebuild: true }, rebuild), runtime.now),
+    const { env } = runtime;
+    const report = withLock(env, () =>
+      stampingOutcome(runtime, () =>
+        withDb(dbPath(env), { ...runtime, forRebuild: true }, (db) => rebuild(db, env)),
+      ),
     );
     return { value: report, exitCode: 0 };
   },
