@@ -8,7 +8,7 @@ export type Step =
   | { readonly agent: string; readonly at: string; readonly usage?: Usage }
   | { readonly handback: string; readonly at: string }
   | { readonly bash: string; readonly at: string; readonly done: string }
-  | { readonly spawn: string; readonly at: string; readonly done: string }
+  | { readonly spawn: string; readonly at: string; readonly done: string; readonly failed?: true }
   | { readonly pending: string; readonly at: string }
   | { readonly read: string; readonly at: string }
   | { readonly compacted: string }
@@ -59,13 +59,18 @@ function linesOf(sessionId: string, cwd: string, steps: readonly Step[], prefix:
         ...(usage === undefined ? {} : { usage }),
       },
     });
-    const result = (at: string, tool: string, more: Record<string, unknown> = {}) => ({
+    const result = (at: string, tool: string, more: Record<string, unknown> = {}, isError = false) => ({
       ...base,
       type: "user",
       uuid: `${uuid}-result`,
       timestamp: at,
       ...more,
-      message: { role: "user", content: [{ type: "tool_result", tool_use_id: tool, content: "ok" }] },
+      message: {
+        role: "user",
+        content: [
+          { type: "tool_result", tool_use_id: tool, content: "ok", ...(isError ? { is_error: true } : {}) },
+        ],
+      },
     });
     const tool = `${uuid}-tool`;
     if ("owner" in step) {
@@ -116,7 +121,7 @@ function linesOf(sessionId: string, cwd: string, steps: readonly Step[], prefix:
         assistant(step.at, [
           { type: "tool_use", id: step.spawn, name: "Agent", input: { prompt: "do the step" } },
         ]),
-        result(step.done, step.spawn),
+        result(step.done, step.spawn, {}, step.failed === true),
       ];
     }
     if ("pending" in step) {

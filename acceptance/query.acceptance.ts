@@ -283,7 +283,12 @@ const tracedHome = (): Home =>
               },
               { compacted: "2026-09-16T10:02:00Z" },
               { rejected: "rm -rf build", at: "2026-09-16T10:02:30Z" },
-              { spawn: "toolu-reviewer", at: "2026-09-16T10:03:00Z", done: "2026-09-16T10:05:00Z" },
+              {
+                spawn: "toolu-reviewer",
+                at: "2026-09-16T10:03:00Z",
+                done: "2026-09-16T10:05:00Z",
+                failed: true,
+              },
               {
                 bash: "git commit -m 'feat: add the step'",
                 at: "2026-09-16T10:05:30Z",
@@ -363,8 +368,8 @@ test("AC-61 trace prints a worker's steps and the reviewer it started, one JSON 
     ["reviewer", 1, "agent", "started", "-"],
     ["reviewer", 2, "verdict", "started", "-"],
     ["reviewer", 3, "verdict", "ended", "ok"],
-    ["reviewer", 4, "agent", "ended", "ok"],
-    ["worker", 7, "tool", "ended", "ok"],
+    ["reviewer", 4, "agent", "ended", "failed"],
+    ["worker", 7, "tool", "ended", "failed"],
     ["worker", 8, "tool", "started", "-"],
     ["worker", 9, "commit", "started", "-"],
     ["worker", 10, "gate", "started", "-"],
@@ -411,6 +416,21 @@ test("AC-61 trace prints a worker's steps and the reviewer it started, one JSON 
     ms: 0,
     outcome: { kind: "ok" },
     verdict: "accept",
+  });
+  expect(lines[11]).toEqual({
+    at: "2026-09-16T10:04:00.000Z",
+    session: "reviewer@coordinator",
+    parent: "worker@coordinator",
+    task: "coordinator",
+    seq: 4,
+    step: "agent",
+    phase: "ended",
+    ms: 59000,
+    outcome: { kind: "failed", error: "error" },
+    inputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    outputTokens: 0,
   });
   expect(lines[6]).toEqual({
     at: "2026-09-16T10:02:30.000Z",

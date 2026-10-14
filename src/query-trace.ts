@@ -70,15 +70,12 @@ type SessionRow = {
   readonly first: string;
   readonly last: string;
   readonly model: string | null;
-  readonly openCalls: number;
   readonly spawnFailure: string | null;
 } & Tokens;
 
 const SESSIONS = `${TREE}
 SELECT s.id, s.parent_id AS parent, s.agent_type AS agentType, s.ts_first AS first, s.ts_last AS last,
   (SELECT u.model FROM usage u WHERE u.session_id = s.id AND u.model IS NOT NULL ORDER BY u.ts LIMIT 1) AS model,
-  (SELECT count(*) FROM tool_call c WHERE c.session_id = s.id AND c.ts_call IS NOT NULL AND c.ts_result IS NULL)
-    AS openCalls,
   ${callFailureSql("spawn")} AS spawnFailure,
   coalesce((SELECT sum(u.input_tokens) FROM usage u WHERE u.session_id = s.id), 0) AS inputTokens,
   coalesce((SELECT sum(u.cache_read_tokens) FROM usage u WHERE u.session_id = s.id), 0) AS cacheReadTokens,
@@ -156,21 +153,20 @@ function callOutcome(call: CallRow): Outcome {
   return failedOr(call.failure);
 }
 
-function agentStep(session: SessionRow): Taken {
+function agentStep(session: SessionRow, waiting: ReadonlySet<string>): Taken {
   const { inputTokens, cacheReadTokens, cacheWriteTokens, outputTokens } = session;
   return {
     step: "agent",
     session: session.id,
     at: session.first,
     start: { agentType: session.agentType, model: session.model },
-    ended:
-      session.openCalls > 0
-        ? null
-        : {
-            at: session.last,
-            outcome: failedOr(session.spawnFailure),
-            result: { inputTokens, cacheReadTokens, cacheWriteTokens, outputTokens },
-          },
+    ended: waiting.has(session.id)
+      ? null
+      : {
+          at: session.last,
+          outcome: failedOr(session.spawnFailure),
+          result: { inputTokens, cacheReadTokens, cacheWriteTokens, outputTokens },
+        },
   };
 }
 
@@ -276,8 +272,9 @@ function stepsUnder(
 } {
   const rows = db.query<SessionRow, [string]>(SESSIONS).all(task);
   const sessions = new Map(rows.map((row) => [row.id, row]));
-  const agents = rows.map(agentStep);
   const calls = db.query<CallRow, [string]>(CALLS).all(task).map(callStep);
+  const waiting = new Set(calls.filter((c) => c.step === "tool" && c.ended === null).map((c) => c.session));
+  const agents = rows.map((row) => agentStep(row, waiting));
   const compactions = db.query<CompactionRow, [string]>(COMPACTIONS).all(task).map(compactStep);
   const verdicts = db.query<VerdictRow, [string]>(VERDICTS).all(task).map(verdictStep);
   const gates = db.query<GateRow, [string]>(GATES).all(task).map(gateStep);
