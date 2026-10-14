@@ -217,8 +217,9 @@ const skillUsage = signalOf<string>({
   name: "skill-usage",
   value: "skill loads per task, each named by its skill and version",
   note:
-    "A version is the first 8 characters of the skill body's hash and the plugin install it was loaded from, " +
-    "- where the load carried no body or came from outside the plugin cache. A load counts in its top-level " +
+    `A version is the first ${HASH_SHOWN} characters of the skill body's hash and the plugin install it was ` +
+    `loaded from, ${UNKNOWN_PART} where the load carried no body or came from outside the plugin cache. ` +
+    "A load counts in its top-level " +
     "session's task, a subagent's preload too.",
   kinds: ["task"],
   events: (timeline) => [
