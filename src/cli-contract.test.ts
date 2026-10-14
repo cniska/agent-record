@@ -2,10 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { Node } from "@babel/types";
 import { allCommands, findCommand } from "./cli-commands";
 import { runCli, scratchEnv } from "./fixtures.test-support";
 import { SYNCED_SESSION, syncedRecord } from "./query.test-support";
-import { importsOf } from "./syntax.test-support";
+import { importsOf, nodesOf } from "./syntax.test-support";
 
 const COMMANDS = await allCommands();
 
@@ -19,6 +20,25 @@ function refused(args: readonly string[]): { exitCode: number; error: unknown } 
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+}
+
+function isMember(node: Node, object: string, property: string): boolean {
+  return (
+    node.type === "MemberExpression" &&
+    node.property.type === "Identifier" &&
+    node.property.name === property &&
+    node.object.type === "Identifier" &&
+    node.object.name === object
+  );
+}
+
+function writesStdout(text: string): boolean {
+  return [...nodesOf(text)].some(
+    (node) =>
+      isMember(node, "console", "log") ||
+      isMember(node, "process", "stdout") ||
+      isMember(node, "Bun", "stdout"),
+  );
 }
 
 function sources(): string[] {
@@ -37,10 +57,25 @@ describe("the command contract", () => {
   });
 
   test("only the writer writes to stdout", () => {
-    const writers = sources().filter((path) =>
-      /console\.log|process\.stdout\.write/.test(readFileSync(join(SRC, path), "utf8")),
-    );
+    const writers = sources().filter((path) => writesStdout(readFileSync(join(SRC, path), "utf8")));
     expect(writers.sort()).toEqual(["cli-output.ts"]);
+  });
+
+  test("the stdout check finds a write however it is called, and not one named in a string", () => {
+    for (const text of [
+      'console.log("x");',
+      "process.stdout.write(x);",
+      "const log = console.log;",
+      "[x].forEach(console.log);",
+      "const { write } = process.stdout;",
+      "const out = process.stdout;",
+      'await Bun.write(Bun.stdout, "x");',
+    ]) {
+      expect(writesStdout(text)).toBe(true);
+    }
+    expect(
+      writesStdout('const help = "console.log(x) or process.stdout.write(x)"; process.stderr.write(help);'),
+    ).toBe(false);
   });
 
   test("every command declared is on the list, once", () => {
