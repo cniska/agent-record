@@ -54,6 +54,16 @@ type Escaped = Placed & {
   readonly earlierAt: string;
 };
 
+export type Spent = { readonly output: number; readonly input: number };
+
+export type Preload = { readonly skill: string; readonly bodySha256: string | null };
+
+type ReviewerRun = Placed & {
+  readonly end: string | null;
+  readonly spent: Spent | null;
+  readonly preloads: readonly Preload[];
+};
+
 export type SkillLoaded = Placed & {
   readonly skill: string;
   readonly bodySha256: string | null;
@@ -64,7 +74,7 @@ export type Timeline = {
   readonly interrupts: readonly Interrupt[];
   readonly tasks: readonly TaskOutcome[];
   readonly commitRuns: readonly CommitRun[];
-  readonly reviewerRuns: readonly Placed[];
+  readonly reviewerRuns: readonly ReviewerRun[];
   readonly denials: readonly Kinded<Judged["kind"]>[];
   readonly reviews: readonly Kinded<Reviewed["kind"]>[];
   readonly blocks: readonly Kinded<Blocked["kind"]>[];
@@ -230,7 +240,14 @@ export function timelineOf(record: SignalRecord): Timeline {
     lastOfSession: lastOfRoot.get(run.root) === run,
   }));
 
-  const reviewerRuns: Placed[] = record.sessions.flatMap((session) => {
+  const spentBySession = new Map(
+    record.sessionSpend.map(({ sessionId, output, input }) => [sessionId, { output, input }]),
+  );
+  const preloadsBySession = Map.groupBy(
+    record.skillLoads.filter((load) => load.preloaded),
+    (load) => load.sessionId,
+  );
+  const reviewerRuns: ReviewerRun[] = record.sessions.flatMap((session) => {
     if (!session.isReviewer || session.start === null) return [];
     const root = rootOf(session.id);
     return [
@@ -239,6 +256,12 @@ export function timelineOf(record: SignalRecord): Timeline {
         sessionId: root,
         repo: repoOfRoot(root),
         ...inTask(root, ms(session.start)),
+        end: session.end,
+        spent: spentBySession.get(session.id) ?? null,
+        preloads: (preloadsBySession.get(session.id) ?? []).map(({ skill, bodySha256 }) => ({
+          skill,
+          bodySha256,
+        })),
       },
     ];
   });

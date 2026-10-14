@@ -261,12 +261,12 @@ test("AC-44 signal splits each week by repo or route, newest first, and refuses 
     code: "unknown_signal",
     resolve:
       "one of: owner-interrupts, time-to-land, stranded-work, review-loops, false-stops, review-returns, blocks, " +
-      "skill-usage, lost-context, escaped-defects",
+      "skill-usage, lost-context, escaped-defects, review-cost",
   });
   const grouping = refused(runCli(home, ["query", "signal", "stranded-work", "--by", "day"]), "query");
   expect({ code: grouping.code, resolve: grouping.resolve }).toEqual({
     code: "unknown_grouping",
-    resolve: "--by <week|repo|route>",
+    resolve: "--by <week|repo|route|version>",
   });
 });
 
@@ -306,6 +306,7 @@ test("AC-45 before-after compares every signal on either side of a commit, from 
     "skill-usage",
     "lost-context",
     "escaped-defects",
+    "review-cost",
   ]);
   expect(around.denominator).toBe(
     `commit ${sha} at 2026-09-18T00:00:00.000Z; before 2026-09-04T00:00:00.000Z to 2026-09-18T00:00:00.000Z, ` +
@@ -572,4 +573,62 @@ test("AC-55 escaped-defects counts the fixes that share a file with, or name, an
 
   rebuild(home);
   expect(counted()).toEqual([["2026-09-14", 0.5, 2, 4, "accepted commit 4, names commit 1, shared file 1"]]);
+});
+
+test("AC-56 review-cost gives each reviewer run's tokens and minutes, split by its preloaded versions", () => {
+  const cache = (name: string) => `/Users/x/.claude/plugins/cache/m/acme/aaa/skills/${name}`;
+  const spent = (output: number, input: number) => ({
+    input_tokens: input,
+    cache_read_input_tokens: input * 2,
+    cache_creation_input_tokens: input,
+    output_tokens: output,
+  });
+  const reviewer = (id: string, minute: number, body: string, output: number, input: number) => ({
+    id,
+    agentType: "acme:reviewer",
+    steps: [
+      { owner: "review the change", at: `2026-09-16T09:${minute}:00Z` },
+      { preload: "acme:review", at: `2026-09-16T09:${minute}:01Z`, dir: cache("review"), body },
+      { agent: "Looking.", at: `2026-09-16T09:${minute + 1}:00Z`, usage: spent(output / 2, input / 2) },
+      {
+        agent: "Verdict: accept",
+        at: `2026-09-16T09:${minute + 2}:00Z`,
+        usage: spent(output / 2, input / 2),
+      },
+    ],
+  });
+  const home = synced([
+    {
+      id: "build",
+      cwd: "/Users/x/code/demo",
+      steps: [{ owner: "add the parser", at: "2026-09-16T09:00:00Z" }],
+      subagents: [
+        reviewer("r1", 10, "# Review\n\nJudge the change.", 1000, 1000),
+        reviewer("r2", 20, "# Review\n\nJudge the change.", 3000, 3000),
+        reviewer("r3", 30, "# Review\n\nJudge the change, briefly.", 500, 2000),
+      ],
+    },
+  ]);
+
+  const counted = () => query(home, ["signal", "review-cost"]).rows;
+  expect(counted()).toEqual([
+    ["2026-09-14", 1000, 3, 3, "reviewer run 3; median input 8000, median minutes 2"],
+  ]);
+  const byVersion = query(home, ["signal", "review-cost", "--by", "version"]);
+  expect(byVersion.columns).toEqual(["week", "version", "value", "count", "of", "kinds"]);
+  expect(byVersion.rows).toEqual([
+    ["2026-09-14", "review 43e4e411", 2000, 2, 2, "reviewer run 2; median input 8000, median minutes 2"],
+    ["2026-09-14", "review c016c828", 500, 1, 1, "reviewer run 1; median input 8000, median minutes 2"],
+  ]);
+  const events = query(home, ["signal-events", "review-cost"]).rows;
+  expect(events.map(([at, kind, , , minutes, , text]) => [at, kind, minutes, text])).toEqual([
+    ["2026-09-16T09:30:00.000Z", "reviewer run", 2, "output 500, input 8000, review c016c828"],
+    ["2026-09-16T09:20:00.000Z", "reviewer run", 2, "output 3000, input 12000, review 43e4e411"],
+    ["2026-09-16T09:10:00.000Z", "reviewer run", 2, "output 1000, input 4000, review 43e4e411"],
+  ]);
+
+  rebuild(home);
+  expect(counted()).toEqual([
+    ["2026-09-14", 1000, 3, 3, "reviewer run 3; median input 8000, median minutes 2"],
+  ]);
 });

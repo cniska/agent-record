@@ -9,12 +9,14 @@ import {
   REVIEW_KINDS,
 } from "./query-hook-timeline";
 import { CAUSES } from "./query-interrupt";
-import type { Placed, SkillLoaded, Timeline } from "./query-timeline";
+import type { Placed, Preload, SkillLoaded, Spent, Timeline } from "./query-timeline";
 
 export type SignalEvent<Kind extends string = string> = Placed & {
   readonly kind: Kind;
   readonly minutes: number | null;
   readonly text: string | null;
+  readonly version: string | null;
+  readonly spent: Spent | null;
 };
 
 type Rate = { readonly value: number | null; readonly count: number; readonly of: number };
@@ -26,9 +28,11 @@ export type Signal = {
   readonly kinds: readonly string[];
   readonly events: (timeline: Timeline) => readonly SignalEvent[];
   readonly rate: (events: readonly SignalEvent[]) => Rate;
+  readonly detail: (events: readonly SignalEvent[]) => string | null;
 };
 
-type Definition<Kind extends string> = Omit<Signal, "kinds" | "events" | "rate"> & {
+type Definition<Kind extends string> = Omit<Signal, "kinds" | "events" | "rate" | "detail"> & {
+  readonly detail?: Signal["detail"];
   readonly kinds: readonly Kind[];
   readonly events: (timeline: Timeline) => readonly SignalEvent<NoInfer<Kind>>[];
   readonly rate: (count: (kind: NoInfer<Kind>) => number, events: readonly SignalEvent[]) => Rate;
@@ -53,6 +57,7 @@ function signalOf<Kind extends string>(definition: Definition<Kind>): Signal {
   return {
     ...definition,
     rate: (events) => definition.rate((kind) => events.filter((event) => event.kind === kind).length, events),
+    detail: definition.detail ?? (() => null),
   };
 }
 
@@ -86,6 +91,8 @@ function event<Kind extends string>(
     kind,
     minutes,
     text,
+    version: null,
+    spent: null,
   };
 }
 
@@ -227,7 +234,10 @@ const skillUsage = signalOf<string>({
     "session's task, a subagent's preload too.",
   kinds: ["task"],
   events: (timeline) => [
-    ...timeline.skillLoads.map((load) => event(load, `${load.skill} ${versionOf(load)}`)),
+    ...timeline.skillLoads.map((load) => {
+      const version = `${load.skill} ${versionOf(load)}`;
+      return { ...event(load, version), version };
+    }),
     ...timeline.tasks.map((task) => event(task, "task")),
   ],
   rate: (count, events) => {
@@ -286,6 +296,62 @@ const escapedDefects = signalOf({
   },
 });
 
+const TENTHS = 10;
+
+const minutesToTenths = (from: string, to: string): number =>
+  Math.round(((Date.parse(to) - Date.parse(from)) / MINUTE_MS) * TENTHS) / TENTHS;
+
+const preloadVersion = (preloads: readonly Preload[]): string | null =>
+  preloads.length === 0
+    ? null
+    : [
+        ...new Set(
+          preloads.map(
+            ({ skill, bodySha256 }) => `${skill} ${bodySha256?.slice(0, HASH_SHOWN) ?? UNKNOWN_PART}`,
+          ),
+        ),
+      ]
+        .sort()
+        .join(", ");
+
+const NO_USAGE = "no usage";
+
+const reviewCost = signalOf({
+  name: "review-cost",
+  value: "median output tokens per reviewer run",
+  note:
+    "A run's input is its input tokens with cache reads and writes, summed over its responses, and its minutes " +
+    "run from its first line to its last. Its version is the skills it preloaded, each named with the first " +
+    `${HASH_SHOWN} characters of its body's hash. A run with no usage recorded counts only in of.`,
+  kinds: ["reviewer run", NO_USAGE],
+  events: (timeline) =>
+    timeline.reviewerRuns.map((run) => {
+      const version = preloadVersion(run.preloads);
+      const minutes = run.end === null ? null : minutesToTenths(run.at, run.end);
+      const text =
+        run.spent === null
+          ? version
+          : `output ${run.spent.output}, input ${run.spent.input}, ${version ?? UNKNOWN_PART}`;
+      return {
+        ...event(run, run.spent === null ? NO_USAGE : "reviewer run", minutes, text),
+        version,
+        spent: run.spent,
+      };
+    }),
+  rate: (count, events) => ({
+    value: median(events.flatMap(({ spent }) => (spent === null ? [] : [spent.output]))),
+    count: count("reviewer run"),
+    of: events.length,
+  }),
+  detail: (events) => {
+    const spent = events.filter((e) => e.spent !== null);
+    if (spent.length === 0) return null;
+    const input = median(spent.flatMap((e) => (e.spent === null ? [] : [e.spent.input])));
+    const tenths = median(spent.flatMap((e) => (e.minutes === null ? [] : [Math.round(e.minutes * TENTHS)])));
+    return `median input ${input}, median minutes ${tenths === null ? null : tenths / TENTHS}`;
+  },
+});
+
 export const SIGNALS: readonly Signal[] = [
   ownerInterrupts,
   timeToLand,
@@ -297,6 +363,7 @@ export const SIGNALS: readonly Signal[] = [
   skillUsage,
   lostContext,
   escapedDefects,
+  reviewCost,
 ];
 
 export function signalNamed(name: string): Signal {

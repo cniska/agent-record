@@ -59,7 +59,7 @@ Each command prints one JSON line.
 | `agent-record query search "<words>"` | Find messages by keyword |
 | `agent-record query thread <id-prefix> [--at <ts>]` | Read the exchange around a hit |
 | `agent-record query prior-art "<path fragment>"` | Find where a file shape already exists on disk |
-| `agent-record query signal <name> [--by <week\|repo\|route>] [--skill <name>]` | Count one friction signal per week, over every task or the tasks that loaded a skill: `owner-interrupts`, `time-to-land`, `stranded-work`, `review-loops`, `false-stops`, `review-returns`, `blocks`, `skill-usage`, `lost-context` or `escaped-defects` |
+| `agent-record query signal <name> [--by <week\|repo\|route\|version>] [--skill <name>]` | Count one friction signal per week, over every task or the tasks that loaded a skill: `owner-interrupts`, `time-to-land`, `stranded-work`, `review-loops`, `false-stops`, `review-returns`, `blocks`, `skill-usage`, `lost-context`, `escaped-defects` or `review-cost` |
 | `agent-record query signal-events <name>` | List what a signal counted, to check it by hand |
 | `agent-record query before-after <sha-prefix> [--days <n>] [--from <ts>] [--skill <name>]` | Compare every signal before and after a commit; with `--skill`, over the tasks that loaded it, naming the versions that ran on each side |
 | `agent-record sql "<select>"` | Run one read-only statement |

@@ -18,6 +18,7 @@ const GROUPED_BY = {
     ],
   },
   route: { columns: ["week", "route"], key: (event) => [weekOf(event.at), event.route] },
+  version: { columns: ["week", "version"], key: (event) => [weekOf(event.at), event.version] },
 } as const satisfies Readonly<Record<string, Grouped>>;
 
 type Grouping = keyof typeof GROUPED_BY;
@@ -58,8 +59,8 @@ function kindsOf(signal: Signal, events: readonly SignalEvent[]): string {
 export const signal: Query<"by" | "skill"> = {
   name: "signal",
   summary:
-    "count one friction signal per week, or per week and repo or route, or in the tasks that loaded a skill",
-  usage: "agent-record query signal <name> [--by <week|repo|route>] [--skill <name>] [--rows <n>]",
+    "count one friction signal per week, or per week and repo, route or version, or in the tasks that loaded a skill",
+  usage: "agent-record query signal <name> [--by <week|repo|route|version>] [--skill <name>] [--rows <n>]",
   flags: ["by", "skill"],
   run: (db, ctx) => {
     const chosen = signalNamed(ctx.arg);
@@ -79,7 +80,7 @@ export const signal: Query<"by" | "skill"> = {
       .map(({ key, events: grouped }) => ({
         key,
         rate: chosen.rate(grouped),
-        kinds: kindsOf(chosen, grouped),
+        kinds: [kindsOf(chosen, grouped), chosen.detail(grouped)].filter((part) => part !== null).join("; "),
       }))
       .sort((a, b) => String(b.key[0]).localeCompare(String(a.key[0])) || b.rate.of - a.rate.of)
       .map(({ key, rate, kinds }) => [...key, rate.value, rate.count, rate.of, kinds]);

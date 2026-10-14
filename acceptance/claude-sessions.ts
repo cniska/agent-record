@@ -4,7 +4,7 @@ import type { Home } from "./cli";
 
 export type Step =
   | { readonly owner: string; readonly at: string }
-  | { readonly agent: string; readonly at: string }
+  | { readonly agent: string; readonly at: string; readonly usage?: Usage }
   | { readonly handback: string; readonly at: string }
   | { readonly bash: string; readonly at: string; readonly done: string }
   | { readonly read: string; readonly at: string }
@@ -12,6 +12,13 @@ export type Step =
   | { readonly rejected: string; readonly at: string }
   | { readonly skill: string; readonly at: string; readonly dir: string; readonly body: string }
   | { readonly preload: string; readonly at: string; readonly dir: string; readonly body: string };
+
+type Usage = {
+  readonly input_tokens: number;
+  readonly cache_read_input_tokens: number;
+  readonly cache_creation_input_tokens: number;
+  readonly output_tokens: number;
+};
 
 export type Subagent = { readonly id: string; readonly agentType: string; readonly steps: readonly Step[] };
 
@@ -31,13 +38,18 @@ function linesOf(sessionId: string, cwd: string, steps: readonly Step[], prefix:
   const base = { sessionId, cwd, version: "2.1.260", entrypoint: "cli", isSidechain: sidechain };
   const lines = steps.flatMap((step, index): readonly object[] => {
     const uuid = `${prefix}-${index}`;
-    const assistant = (at: string, content: readonly unknown[]) => ({
+    const assistant = (at: string, content: readonly unknown[], usage?: Usage) => ({
       ...base,
       type: "assistant",
       uuid,
       timestamp: at,
       requestId: `${uuid}-req`,
-      message: { id: `${uuid}-msg`, model: "claude-opus-5", content },
+      message: {
+        id: `${uuid}-msg`,
+        model: "claude-opus-5",
+        content,
+        ...(usage === undefined ? {} : { usage }),
+      },
     });
     const result = (at: string, tool: string, more: Record<string, unknown> = {}) => ({
       ...base,
@@ -60,7 +72,7 @@ function linesOf(sessionId: string, cwd: string, steps: readonly Step[], prefix:
         },
       ];
     }
-    if ("agent" in step) return [assistant(step.at, [{ type: "text", text: step.agent }])];
+    if ("agent" in step) return [assistant(step.at, [{ type: "text", text: step.agent }], step.usage)];
     if ("handback" in step) {
       return [
         assistant(step.at, [{ type: "thinking", thinking: "the diff is small" }]),

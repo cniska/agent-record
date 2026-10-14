@@ -11,6 +11,7 @@ export type SessionRow = {
   readonly tool: Tool;
   readonly project: string | null;
   readonly start: string | null;
+  readonly end: string | null;
   readonly isReviewer: boolean;
 };
 
@@ -43,7 +44,10 @@ type LoadRow = TimedRow & {
   readonly skill: string;
   readonly bodySha256: string | null;
   readonly install: string | null;
+  readonly preloaded: boolean;
 };
+
+export type SpentRow = { readonly sessionId: string; readonly output: number; readonly input: number };
 
 type HookColumns = {
   readonly at: string;
@@ -117,6 +121,7 @@ export type SignalRecord = {
   readonly compactedSessionReads: readonly ReadRow[];
   readonly hookEvents: readonly HookRow[];
   readonly skillLoads: readonly LoadRow[];
+  readonly sessionSpend: readonly SpentRow[];
   readonly checkouts: readonly CheckoutRow[];
   readonly commits: readonly CommitRow[];
   readonly commitFiles: readonly CommitFileRow[];
@@ -148,10 +153,12 @@ const SUCCEEDED = `c.ts_result IS NOT NULL AND coalesce(c.is_error, 0) = 0
 
 const REVIEWER = "%reviewer%";
 
+const PRELOAD = "preload";
+
 export function readSignalRecord(db: Database): SignalRecord {
   const sessions = db
     .query<Omit<SessionRow, "isReviewer"> & { readonly isReviewer: number }, [string]>(
-      `SELECT id, parent_id AS parentId, tool, project, ts_first AS start,
+      `SELECT id, parent_id AS parentId, tool, project, ts_first AS start, ts_last AS end,
               (parent_id IS NOT NULL AND agent_type LIKE ?) AS isReviewer
        FROM session`,
     )
@@ -202,9 +209,18 @@ export function readSignalRecord(db: Database): SignalRecord {
     .all()
     .map(hookRowOf);
   const skillLoads = db
-    .query<LoadRow, []>(
-      `SELECT session_id AS sessionId, ts AS at, skill_name AS skill, body_sha256 AS bodySha256, install
+    .query<Omit<LoadRow, "preloaded"> & { readonly preloaded: number }, [string]>(
+      `SELECT session_id AS sessionId, ts AS at, skill_name AS skill, body_sha256 AS bodySha256, install,
+              how = ? AS preloaded
        FROM skill_load ORDER BY ts`,
+    )
+    .all(PRELOAD)
+    .map((load) => ({ ...load, preloaded: load.preloaded === 1 }));
+  const sessionSpend = db
+    .query<SpentRow, []>(
+      `SELECT session_id AS sessionId, sum(output_tokens) AS output,
+              sum(input_tokens + cache_read_tokens + cache_write_tokens) AS input
+       FROM usage GROUP BY session_id`,
     )
     .all();
   const checkouts = db.query<CheckoutRow, []>("SELECT path, repo FROM checkout").all();
@@ -240,6 +256,7 @@ export function readSignalRecord(db: Database): SignalRecord {
     compactedSessionReads,
     hookEvents,
     skillLoads,
+    sessionSpend,
     checkouts,
     commits,
     commitFiles,

@@ -13,6 +13,7 @@ const session = (id: string, start: string, more: Partial<SessionRow> = {}): Ses
   tool: "claude",
   project: REPO,
   start,
+  end: null,
   isReviewer: false,
   ...more,
 });
@@ -34,6 +35,7 @@ const recordOf = (more: Partial<SignalRecord>): SignalRecord => ({
   compactedSessionReads: [],
   commits: [],
   commitFiles: [],
+  sessionSpend: [],
   hookEvents: [],
   skillLoads: [],
   checkouts: [{ path: REPO, repo: REPO }],
@@ -346,9 +348,24 @@ describe("counting skill loads per task by version", () => {
         skill: "plan",
         bodySha256: V1,
         install: "41c40cc68eb7",
+        preloaded: false,
       },
-      { sessionId: "sub", at: "2026-10-14T09:06:00.000Z", skill: "plan", bodySha256: V2, install: null },
-      { sessionId: "s", at: "2026-10-14T09:31:00.000Z", skill: "build", bodySha256: null, install: null },
+      {
+        sessionId: "sub",
+        at: "2026-10-14T09:06:00.000Z",
+        skill: "plan",
+        bodySha256: V2,
+        install: null,
+        preloaded: true,
+      },
+      {
+        sessionId: "s",
+        at: "2026-10-14T09:31:00.000Z",
+        skill: "build",
+        bodySha256: null,
+        install: null,
+        preloaded: false,
+      },
     ],
   });
 
@@ -467,6 +484,68 @@ describe("counting fix commits that point back at an earlier accepted commit", (
 
   test("divides the escapes by the accepted commits", () => {
     expect(rateOf("escaped-defects", record)).toEqual({ value: 0.4, count: 2, of: 5 });
+  });
+});
+
+describe("costing each reviewer run by its preloaded skills' versions", () => {
+  const preload = (sessionId: string, skill: string, bodySha256: string | null) => ({
+    sessionId,
+    at: "2026-10-14T09:05:01.000Z",
+    skill,
+    bodySha256,
+    install: null,
+    preloaded: true,
+  });
+  const record = recordOf({
+    sessions: [
+      session("a", "2026-10-14T09:00:00.000Z"),
+      session("r1", "2026-10-14T09:05:00.000Z", {
+        parentId: "a",
+        isReviewer: true,
+        end: "2026-10-14T09:05:30.000Z",
+      }),
+      session("r2", "2026-10-14T09:10:00.000Z", {
+        parentId: "a",
+        isReviewer: true,
+        end: "2026-10-14T09:12:00.000Z",
+      }),
+      session("r3", "2026-10-14T09:20:00.000Z", {
+        parentId: "a",
+        isReviewer: true,
+        end: "2026-10-14T09:21:00.000Z",
+      }),
+      session("e1", "2026-10-14T09:25:00.000Z", { parentId: "a", end: "2026-10-14T09:26:00.000Z" }),
+    ],
+    skillLoads: [
+      preload("r1", "principles", "bbbbbbbbbbbb"),
+      preload("r1", "design-review", "aaaaaaaaaaaa"),
+      preload("r2", "design-review", "cccccccccccc"),
+      { ...preload("r3", "design-review", "aaaaaaaaaaaa"), preloaded: false },
+    ],
+    sessionSpend: [
+      { sessionId: "r1", output: 1000, input: 90000 },
+      { sessionId: "r2", output: 3000, input: 150000 },
+    ],
+  });
+
+  test("names each run's output, input, minutes and version", () => {
+    expect(eventsOf("review-cost", record).map((e) => [e.kind, e.minutes, e.version, e.text])).toEqual([
+      [
+        "reviewer run",
+        0.5,
+        "design-review aaaaaaaa, principles bbbbbbbb",
+        "output 1000, input 90000, design-review aaaaaaaa, principles bbbbbbbb",
+      ],
+      ["reviewer run", 2, "design-review cccccccc", "output 3000, input 150000, design-review cccccccc"],
+      ["no usage", 1, null, null],
+    ]);
+  });
+
+  test("gives the median output tokens of the runs with usage, over every run", () => {
+    expect(rateOf("review-cost", record)).toEqual({ value: 2000, count: 2, of: 3 });
+    expect(signalNamed("review-cost").detail(eventsOf("review-cost", record))).toBe(
+      "median input 120000, median minutes 1.3",
+    );
   });
 });
 
