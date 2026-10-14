@@ -60,24 +60,5 @@ export function listGrokSessions(paths: readonly string[], fail: Failure): Sourc
       },
     });
   }
-  return orderParents(specs);
-}
-
-function orderParents(specs: SourceFile[]): SourceFile[] {
-  const ids = new Set(specs.map((spec) => spec.sessionId));
-  const remaining = [...specs];
-  const ordered: SourceFile[] = [];
-  const placed = new Set<string>();
-  while (remaining.length > 0) {
-    const ready = remaining.filter(
-      (spec) => spec.parentId === null || !ids.has(spec.parentId) || placed.has(spec.parentId),
-    );
-    if (ready.length === 0) return ordered.concat(remaining);
-    for (const spec of ready) {
-      placed.add(spec.sessionId);
-      ordered.push(spec);
-    }
-    for (const spec of ready) remaining.splice(remaining.indexOf(spec), 1);
-  }
-  return ordered;
+  return specs;
 }

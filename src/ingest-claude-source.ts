@@ -24,9 +24,7 @@ export function claudeSidecars(sessionPath: string): readonly string[] {
 }
 
 export function listClaudeSessions(paths: readonly string[], fail: Failure): SourceFile[] {
-  const transcripts = paths.filter((path) => !isSubagent(path));
-  const subagents = paths.filter(isSubagent);
-  return [...transcripts.flatMap(transcript), ...subagents.flatMap((path) => subagent(path, fail))];
+  return paths.flatMap((path) => (isSubagent(path) ? subagent(path, fail) : transcript(path)));
 }
 
 function transcript(path: string): SourceFile[] {

@@ -7,6 +7,7 @@ import { createIngester, type FileSpec, type SourceFile } from "./ingest";
 import { type ArchiveReport, archiveRootOf, archiveSources } from "./ingest-archive";
 import { type GitReport, ingestCommits, probeCheckouts, repoRoots } from "./ingest-git";
 import type { SessionId } from "./ingest-ids";
+import { parentsFirst } from "./ingest-order";
 import { listSource, SESSION_SOURCES, type SessionSource } from "./ingest-sources";
 import { TOOLS, type Tool } from "./ingest-tools";
 import type { Env } from "./paths";
@@ -74,7 +75,7 @@ export function sync(db: Database, env: Env = process.env): SyncReport {
   for (const tool of TOOLS) {
     const source = SESSION_SOURCES[tool];
     const root = archiveRootOf(tool, env);
-    const files = listSource(source, root, fail);
+    const files = parentsFirst(listSource(source, root, fail));
     const titles = titlesOf(source, root);
     const ingest = (file: SourceFile): boolean => {
       const reset = run({ ...file, tool });
