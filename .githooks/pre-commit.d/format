@@ -1,0 +1,93 @@
+#!/bin/sh
+# agent-gate:format:1
+set -eu
+
+command='bun run format --linter-enabled=false'
+
+paths() {
+  git -c core.quotePath=false "$@"
+}
+
+listed() {
+  printf '%s\n' "$1" | grep -Fxq -- "$2"
+}
+
+shown() {
+  printf '%s\n' "$1" | sed 's/^/  /' >&2
+}
+
+entry() {
+  if [ -f "$1" ]; then
+    printf '%s %s\n' "$(git hash-object -- "$1")" "$1"
+  else
+    printf '%s %s\n' - "$1"
+  fi
+}
+
+entries() {
+  printf '%s\n' "$1" | while IFS= read -r path; do
+    [ -z "$path" ] || entry "$path"
+  done
+}
+
+touched() {
+  if listed "$dirty" "$1"; then
+    ! listed "$before" "$(entry "$1")"
+  else
+    listed "$after" "$1"
+  fi
+}
+
+picked() {
+  printf '%s\n' "$1" | while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    case "$2" in
+      partly) listed "$dirty" "$path" || continue ;;
+      whole) ! listed "$dirty" "$path" || continue ;;
+      unstaged) ! listed "$staged" "$path" || continue ;;
+    esac
+    ! touched "$path" || printf '%s\n' "$path"
+  done
+}
+
+run_command() {
+  if ! output=$(sh -c "$command" 2>&1); then
+    printf 'format: `%s` failed:\n%s\n' "$command" "$output" >&2
+    exit 1
+  fi
+}
+
+if [ "${1:-}" = --check ]; then
+  run_command
+  unformatted=$(paths diff --name-only)
+  [ -n "$unformatted" ] || exit 0
+  printf 'format: `%s` changes these files; run it and commit the result:\n' "$command" >&2
+  shown "$unformatted"
+  exit 1
+fi
+
+[ ! -f "$(git rev-parse --git-path MERGE_HEAD)" ] || exit 0
+
+staged=$(paths diff --cached --name-only --diff-filter=ACMR)
+[ -n "$staged" ] || exit 0
+dirty=$(paths diff --name-only)
+before=$(entries "$dirty")
+
+run_command
+
+after=$(paths diff --name-only)
+partly=$(picked "$staged" partly)
+if [ -n "$partly" ]; then
+  printf 'format: `%s` changes these partly staged files, so the commit would not be formatted; stage each whole or not at all, then commit again:\n' "$command" >&2
+  shown "$partly"
+  exit 1
+fi
+
+whole=$(picked "$staged" whole)
+[ -z "$whole" ] || printf '%s\n' "$whole" | git --literal-pathspecs add --pathspec-from-file=-
+
+unstaged=$(picked "$after" unstaged)
+if [ -n "$unstaged" ]; then
+  printf 'format: `%s` also changed these files the commit leaves out; they stay in the worktree:\n' "$command" >&2
+  shown "$unstaged"
+fi
