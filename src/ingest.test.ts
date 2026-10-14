@@ -855,7 +855,9 @@ describe("the archive", () => {
     const env = scratchEnv(newRoot());
     const db = run(env);
     try {
-      db.run("INSERT INTO checkout (path, head, index_stat) VALUES ('/code/gone', 'abc', '1:1')");
+      db.run(
+        "INSERT INTO checkout (path, repo, head, index_stat) VALUES ('/code/gone', '/code/gone', 'abc', '1:1')",
+      );
       expect(rebuild(db, env).failures).toEqual([]);
       expect(db.query("SELECT path FROM checkout").all()).toEqual([]);
     } finally {

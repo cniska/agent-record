@@ -17,13 +17,13 @@ export function indexRepoFiles(db: Database, checkouts: readonly Checkout[], fai
   );
   const clear = db.prepare("DELETE FROM repo_file WHERE checkout = ?");
   const insert = db.prepare("INSERT INTO repo_file (checkout, path) VALUES (?, ?) ON CONFLICT DO NOTHING");
-  const saveIndex = db.prepare<void, [string, string | null]>(
-    "INSERT INTO checkout (path, index_stat) VALUES (?, ?) ON CONFLICT(path) DO UPDATE SET index_stat = excluded.index_stat",
+  const saveIndex = db.prepare<void, [string, string, string | null]>(
+    "INSERT INTO checkout (path, repo, index_stat) VALUES (?, ?, ?) ON CONFLICT(path) DO UPDATE SET repo = excluded.repo, index_stat = excluded.index_stat",
   );
 
   const report: RepoFileReport = { repos: 0, files: 0, unchanged: 0 };
   writeTransaction(db, () => {
-    for (const { path, indexStat } of checkouts) {
+    for (const { path, repo, indexStat } of checkouts) {
       if (indexUnchanged.get(path, indexStat)) {
         report.unchanged += 1;
         continue;
@@ -37,7 +37,7 @@ export function indexRepoFiles(db: Database, checkouts: readonly Checkout[], fai
       }
       clear.run(path);
       for (const file of tracked) insert.run(path, file);
-      saveIndex.run(path, indexStat);
+      saveIndex.run(path, repo, indexStat);
       report.repos += 1;
       report.files += tracked.length;
     }

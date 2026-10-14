@@ -75,8 +75,8 @@ const SESSION_SUMMARY = `select s.id, s.tool, s.cwd, s.git_branch, s.cli_version
     (select coalesce(sum(input_tokens + cache_read_tokens + cache_write_tokens + output_tokens), 0)
        from usage u where u.session_id = s.id) as tokens,
     (select count(*) from tool_call c where c.session_id = s.id) as tool_calls,
-    (select group_concat(subcommand, ' ') from
-       (select g.subcommand from git_command g join tool_call c on c.id = g.tool_call_id
+    (select group_concat(subcommand || '@' || coalesce(dir, '?'), ' ') from
+       (select g.subcommand, g.dir from git_command g join tool_call c on c.id = g.tool_call_id
         where c.session_id = s.id order by c.id, g.position)) as git,
     (select group_concat(skill_name || ':' || how, ' ') from skill_load k where k.session_id = s.id) as skills
   from session s order by s.id`;
@@ -125,7 +125,7 @@ test("AC-1 a sync records every tool's sessions with their facts, turns, tokens,
       1,
       2100,
       2,
-      "log",
+      "log@/Users/x/code/demo",
       "review:read",
     ],
     [
@@ -141,7 +141,7 @@ test("AC-1 a sync records every tool's sessions with their facts, turns, tokens,
       1,
       2460,
       2,
-      "add commit",
+      "add@/Users/x/code/demo commit@/Users/x/code/demo",
       "build:model",
     ],
     [
@@ -157,7 +157,7 @@ test("AC-1 a sync records every tool's sessions with their facts, turns, tokens,
       0,
       0,
       1,
-      "diff",
+      "diff@/Users/x/code/demo",
       null,
     ],
     [
@@ -173,7 +173,7 @@ test("AC-1 a sync records every tool's sessions with their facts, turns, tokens,
       0,
       1047,
       1,
-      "push",
+      "push@/Users/x/code/demo",
       null,
     ],
     [
@@ -189,7 +189,7 @@ test("AC-1 a sync records every tool's sessions with their facts, turns, tokens,
       0,
       1047,
       1,
-      "push",
+      "push@/Users/x/code/demo",
       null,
     ],
   ]);

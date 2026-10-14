@@ -31,7 +31,7 @@ claude plugin install cniska-record@cniska
 
 ## Why
 
-An experiment in giving coding agents a memory of their own work.
+Coding agents get a memory of their own work, and the owner gets evidence for changing how they work.
 
 A session's context ends at compaction, at a handoff, or when another agent takes over. The transcripts on disk keep everything that was said and decided. agent-record makes those transcripts something an agent can ask:
 
@@ -39,6 +39,7 @@ A session's context ends at compaction, at a handoff, or when another agent take
 - What happened after a handoff?
 - Why did the owner switch agents mid-task?
 - How does the owner actually work? The answers are evidence for codifying that workflow.
+- Did a workflow change help? `query signal` counts the friction the owner feels per week, and `query before-after` compares it on either side of the commit that made the change.
 
 The [search-sessions](https://github.com/cniska/agent-skills/tree/main/skills/search-sessions) skill in [cniska/agent-skills](https://github.com/cniska/agent-skills) asks it first.
 
@@ -56,6 +57,9 @@ Each command prints one JSON line.
 | `agent-record query search "<words>"` | Find messages by keyword |
 | `agent-record query thread <id-prefix> [--at <ts>]` | Read the exchange around a hit |
 | `agent-record query prior-art "<path fragment>"` | Find where a file shape already exists on disk |
+| `agent-record query signal <name> [--by <week\|repo\|route>]` | Count one friction signal per week: `owner-interrupts`, `time-to-land`, `stranded-work` or `review-loops` |
+| `agent-record query signal-events <name>` | List what a signal counted, to check it by hand |
+| `agent-record query before-after <sha-prefix> [--days <n>] [--from <ts>]` | Compare every signal before and after a commit |
 | `agent-record sql "<select>"` | Run one read-only statement |
 
 The record lives at `$XDG_DATA_HOME/agent-record/sessions.db` (`~/.local/share/agent-record/sessions.db` by default); `src/db-schema.ts` holds its tables.

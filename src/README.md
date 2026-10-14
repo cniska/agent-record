@@ -41,5 +41,5 @@ The rest are named by the step they take (`ingest-parse-claude.ts`, `ingest-arch
 - `cli-commands.ts` lists the commands, each loaded only when it runs; `cli-contract.ts` is what one is.
 - `db-schema.ts` holds the record's tables.
 - `ingest-sources.ts` lists the session sources; `ingest-parse-<tool>.ts` reads one tool's files.
-- `query-registry.ts` lists the named queries.
+- `query-registry.ts` lists the named queries; `query-signals.ts` lists the signals they count.
 - Read a module's `.test.ts` before changing its contract, and `modules.test.ts` before publishing a file.

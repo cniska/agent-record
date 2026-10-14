@@ -1,6 +1,7 @@
 import type { Database, SQLQueryBindings } from "bun:sqlite";
 import { invariant } from "./assert";
-import type { Cell, Rows } from "./query-contract";
+import { type Cell, type Rows, refuseQuery } from "./query-contract";
+import { Timestamp } from "./timestamp";
 
 export const SAID = "m.is_skill_body = 0 AND (m.is_meta = 0 OR m.origin_kind IN ('coordinator', 'peer'))";
 
@@ -22,4 +23,16 @@ export function select(db: Database, sql: string, params: SQLQueryBindings[] = [
   const statement = db.query<unknown, SQLQueryBindings[]>(sql);
   const rows = statement.values(...params).map((row) => row.map(cellOf));
   return { columns: statement.columnNames, rows };
+}
+
+export function countFlag(flag: string, value: string): number {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1) throw refuseQuery("not_a_count", { flag, value });
+  return n;
+}
+
+export function timeFlag(flag: string, value: string): Timestamp {
+  const time = Timestamp.safeParse(value);
+  if (!time.success) throw refuseQuery("not_a_time", { flag, value });
+  return time.data;
 }

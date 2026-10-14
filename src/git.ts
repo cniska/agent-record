@@ -3,9 +3,9 @@ import { constants } from "node:os";
 import { errorDetail } from "./error-read";
 import { refuseGit } from "./git-contract";
 
-export type GitRun = { readonly status: number; readonly out: string; readonly err: string };
+export type GitOutput = { readonly status: number; readonly out: string; readonly err: string };
 
-export function git(repo: string, args: readonly string[]): GitRun {
+export function git(repo: string, args: readonly string[]): GitOutput {
   const run = spawnSync("git", ["-C", repo, ...args], {
     stdio: ["ignore", "pipe", "pipe"],
     maxBuffer: Number.POSITIVE_INFINITY,
@@ -16,7 +16,7 @@ export function git(repo: string, args: readonly string[]): GitRun {
   return { status, out: run.stdout.toString(), err: run.stderr.toString().trim() };
 }
 
-export function refused(repo: string, args: readonly string[], run: GitRun) {
+export function refused(repo: string, args: readonly string[], run: GitOutput) {
   return refuseGit("git_failed", {
     repo,
     command: `git ${args.join(" ")}`,

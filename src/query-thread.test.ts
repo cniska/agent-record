@@ -162,7 +162,7 @@ describe("thread", () => {
       expect.objectContaining({
         code: "not_a_time",
         message: "--at yesterday is not a time",
-        meta: { value: "yesterday" },
+        meta: { flag: "at", value: "yesterday" },
         resolve: "--at <ts>, an ISO time such as 2026-09-01T10:30:00Z",
         kind: "refusal",
       }),

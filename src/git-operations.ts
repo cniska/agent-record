@@ -1,3 +1,5 @@
+import { isAbsolute, resolve } from "node:path";
+
 type ShellToken = { readonly kind: "word"; readonly text: string } | { readonly kind: "separator" };
 
 const SEPARATORS = ["&&", "||", ";", "|", "\n"] as const;
@@ -146,19 +148,45 @@ const VALUED = new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace", "
 
 const SUBCOMMAND = /^[a-z][a-z0-9-]*$/;
 
-function subcommandOf(words: readonly string[]): string | null {
+const CD = "cd";
+
+const DIR_FLAG = "-C";
+
+const HOME = "~";
+
+export type GitRun = { readonly subcommand: string; readonly dir: string | null };
+
+export type RunsIn = { readonly cwd: string | null; readonly home: string };
+
+function within(dir: string | null, path: string, home: string): string | null {
+  if (path === HOME || path.startsWith(`${HOME}/`)) return resolve(home, path.slice(2));
+  if (isAbsolute(path)) return resolve(path);
+  return dir === null ? null : resolve(dir, path);
+}
+
+function runOf(words: readonly string[], cwd: string | null, home: string): GitRun | null {
   const start = words.findIndex((word) => !PREFIX.test(word));
   if (start === -1 || !GIT.test(words[start] ?? "")) return null;
+  let dir = cwd;
   for (let at = start + 1; at < words.length; at += 1) {
     const word = words[at] ?? "";
+    if (word === DIR_FLAG) dir = within(dir, words[at + 1] ?? "", home);
     if (VALUED.has(word)) at += 1;
-    else if (!word.startsWith("-")) return SUBCOMMAND.test(word) ? word : null;
+    else if (!word.startsWith("-")) return SUBCOMMAND.test(word) ? { subcommand: word, dir } : null;
   }
   return null;
 }
 
-export function gitSubcommands(command: string): string[] {
-  return commandsOf(lexShell(command))
-    .map(subcommandOf)
-    .filter((sub) => sub !== null);
+export function gitRuns(command: string, { cwd, home }: RunsIn): readonly GitRun[] {
+  const runs: GitRun[] = [];
+  let dir = cwd;
+  for (const words of commandsOf(lexShell(command))) {
+    if (words[0] === CD) {
+      dir = within(dir, words[1] ?? home, home);
+      continue;
+    }
+    const run = runOf(words, dir, home);
+    if (run !== null) runs.push(run);
+  }
+  return runs;
 }

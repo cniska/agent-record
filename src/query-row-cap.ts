@@ -1,12 +1,11 @@
-import { type CappedResult, type QueryResult, refuseQuery } from "./query-contract";
+import { countFlag } from "./query";
+import type { CappedResult, QueryResult } from "./query-contract";
 
 export const DEFAULT_MAX_ROWS = 40;
 
 export function rowsOf(spec: string | undefined): number {
   if (spec === undefined) return DEFAULT_MAX_ROWS;
-  const n = Number(spec);
-  if (!Number.isInteger(n) || n < 1) throw refuseQuery("not_a_count", { value: spec });
-  return n;
+  return countFlag("rows", spec);
 }
 
 export function rowsToRead(maxRows: number): number {

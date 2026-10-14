@@ -27,25 +27,51 @@ export type Query<Flag extends string = string> = {
 
 export const refuseQuery = refuser<{
   readonly unknown_query: { readonly name: string };
-  readonly not_a_count: { readonly value: string };
-  readonly not_a_time: { readonly value: string };
+  readonly not_a_count: { readonly flag: string; readonly value: string };
+  readonly not_a_time: { readonly flag: string; readonly value: string };
   readonly ambiguous_session: { readonly prefix: string; readonly matches: readonly string[] };
+  readonly unknown_signal: { readonly name: string; readonly signals: readonly string[] };
+  readonly unknown_grouping: { readonly by: string; readonly groupings: readonly string[] };
+  readonly unknown_commit: { readonly prefix: string };
+  readonly ambiguous_commit: { readonly prefix: string; readonly matches: readonly string[] };
+  readonly from_before_commit: { readonly from: string; readonly sha: string; readonly at: string };
 }>({
   unknown_query: {
     message: ({ name }) => `no query named ${name}`,
     resolve: () => "agent-record query list",
   },
   not_a_count: {
-    message: ({ value }) => `--rows ${value} is not a count of at least 1`,
-    resolve: () => "--rows <n>, a whole number of at least 1",
+    message: ({ flag, value }) => `--${flag} ${value} is not a count of at least 1`,
+    resolve: ({ flag }) => `--${flag} <n>, a whole number of at least 1`,
   },
   not_a_time: {
-    message: ({ value }) => `--at ${value} is not a time`,
-    resolve: () => "--at <ts>, an ISO time such as 2026-09-01T10:30:00Z",
+    message: ({ flag, value }) => `--${flag} ${value} is not a time`,
+    resolve: ({ flag }) => `--${flag} <ts>, an ISO time such as 2026-09-01T10:30:00Z`,
   },
   ambiguous_session: {
     message: ({ prefix, matches }) =>
       `${prefix} matches more than one session, among them ${matches.join(" and ")}`,
     resolve: ({ matches }) => `agent-record query thread <a longer prefix of one of: ${matches.join(", ")}>`,
+  },
+  unknown_signal: {
+    message: ({ name }) => `no signal named ${name}`,
+    resolve: ({ signals }) => `one of: ${signals.join(", ")}`,
+  },
+  unknown_grouping: {
+    message: ({ by }) => `--by ${by} is not a grouping`,
+    resolve: ({ groupings }) => `--by <${groupings.join("|")}>`,
+  },
+  unknown_commit: {
+    message: ({ prefix }) => `no commit in the record starts with ${prefix}`,
+    resolve: () => "agent-record sync, then a prefix of a commit in a repo a session worked in",
+  },
+  ambiguous_commit: {
+    message: ({ prefix, matches }) =>
+      `${prefix} matches more than one commit, among them ${matches.join(" and ")}`,
+    resolve: ({ matches }) => `a longer prefix of one of: ${matches.join(", ")}`,
+  },
+  from_before_commit: {
+    message: ({ from, sha, at }) => `--from ${from} is before commit ${sha} at ${at}`,
+    resolve: ({ at }) => `--from <ts> at or after ${at}`,
   },
 });

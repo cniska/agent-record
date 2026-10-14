@@ -25,7 +25,7 @@ export type SyncReport = {
 };
 
 export function sync(db: Database, env: Env): SyncReport {
-  const ingester = createIngester(db);
+  const ingester = createIngester(db, env.home);
   const sessionExists = db.prepare<{ one: number }, [string]>("SELECT 1 AS one FROM session WHERE id = ?");
   const setTitle = db.prepare<void, [string, string]>(
     "UPDATE session SET title = ? WHERE id = ? AND title IS NULL",

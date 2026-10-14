@@ -63,8 +63,8 @@ export function ingestCommits(db: Database, checkouts: readonly Checkout[], fail
   const headUnchanged = db.query<{ one: number }, [string, string | null]>(
     "SELECT 1 AS one FROM checkout WHERE path = ? AND head IS ?",
   );
-  const saveHead = db.prepare<void, [string, string | null]>(
-    "INSERT INTO checkout (path, head) VALUES (?, ?) ON CONFLICT(path) DO UPDATE SET head = excluded.head",
+  const saveHead = db.prepare<void, [string, string, string | null]>(
+    "INSERT INTO checkout (path, repo, head) VALUES (?, ?, ?) ON CONFLICT(path) DO UPDATE SET repo = excluded.repo, head = excluded.head",
   );
 
   const report: GitReport = { repos: 0, commits: 0, files: 0, unchanged: 0 };
@@ -97,7 +97,7 @@ export function ingestCommits(db: Database, checkouts: readonly Checkout[], fail
         continue;
       }
       if (head !== null && !readHead(path, repo, head)) continue;
-      saveHead.run(path, head);
+      saveHead.run(path, repo, head);
     }
   });
   return report;

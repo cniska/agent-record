@@ -1,9 +1,9 @@
 import type { Database } from "bun:sqlite";
 import { invariant } from "./assert";
-import { SAID, select } from "./query";
+import { SAID, select, timeFlag } from "./query";
 import { type Query, refuseQuery } from "./query-contract";
 import { rowsToRead } from "./query-row-cap";
-import { Timestamp } from "./timestamp";
+import type { Timestamp } from "./timestamp";
 
 const TRANSCRIPT_READING_CHARS = 240;
 
@@ -63,10 +63,7 @@ function countsOf(db: Database, id: string, at: string | null): Counts {
 }
 
 function passageTime(at: string | undefined): Timestamp | null {
-  if (at === undefined) return null;
-  const time = Timestamp.safeParse(at);
-  if (!time.success) throw refuseQuery("not_a_time", { value: at });
-  return time.data;
+  return at === undefined ? null : timeFlag("at", at);
 }
 
 function unshown(earlier: number, later: number): string {

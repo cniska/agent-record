@@ -37,6 +37,12 @@ test("AC-13 query list names every query with its usage and summary", () => {
     { name: "prior-art", usage: 'agent-record query prior-art "<path fragment>" [--rows <n>]' },
     { name: "search", usage: 'agent-record query search "<words>" [--rows <n>]' },
     { name: "thread", usage: "agent-record query thread <id-prefix> [--at <ts>] [--rows <n>]" },
+    { name: "signal", usage: "agent-record query signal <name> [--by <week|repo|route>] [--rows <n>]" },
+    { name: "signal-events", usage: "agent-record query signal-events <name> [--rows <n>]" },
+    {
+      name: "before-after",
+      usage: "agent-record query before-after <sha-prefix> [--days <n>] [--from <ts>] [--rows <n>]",
+    },
   ]);
   for (const { summary } of result.queries) expect(summary).not.toBe("");
 });

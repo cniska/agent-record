@@ -33,13 +33,20 @@ function recordOf(path: string): unknown {
   }
 }
 
+const ARGS: Readonly<Record<string, string>> = {
+  signal: "owner-interrupts",
+  "signal-events": "owner-interrupts",
+  "before-after": "abc123",
+};
+
 describe("agent-record query", () => {
   test("answers every query without changing the record, and creates none", async () => {
     const { home, env, path } = recordWithCommit();
     const empty = mkdtempSync(join(tmpdir(), "agent-record-db-read-"));
     try {
       const before = recordOf(path);
-      for (const query of QUERIES) queryCommand.run([query.name, "stay"], testRuntime(env));
+      for (const query of QUERIES)
+        queryCommand.run([query.name, ARGS[query.name] ?? "stay"], testRuntime(env));
       expect(recordOf(path)).toEqual(before);
 
       expect(() => queryCommand.run(["search", "stay"], testRuntime(scratchEnv(empty)))).toThrow(

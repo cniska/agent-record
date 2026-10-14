@@ -274,7 +274,7 @@ describe("the command contract", () => {
         kind: "refusal",
         code: "not_a_count",
         message: "--rows 0 is not a count of at least 1",
-        meta: { value: "0" },
+        meta: { flag: "rows", value: "0" },
         resolve: "--rows <n>, a whole number of at least 1",
       },
     });

@@ -3,7 +3,7 @@ import { existsSync, statSync } from "node:fs";
 import { basename } from "node:path";
 import { unreachable } from "./assert";
 import { writeTransaction } from "./db";
-import { gitSubcommands } from "./git-operations";
+import { gitRuns } from "./git-operations";
 import { readChunk } from "./ingest-chunk";
 import type { SessionId, ToolCallId } from "./ingest-ids";
 import { advance, type Position, planRead } from "./ingest-read-plan";
@@ -81,7 +81,7 @@ function bitOf(value: boolean | null): number | null {
   return value ? 1 : 0;
 }
 
-export function createIngester(db: Database) {
+export function createIngester(db: Database, home: string) {
   const selectCursor = db.prepare<Cursor, [string]>(
     `SELECT ${CURSOR_COLUMNS} FROM source_file WHERE path = ?`,
   );
@@ -222,7 +222,10 @@ export function createIngester(db: Database) {
 
   const clearGitCommands = db.prepare("DELETE FROM git_command WHERE tool_call_id = ?");
   const insertGitCommand = db.prepare(
-    "INSERT INTO git_command (tool_call_id, position, subcommand) VALUES (?, ?, ?)",
+    "INSERT INTO git_command (tool_call_id, position, subcommand, dir) VALUES (?, ?, ?, ?)",
+  );
+  const selectSessionCwd = db.prepare<{ cwd: string | null }, [string]>(
+    "SELECT cwd FROM session WHERE id = ?",
   );
 
   const skillLoadConflict = `ON CONFLICT(session_id, anchor_id, skill_name, how) DO UPDATE SET
@@ -337,10 +340,10 @@ export function createIngester(db: Database) {
     }
   }
 
-  function writeGitCommands(id: ToolCallId, command: string): void {
+  function writeGitCommands(id: ToolCallId, command: string, cwd: string | null): void {
     clearGitCommands.run(id);
-    for (const [position, subcommand] of gitSubcommands(command).entries()) {
-      insertGitCommand.run(id, position, subcommand);
+    for (const [position, { subcommand, dir }] of gitRuns(command, { cwd, home }).entries()) {
+      insertGitCommand.run(id, position, subcommand, dir);
     }
   }
 
@@ -416,9 +419,10 @@ export function createIngester(db: Database) {
       });
     }
 
+    const cwd = selectSessionCwd.get(spec.sessionId)?.cwd ?? null;
     for (const t of parsed.toolCalls) {
       writeToolCall(t, spec);
-      if (t.kind !== "result" && t.command) writeGitCommands(t.id, t.command);
+      if (t.kind !== "result" && t.command) writeGitCommands(t.id, t.command, cwd);
     }
 
     for (const l of parsed.skillLoads) {

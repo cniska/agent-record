@@ -10,7 +10,7 @@ This document states what must hold, not how. [`README.md`](README.md) lists the
 
 A coding agent's context ends at compaction, at a handoff, or when another agent takes over. The tools' transcripts on disk keep what was said, decided and done, but each tool keeps them in its own format and place, and may delete them. agent-record copies them into one archive, reads that archive into one SQLite record, and answers questions over it.
 
-The record is what agent workflows improve from. Its first use is search: an agent finds where earlier work was said, decided or ran into friction, and reads the thread around it. The direction, not built yet, is to also check whether a workflow change helped, by comparing the record before and after it.
+The record is what agent workflows improve from. Its first use is search: an agent finds where earlier work was said, decided or ran into friction, and reads the thread around it. Its second is the check: the signals count the friction the owner feels, week by week, and `before-after` compares them on either side of a workflow change, so the change is kept or reverted on evidence.
 
 **Primary user:** the owner's coding agents on the owner's own machine, through the CLI and the Claude Code plugin; the owner when diagnosing the record. Not the audience: other users of the machine, remote services, teams sharing a record.
 
@@ -33,7 +33,7 @@ The record is what agent workflows improve from. Its first use is search: an age
 - **FR-10** — A line of a kind the record keeps that cannot be parsed, or that lacks a field its rows need (an id or a time the line records), is skipped, the rest of its file is read, and the sync reports the file and line number. A line of a kind the record does not keep is skipped without a report.
 - **FR-11** — A file that cannot be read or archived does not stop the sync: the other files are read, and the sync's result lists each failure as a refusal naming its fix.
 - **FR-12** — A subagent session is recorded with its parent session. A subagent whose parent is not in the record is recorded without one, and the sync reports it.
-- **FR-13** — The record holds, per session: its tool, parent, agent type, working directory, project, branch, tool version, entry point, first and last time (the earliest and latest timestamp on any line read from its files), and title; per message: its role, time, model, text and source line; per turn: its start, end, duration, status and model; per model response: its token counts; per tool call: its tool, command or file, the git subcommands its command ran, its outcome and its times.
+- **FR-13** — The record holds, per session: its tool, parent, agent type, working directory, project, branch, tool version, entry point, first and last time (the earliest and latest timestamp on any line read from its files), and title; per message: its role, time, model, text and source line; per turn: its start, end, duration, status and model; per model response: its token counts; per tool call: its tool, command or file, its git runs (each git subcommand its command ran, and the directory it ran in: the session's working directory, as a `cd` or `git -C` in the command changes it), its outcome and its times.
 - **FR-14** — A message's text that a tool wrote across several lines under one id is recorded as one message.
 - **FR-15** — A model response recorded several times while it streamed is counted once, with its final token counts.
 - **FR-16** — For every tool, `input_tokens` counts input tokens excluding cache reads; cache reads and cache writes have their own counts.
@@ -52,7 +52,7 @@ The record is what agent workflows improve from. Its first use is search: an age
 
 - **FR-24** — `rebuild` drops the record and reads it again from the archive, whatever schema version the record had.
 - **FR-25** — After `rebuild`, every session `sync` archived is in the record as the archive last held it, including sessions whose tool files are gone. Git history is not covered (FR-23).
-- **FR-26** — Given the same archive, `rebuild` writes the same session, message, turn, usage, tool-call and skill-load rows that the syncs that built the archive wrote.
+- **FR-26** — Given the same archive, `rebuild` writes the same session, message, turn, usage, tool-call, git-run and skill-load rows that the syncs that built the archive wrote.
 
 ### 2.5 Schema version
 
@@ -120,6 +120,28 @@ The archive holds the only copy of sessions a tool has deleted, so `sync` keeps 
 - **FR-68** — The mirror check warns when the mirror folder's parent does not exist or cannot be read, when no `sync` has yet mirrored the whole archive, or when the last `sync` that did finished more than a day ago, and its detail names the mirror folder.
 - **FR-69** — A `sync` whose record write fails still mirrors the archive before it reports the failure.
 
+### 2.12 Signals
+
+The signals count the friction the owner feels, so a change to the workflow can be checked against them. Each is read from the transcripts the record holds. Review verdicts and gate refusals come from the hook event log, which the record does not hold yet: the signals that need it, false stops among them, wait on it. These terms hold for every signal:
+
+- **Owner message**: what the owner typed into a top-level session. In Claude Code, a user message the transcript marks as human (or as typed or queued, before Claude Code marked who wrote it), and the `[Request interrupted by user]` marker; in Codex, a typed user message in a session `codex exec` did not run; in Grok, pi and omp, every user message. A slash command, a shell escape and their output are not owner messages, and a subagent session holds none.
+- **Task**: a top-level session and its subagents, from a task prompt to the next one. A task prompt is the session's start, or an owner message that comes after the agent has said something and is not an interrupt (FR-70).
+- **Commit run** and **push run**: a git run (FR-13) of `commit` or `push` whose tool call did not fail, at the time its result came back. It counts in the repo the record holds for the checkout its directory lies in, the innermost when checkouts nest; one outside every checkout the record indexes (FR-19) is not counted. A **commit** stays what `repo_commit` holds.
+- **On origin**: a commit run is on origin from the first push run in its repo at or after it, in any session. A push the owner ran outside every session is not seen.
+- **Repo**: the record's repo (FR-19), shown with its label. A commit run counts in its own repo, and a task that made one in the repo of its last; an owner message, a reviewer run and a task that made none count in the repo of the top-level session's project.
+- **Route**: the stem of the first file under `skills/task/references/` that a tool call of the task's sessions read; `none` when they read none.
+- **Week**: Monday to Sunday in UTC, named by its Monday.
+
+Requirements:
+
+- **FR-70** — The `owner-interrupts` signal counts each owner message that answers, corrects or unblocks an agent, tagged by the first cause that fits: `stop`, the interrupted marker; `answer`, the last 300 characters of what the agent last said before it hold a question mark; `correct`, it opens with a word that pushes back (no, don't, stop, wait, actually, instead, why, not, wrong, undo, revert, but, isn't, shouldn't); `unblock`, it is under 80 characters and opens with a go-ahead (yes, yep, yeah, ok, okay, sure, go ahead, proceed, continue, approve, approved, lgtm, do it, ship it, push, commit). A word matches whole, case aside, and its apostrophe may be left out. An owner message before the agent has said anything, or one no cause fits, is a task prompt instead. A tool call the owner rejected at a permission prompt counts as `permission`. Its value is interrupts per task, over the tasks of the top-level sessions the owner typed in.
+- **FR-71** — The `time-to-land` signal takes each task that made a commit run, at its task prompt, and the minutes until the task's last commit run was on origin. Its value is the median minutes over the tasks that landed; a task not landed is counted apart.
+- **FR-72** — The `stranded-work` signal takes each commit run an hour older than the record's newest message, and counts it stranded when it was not on origin within the hour. A session, with its subagents, whose last commit run was never on origin is counted apart: the transcript does not say when a session is archived, so a session that ended with its last commit run unpushed stands in for it. The transcript does not say whether a reviewer accepted a commit, so every commit run counts. Its value is the share of commit runs stranded.
+- **FR-73** — The `review-loops` signal counts the reviewer runs, the subagent sessions whose agent type names a reviewer, and the commit runs. Its value is reviewer runs per commit run. The verdicts, their Fix and Consider counts, the rounds to accept and the rules cited wait on the hook event log.
+- **FR-74** — `query signal <name>` returns, per week, the signal's value, the count behind it, what it is out of, and the count of each cause or kind. `--by repo` or `--by route` splits each week by repo or by route; `--by week` is the default. Weeks are newest first, and a week, repo or route that nothing fell in is absent, not zero. An unknown signal or `--by` is refused, naming the choices.
+- **FR-75** — `query signal-events <name>` lists each message, task, commit run or reviewer run the signal counted, newest first, with its time, kind, repo, route, its minutes where the signal times it, the session `thread` opens, and the owner's words for an interrupt.
+- **FR-76** — `query before-after <sha>` finds the commit in the record by a prefix of its SHA and compares each signal over the `--days <n>` days (14 by default) before the commit's time with the same span after it. `--from <ts>` starts the after window at that time instead, when the change took effect later than its commit, such as when a hook it replaced was removed. The after window ends at the record's newest message. For each signal it returns its value before and after, with the count behind each and what it is out of, so windows of different lengths compare. A prefix that matches no commit or more than one, a `--days` that is not a whole number of at least 1, and a `--from` before the commit are refused.
+
 ## 3. Non-functional requirements
 
 - **NF-1** — agent-record needs no network and no credential, and sends nothing off the machine itself: the mirror is a folder on this machine that a backup service, such as iCloud Drive, may carry off it (FR-61).
@@ -141,7 +163,7 @@ The archive holds the only copy of sessions a tool has deleted, so `sync` keeps 
 
 ## 5. Acceptance criteria
 
-- **AC-1** — Run `sync` over fixture homes for all five tools: each session is in the archive and the record, with its facts, messages, turns, token counts, tool calls with their git subcommands, and skill loads. (FR-1, FR-6, FR-7, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18)
+- **AC-1** — Run `sync` over fixture homes for all five tools: each session is in the archive and the record, with its facts, messages, turns, token counts, tool calls with their git runs and the directory each ran in, and skill loads. (FR-1, FR-6, FR-7, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18)
 - **AC-2** — Append lines to a fixture transcript, one without a trailing newline, and sync again: only the complete new lines are added. (FR-2, FR-8, FR-9)
 - **AC-3** — Delete a tool's fixture file and sync: the session stays in the record. Then `rebuild`: it is still there. (FR-3, FR-24, FR-25)
 - **AC-4** — Rewrite a fixture transcript shorter and sync: the session holds only the new content. (FR-4)
@@ -149,7 +171,7 @@ The archive holds the only copy of sessions a tool has deleted, so `sync` keeps 
 - **AC-6** — Change a tool's fixture file after archiving it, then `rebuild` from the archive alone: the record matches the archive, not the tool's file. (FR-7)
 - **AC-7** — Sync a fixture of each tool holding a malformed line, with an unreadable file and an orphan subagent: the sync finishes, and its report names each malformed line, the failure with its fix, and the orphan. (FR-10, FR-11, FR-12)
 - **AC-8** — Sync with a fixture session in a fixture git repo with an origin remote, and in a repo under a temp directory: the first repo's commits with their types, its label and its files are recorded, the temp repo's are not; a second sync with no change reads neither. (FR-19, FR-20, FR-21, FR-22)
-- **AC-9** — Sync fixtures, then `rebuild`: the session, message, turn, usage, tool-call and skill-load rows are identical. (FR-26)
+- **AC-9** — Sync fixtures, then `rebuild`: the session, message, turn, usage, tool-call, git-run and skill-load rows are identical. (FR-26)
 - **AC-10** — Set the record's schema version lower, then higher: `sync`, `query` and `sql` each refuse, naming `agent-record rebuild` and a newer agent-record respectively; `rebuild` succeeds on the lower one. (FR-24, FR-27, FR-28, FR-29)
 - **AC-11** — Run each command once successfully and once with bad input, and `doctor` with a failing check: the successful runs and `doctor` print `ok: true` on stdout, `doctor` exiting 1; the bad input prints `ok: false` on stderr with exit 1, and the error carries kind, code, message, meta and resolve. (FR-30, FR-31)
 - **AC-12** — Run `agent-record` alone, an unknown command, and each malformed argument form: the listing and each refusal with its usage. (FR-32, FR-33)
@@ -180,6 +202,12 @@ The archive holds the only copy of sessions a tool has deleted, so `sync` keeps 
 - **AC-37** — Plant a session in the mirror that the archive lacks, then `rebuild`: the record does not hold it. (FR-67)
 - **AC-38** — `doctor` after a sync that mirrored the archive, and with a mirror time over a day old: the mirror check passes, then warns, naming the mirror folder. (FR-45, FR-68)
 - **AC-39** — Sync with an iCloud Drive folder and a record of another schema version: the sync is refused, and the archive is mirrored. (FR-69)
+- **AC-40** — Sync a session in which the owner opens a task, answers a question, pushes back, says go ahead, interrupts, rejects a permission and asks a new task, with a subagent: `signal owner-interrupts` counts one of each cause over two tasks and nothing from the subagent, and `signal-events owner-interrupts` lists them. (FR-70, FR-75)
+- **AC-41** — Sync sessions in a fixture repo where one task commits and pushes, one commits after a `cd` into the repo and is pushed later from another session, and one never pushes: `signal time-to-land` gives the median minutes of the two landed tasks and one task not landed. (FR-71)
+- **AC-42** — Sync a session with a commit run pushed within the hour, one pushed after it, and a last commit run never pushed: `signal stranded-work` counts two stranded commit runs of three, and one session ended unpushed. (FR-72)
+- **AC-43** — Sync a session with two reviewer subagents and one commit run: `signal review-loops` gives two reviewer runs per commit run. (FR-73)
+- **AC-44** — `signal` by week, with `--by repo`, `--by route`, an unknown signal and an unknown `--by`: rows per week, split by repo with its label and by route, and two refusals naming the choices. (FR-74)
+- **AC-45** — `before-after` on a fixture commit with sessions on both sides, with `--from`, and with an unknown SHA, a `--days 0` and a `--from` before the commit: each signal's value before and after with its counts, the after window starting at `--from`, and three refusals. (FR-76)
 
 ## 6. Deliverables
 
@@ -206,6 +234,7 @@ The archive holds the only copy of sessions a tool has deleted, so `sync` keeps 
 - How search ranks within equal matched-word counts (bounded by FR-37).
 - How long a command waits for a held record before it is refused (bounded by FR-58, NF-5).
 - The shape of the reference `search` gives and `thread` takes (bounded by FR-37, FR-40).
+- The signals' thresholds and word lists, and `before-after`'s default span, provided each is stated where the signal is defined (FR-70 to FR-73, FR-76).
 
 ### Policies chosen (not open)
 

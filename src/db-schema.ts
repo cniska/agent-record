@@ -3,7 +3,7 @@ import { HOWS } from "./ingest-skill-load";
 import { KINDS, TOOLS } from "./ingest-tools";
 
 const sqlList = (values: readonly string[]): string => values.map((value) => `'${value}'`).join(",");
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS source_file (
@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS git_command (
   tool_call_id    TEXT NOT NULL REFERENCES tool_call(id) ON DELETE CASCADE,
   position        INTEGER NOT NULL,
   subcommand      TEXT NOT NULL,
+  dir             TEXT,
   PRIMARY KEY (tool_call_id, position)
 );
 CREATE INDEX IF NOT EXISTS git_command_sub ON git_command(subcommand);
@@ -172,6 +173,7 @@ CREATE INDEX IF NOT EXISTS repo_file_path ON repo_file(path);
 
 CREATE TABLE IF NOT EXISTS checkout (
   path            TEXT PRIMARY KEY,
+  repo            TEXT NOT NULL,
   head            TEXT,
   index_stat      TEXT
 );
