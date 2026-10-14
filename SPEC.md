@@ -1,6 +1,6 @@
 # agent-record Specification
 
-> A local record of every coding-agent session on this machine: the record agent workflows improve from.
+> A local record of what every coding-agent session on this machine did, kept verbatim, for agents to search and the owner to measure from.
 
 This document states what must hold, not how. [`README.md`](README.md) lists the commands and [`src/README.md`](src/README.md) maps the modules that meet these requirements.
 

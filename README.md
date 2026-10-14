@@ -1,6 +1,6 @@
 # agent-record
 
-A local record of every coding-agent session on this machine: the record agent workflows improve from.
+A local record of what every coding-agent session on this machine did, kept verbatim, for agents to search and the owner to measure from.
 
 - `agent-record sync` reads the session files of Claude Code, Codex, Grok, pi and omp into one SQLite database, with the commits of the repos those sessions worked in and the cniska-skills plugin's hook event log.
 - `agent-record query` and `agent-record sql` read it. Search comes first: `query search` finds where earlier work was said, decided or ran into friction, and `query thread` shows what happened around it.
@@ -23,7 +23,7 @@ agent-record sync
 agent-record doctor
 ```
 
-Then install the Claude Code plugin, the preferred way to keep the record current and put it in front of every session:
+Then install the Claude Code plugin, the preferred way to keep the record current and point every session at it:
 
 ```bash
 claude plugin install cniska-record@cniska
@@ -31,9 +31,9 @@ claude plugin install cniska-record@cniska
 
 ## Why
 
-Coding agents get a memory of their own work, and the owner gets evidence for changing how they work.
+A session's context ends at compaction, at a handoff, or when another agent takes over, and the tool may later delete its transcript. agent-record keeps every session file as the tool wrote it, in an archive that outlasts the tool's own copy and is mirrored off the machine. It reads those files beside the commits of the repos they worked in.
 
-A session's context ends at compaction, at a handoff, or when another agent takes over. The transcripts on disk keep everything that was said and decided. agent-record makes those transcripts something an agent can ask:
+A memory tool decides what an agent should remember: it distills sessions into facts or summaries and puts them into the agent's context. agent-record distills nothing and puts none of it into a context. An agent or the owner asks it, and it answers from what happened:
 
 - What was decided before?
 - What happened after a handoff?
