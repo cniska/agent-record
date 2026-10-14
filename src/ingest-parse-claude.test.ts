@@ -214,6 +214,35 @@ describe("parseClaudeChunk", () => {
     expect(chunk.toolCalls).toMatchObject([{ id: "tu-h", toolName: "SubagentHandback" }, { id: "tu-b" }]);
   });
 
+  test("reads a failed command's exit code from the result Claude Code writes for it", () => {
+    const result = (id: string, content: unknown, isError: boolean) =>
+      JSON.stringify({
+        type: "user",
+        uuid: `u-${id}`,
+        timestamp: "2026-09-16T10:03:00.000Z",
+        message: { content: [{ type: "tool_result", tool_use_id: id, content, is_error: isError }] },
+      });
+    const chunk = parseClaudeChunk(
+      [
+        result("tu-1", "Exit code 2\nboom", true),
+        result("tu-2", [{ type: "text", text: "Exit code 137" }], true),
+        result("tu-3", "PreToolUse:Bash hook error: denied", true),
+        result("tu-4", "Exit code 3", false),
+        result("tu-5", "error\nExit code 4", true),
+      ],
+      1,
+    );
+    expect(chunk.toolCalls.map((call) => [call.id, call.kind === "result" ? call.exitCode : "call"])).toEqual(
+      [
+        ["tu-1", 2],
+        ["tu-2", 137],
+        ["tu-3", null],
+        ["tu-4", null],
+        ["tu-5", null],
+      ],
+    );
+  });
+
   test("stores a time with an offset as UTC", () => {
     const [, first] = claudeTranscriptLines("s-1");
     const offset = withFields(first, { timestamp: "2026-09-16T12:01:00+02:00" });

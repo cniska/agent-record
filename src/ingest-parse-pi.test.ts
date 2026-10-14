@@ -150,6 +150,48 @@ describe("a Pi or omp session", () => {
     expect(call?.toolName).toBeNull();
   });
 
+  test("reads a failed command's exit code from omp's details, or else from the line pi ends its output with", () => {
+    const result = (id: string, isError: boolean, text: string, details: unknown = undefined) =>
+      JSON.stringify({
+        type: "message",
+        id: `r-${id}`,
+        timestamp: "2026-01-01T10:05:00.000Z",
+        message: {
+          role: "toolResult",
+          toolCallId: id,
+          toolName: "bash",
+          isError,
+          content: [{ type: "text", text }],
+          details,
+        },
+      });
+    const parsed = parsePiChunk(
+      [
+        result("call_a", true, "boom\n\nCommand exited with code 2"),
+        result("call_b", true, "boom\n\nWall time: 0.54 seconds\n\nCommand exited with code 1", {
+          timeoutSeconds: 120,
+          exitCode: 1,
+        }),
+        result("call_c", true, "boom", { exitCode: 3 }),
+        result("call_d", true, "Command exited with code 4\nthen more"),
+        result("call_e", false, "Command exited with code 5"),
+        result("call_f", true, "Skipped due to queued user message.", { __synthetic: true }),
+      ],
+      1,
+    );
+    expect(parsed.dropped).toEqual([]);
+    expect(
+      parsed.toolCalls.map((call) => [call.id, call.kind === "result" ? call.exitCode : "call"]),
+    ).toEqual([
+      ["call_a", 2],
+      ["call_b", 1],
+      ["call_c", 3],
+      ["call_d", null],
+      ["call_e", null],
+      ["call_f", null],
+    ]);
+  });
+
   test("reports a tool result with no call id or no time as dropped", () => {
     const orphan = JSON.stringify({
       type: "message",

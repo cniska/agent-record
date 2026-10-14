@@ -228,12 +228,22 @@ function visibleText(texts: readonly string[]): string | null {
   return nonEmpty(texts.join("\n"));
 }
 
+const FAILED_COMMAND_HEAD = /^Exit code (\d+)(?:\n|$)/;
+
+function resultTexts(content: unknown): string[] {
+  if (typeof content === "string") return [content];
+  if (!Array.isArray(content)) return [];
+  return content.flatMap((b) => (typeof b?.text === "string" ? [b.text] : []));
+}
+
+function exitCodeOf(content: unknown, isError: boolean): number | null {
+  if (!isError) return null;
+  const code = resultTexts(content)[0]?.match(FAILED_COMMAND_HEAD)?.[1];
+  return code === undefined ? null : Number(code);
+}
+
 function resultSize(content: unknown, result: ClaudeToolUseResult | undefined): number | null {
-  const parts: string[] = [];
-  if (typeof content === "string") parts.push(content);
-  else if (Array.isArray(content)) {
-    for (const b of content) if (typeof b?.text === "string") parts.push(b.text);
-  }
+  const parts = resultTexts(content);
   if (typeof result?.stdout === "string") parts.push(result.stdout);
   if (typeof result?.stderr === "string") parts.push(result.stderr);
   return parts.length > 0 ? parts.reduce((n, p) => n + p.length, 0) : null;
@@ -389,7 +399,7 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
               toolName: null,
               isError: block.isError,
               isInterrupted: r?.interrupted === true,
-              exitCode: null,
+              exitCode: exitCodeOf(block.content, block.isError),
               durationMs: null,
               resultBytes: resultSize(block.content, r),
               srcLine,

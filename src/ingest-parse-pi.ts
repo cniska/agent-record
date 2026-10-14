@@ -74,6 +74,14 @@ const PiAssistantLine = z
   }));
 type PiAssistantLine = z.infer<typeof PiAssistantLine>;
 
+const FAILED_COMMAND_TAIL = /\nCommand exited with code (\d+)$/;
+
+function exitCodeOf(parts: readonly z.output<typeof PiUserPart>[]): number | null {
+  const last = parts.at(-1);
+  const code = last?.kind === "text" ? last.text?.match(FAILED_COMMAND_TAIL)?.[1] : undefined;
+  return code === undefined ? null : Number(code);
+}
+
 const PiToolResultLine = z
   .looseObject({
     timestamp: Timestamp,
@@ -81,6 +89,8 @@ const PiToolResultLine = z
       toolCallId: ToolCallId,
       toolName: z.string().optional(),
       isError: z.boolean().optional(),
+      content: z.array(PiUserPart).optional(),
+      details: z.looseObject({ exitCode: z.number().int().optional() }).nullish(),
     }),
   })
   .transform(({ timestamp, message }) => ({
@@ -89,6 +99,8 @@ const PiToolResultLine = z
     toolCallId: message.toolCallId,
     toolName: nonEmpty(message.toolName),
     isError: message.isError ?? null,
+    exitCode:
+      message.details?.exitCode ?? (message.isError === true ? exitCodeOf(message.content ?? []) : null),
   }));
 type PiToolResultLine = z.infer<typeof PiToolResultLine>;
 
@@ -169,7 +181,7 @@ function resultOf(line: PiToolResultLine, srcLine: number): ToolCallRow {
     toolName: line.toolName,
     isError: line.isError,
     isInterrupted: null,
-    exitCode: null,
+    exitCode: line.exitCode,
     durationMs: null,
     resultBytes: null,
     srcLine,

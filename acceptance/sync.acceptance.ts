@@ -473,3 +473,79 @@ test("AC-52 a subagent's hand-back report is its last message text, through sync
   rebuild(home);
   expect(rowsOf(home, lastText)).toEqual([[report]]);
 });
+
+test("AC-53 a shell call's exit code is recorded from every tool that writes one, through sync and rebuild", () => {
+  const home = withFixtures(scratchHome(), EVERY_TOOL);
+  const at = "2026-09-16T10:04:30.000Z";
+  const failedResult = (id: string, text: string, details: object | null = null) => ({
+    type: "message",
+    id,
+    timestamp: at,
+    message: {
+      role: "toolResult",
+      toolCallId: id,
+      toolName: "bash",
+      isError: true,
+      content: [{ type: "text", text }],
+      details,
+    },
+  });
+  const appended: readonly (readonly [Fixture, object])[] = [
+    [
+      CLAUDE,
+      {
+        type: "user",
+        sessionId: "claude-session",
+        uuid: "claude-session-failed",
+        cwd: "/Users/x/code/demo",
+        timestamp: at,
+        message: {
+          role: "user",
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "claude-failed",
+              content: "Exit code 2\nboom",
+              is_error: true,
+            },
+          ],
+        },
+      },
+    ],
+    [
+      GROK_UPDATES,
+      {
+        timestamp: 1789553070,
+        method: "session/update",
+        params: {
+          sessionId: "grok-session",
+          update: {
+            sessionUpdate: "tool_call_update",
+            toolCallId: "grok-failed",
+            status: "completed",
+            rawOutput: { type: "Bash", exit_code: 3 },
+          },
+          _meta: { eventId: "g-failed", agentTimestampMs: 1789553070000 },
+        },
+      },
+    ],
+    [PI, failedResult("pi-failed", "boom\n\nCommand exited with code 4")],
+    [OMP, failedResult("omp-failed", "boom", { exitCode: 5 })],
+  ];
+  for (const [fixture, line] of appended)
+    appendFileSync(livePath(home, fixture), `${JSON.stringify(line)}\n`);
+  const exitCodes = "select id, exit_code from tool_call where exit_code is not null order by id";
+  const expected = [
+    [`${CODEX_THREAD}-c1`, 0],
+    [`${CODEX_THREAD}-c2`, 0],
+    ["claude-failed", 2],
+    ["grok-failed", 3],
+    ["omp-failed", 5],
+    ["pi-failed", 4],
+  ];
+
+  sync(home);
+  expect(rowsOf(home, exitCodes)).toEqual(expected);
+  rebuild(home);
+  expect(rowsOf(home, exitCodes)).toEqual(expected);
+});

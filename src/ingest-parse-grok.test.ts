@@ -102,6 +102,32 @@ describe("a grok update line", () => {
     ]);
   });
 
+  test("reads a finished shell command's exit code, and no other tool's", () => {
+    const update = (id: string, status: string, rawOutput: unknown) =>
+      JSON.stringify(
+        event({ sessionUpdate: "tool_call_update", toolCallId: id, status, rawOutput }, `${id}-${status}`),
+      );
+    const parsed = parseGrokChunk(
+      [
+        update("call-a", "in_progress", { type: "Bash", exit_code: 0 }),
+        update("call-a", "completed", { type: "Bash", exit_code: 2 }),
+        update("call-b", "completed", { type: "GrepSearch", exit_code: 1 }),
+        update("call-c", "completed", { type: "FileContent" }),
+        update("call-d", "completed", "plain output"),
+      ],
+      1,
+    );
+    expect(parsed.dropped).toEqual([]);
+    expect(
+      parsed.toolCalls.flatMap((call) => (call.kind === "result" ? [[call.id, call.exitCode]] : [])),
+    ).toEqual<unknown[]>([
+      ["call-a", 2],
+      ["call-b", null],
+      ["call-c", null],
+      ["call-d", null],
+    ]);
+  });
+
   test("reports a message line with no time as dropped", () => {
     const untimed = {
       method: "session/update",

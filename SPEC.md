@@ -173,6 +173,7 @@ A version of a skill is its body's hash (FR-17), with the plugin install it was 
 What an agent handed back, and how its commands ended, kept beside the messages of §2.2 so a run's outcome is read from the record, not its transcript.
 
 - **FR-84** — A subagent's hand-back report, which Claude Code carries only in the input of its `SubagentHandback` call, is the text of the assistant message that makes the call, after any text that message shows, so a subagent's report is its last assistant message text.
+- **FR-85** — A shell call's exit code is recorded where its tool's transcript states one: Codex for every command; Grok for a finished shell command; omp in a failed command's details; pi and Claude Code only for a failed command, in the line pi ends its output with and the line Claude Code starts it with. A tool that states no code leaves it empty, as Claude Code and pi do for a command that succeeded, and Claude Code for a command whose non-zero exit it reports as no error, such as a search that matched nothing; it is never inferred from whether the call failed.
 
 ## 3. Non-functional requirements
 
@@ -249,6 +250,7 @@ What an agent handed back, and how its commands ended, kept beside the messages 
 - **AC-50** — Sync a session that loads a plugin skill twice through the Skill tool, once with arguments appended to its body, and whose subagent preloads another, beside a later session that loads a changed body of the first from a newer install: `signal skill-usage` gives three loads in the first week's one task, two of one version, and one in the next week's. (FR-17, FR-82)
 - **AC-51** — Sync three sessions around a fixture commit, the first two loading one version of a skill and the third none: `signal stranded-work --skill` counts only the first two, `before-after --skill` names that version on both sides and notes it is not installed yet, with `--from` after the second session it notes no task loaded the skill, and a skill named with its plugin or never loaded is refused. (FR-74, FR-76, FR-83)
 - **AC-52** — Sync a session whose subagent hands back its report through `SubagentHandback`: `sql` returns the report as the subagent's last assistant message text, and after `rebuild` it still does. (FR-84)
+- **AC-53** — Sync fixtures of every tool, each but Codex with a failed shell call that states its exit code: `sql` returns each code beside Codex's, and after `rebuild` it still does. (FR-85)
 
 ## 6. Deliverables
 
