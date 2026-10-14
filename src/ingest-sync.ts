@@ -11,6 +11,7 @@ import { createEventIngester, ingestEventLog } from "./ingest-events";
 import { type GitReport, ingestCommits, probeCheckouts, repoRoots } from "./ingest-git";
 import type { SessionId } from "./ingest-ids";
 import { parentsFirst } from "./ingest-order";
+import type { ReadResult } from "./ingest-read-new";
 import { scan } from "./ingest-scan";
 import { listSource, SESSION_SOURCES, type SessionSource } from "./ingest-sources";
 import { TOOLS, type Tool } from "./ingest-tools";
@@ -27,8 +28,6 @@ export type SyncReport = {
   git: GitReport;
   repoFiles: RepoFileReport;
 };
-
-type ReadResult = { readonly read: boolean; readonly dropped: readonly number[] };
 
 export function sync(db: Database, env: Env): SyncReport {
   const ingester = createIngester(db, env.home);

@@ -5,7 +5,7 @@ import { unreachable } from "./assert";
 import { writeTransaction } from "./db";
 import { gitRuns } from "./git-operations";
 import type { SessionId, ToolCallId } from "./ingest-ids";
-import { readNewLines } from "./ingest-read-new";
+import { type ReadResult, readNewLines } from "./ingest-read-new";
 import { advance, type Position } from "./ingest-read-plan";
 import type { ChunkParser, ParsedChunk, SessionFacts, ToolCallRow } from "./ingest-session-records";
 import type { Kind, Tool } from "./ingest-tools";
@@ -23,11 +23,7 @@ export type SourceFile = {
   readonly parse: ChunkParser;
 };
 
-export type FileResult = {
-  read: boolean;
-  reset: boolean;
-  dropped: readonly number[];
-};
+type FileResult = ReadResult & { readonly reset: boolean };
 
 type Cursor = Position & { readonly path: string };
 

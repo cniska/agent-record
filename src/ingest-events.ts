@@ -2,10 +2,8 @@ import type { Database } from "bun:sqlite";
 import { unreachable } from "./assert";
 import { writeTransaction } from "./db";
 import { type HookEventRow, parseEventChunk } from "./ingest-parse-events";
-import { readNewLines } from "./ingest-read-new";
+import { type ReadResult, readNewLines } from "./ingest-read-new";
 import { advance, type Position } from "./ingest-read-plan";
-
-type EventLogResult = { readonly read: boolean; readonly dropped: readonly number[] };
 
 type Columns = {
   readonly $gate: string | null;
@@ -106,7 +104,7 @@ export function createEventIngester(db: Database) {
 
 export type EventIngester = ReturnType<typeof createEventIngester>;
 
-export function ingestEventLog(ingester: EventIngester, path: string): EventLogResult {
+export function ingestEventLog(ingester: EventIngester, path: string): ReadResult {
   const { reset, from, chunk } = readNewLines(path, ingester.cursorOf(path));
   if (from === null) {
     if (reset) ingester.resetLog(path);
