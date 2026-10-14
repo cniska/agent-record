@@ -7,7 +7,9 @@ export type Step =
   | { readonly agent: string; readonly at: string }
   | { readonly bash: string; readonly at: string; readonly done: string }
   | { readonly read: string; readonly at: string }
-  | { readonly rejected: string; readonly at: string };
+  | { readonly rejected: string; readonly at: string }
+  | { readonly skill: string; readonly at: string; readonly dir: string; readonly body: string }
+  | { readonly preload: string; readonly at: string; readonly dir: string; readonly body: string };
 
 export type Subagent = { readonly id: string; readonly agentType: string; readonly steps: readonly Step[] };
 
@@ -19,6 +21,8 @@ export type ClaudeSession = {
 };
 
 const PROJECTS = [".claude", "projects"];
+
+const SKILL_BODY_PREFIX = "Base directory for this skill:";
 
 function linesOf(sessionId: string, cwd: string, steps: readonly Step[], prefix: string): string {
   const sidechain = prefix !== sessionId;
@@ -65,6 +69,38 @@ function linesOf(sessionId: string, cwd: string, steps: readonly Step[], prefix:
       return [
         assistant(step.at, [{ type: "tool_use", id: tool, name: "Read", input: { file_path: step.read } }]),
         result(step.at, tool),
+      ];
+    }
+    if ("skill" in step) {
+      return [
+        assistant(step.at, [{ type: "tool_use", id: tool, name: "Skill", input: { skill: step.skill } }]),
+        {
+          ...base,
+          type: "user",
+          uuid: `${uuid}-body`,
+          timestamp: step.at,
+          isMeta: true,
+          sourceToolUseID: tool,
+          message: { role: "user", content: `${SKILL_BODY_PREFIX} ${step.dir}\n\n${step.body}` },
+        },
+      ];
+    }
+    if ("preload" in step) {
+      return [
+        {
+          ...base,
+          type: "user",
+          uuid,
+          timestamp: step.at,
+          isMeta: true,
+          message: {
+            role: "user",
+            content: [
+              { type: "text", text: `<command-name>${step.preload}</command-name>` },
+              { type: "text", text: `${SKILL_BODY_PREFIX} ${step.dir}\n\n${step.body}` },
+            ],
+          },
+        },
       ];
     }
     return [

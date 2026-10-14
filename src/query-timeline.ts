@@ -34,6 +34,12 @@ type CommitRun = Placed & { readonly onOriginAt: string | null; readonly lastOfS
 
 type Kinded<Kind extends string> = Placed & { readonly kind: Kind };
 
+export type SkillLoaded = Placed & {
+  readonly skill: string;
+  readonly sha256: string | null;
+  readonly install: string | null;
+};
+
 export type Timeline = {
   readonly interrupts: readonly Interrupt[];
   readonly tasks: readonly TaskOutcome[];
@@ -42,6 +48,7 @@ export type Timeline = {
   readonly denials: readonly Kinded<Judged["kind"]>[];
   readonly reviews: readonly Kinded<Reviewed["kind"]>[];
   readonly blocks: readonly Kinded<Blocked["kind"]>[];
+  readonly skillLoads: readonly SkillLoaded[];
   readonly newest: string | null;
 };
 
@@ -207,6 +214,19 @@ export function timelineOf(record: SignalRecord): Timeline {
     ];
   });
 
+  const skillLoads: SkillLoaded[] = record.skillLoads.map((load) => {
+    const root = rootOf(load.sessionId);
+    return {
+      at: load.at,
+      sessionId: root,
+      repo: repoOfRoot(root),
+      route: routeOf(taskKey(root, ms(load.at))),
+      skill: load.skill,
+      sha256: load.sha256,
+      install: load.install,
+    };
+  });
+
   const placeHook = <Kind extends string>({ row, kind }: { row: HookRow; kind: Kind }): Kinded<Kind> => {
     const root = rootOf(row.sessionId);
     const named = repoNamed(row);
@@ -229,6 +249,7 @@ export function timelineOf(record: SignalRecord): Timeline {
     blocks: blocksOf(record.hookEvents)
       .filter(({ row }) => hookLoggedTasks.has(taskKey(rootOf(row.sessionId), ms(row.at))))
       .map(placeHook),
+    skillLoads,
     newest: record.newest,
   };
 }

@@ -31,6 +31,7 @@ const recordOf = (more: Partial<SignalRecord>): SignalRecord => ({
   gitRuns: [],
   routeReads: [],
   hookEvents: [],
+  skillLoads: [],
   checkouts: [{ path: REPO, repo: REPO }],
   labels: new Map([[REPO, "me/demo"]]),
   newest: "2026-10-14T12:00:00.000Z",
@@ -319,6 +320,40 @@ describe("counting blocks by source per task", () => {
       "task",
     ]);
     expect(rateOf("blocks", record)).toEqual({ value: 4, count: 4, of: 1 });
+  });
+});
+
+describe("counting skill loads per task by version", () => {
+  const V1 = "1a2b3c4d5e6f";
+  const V2 = "9f8e7d6c5b4a";
+  const record = recordOf({
+    sessions: [
+      session("s", "2026-10-14T09:00:00.000Z"),
+      session("sub", "2026-10-14T09:05:00.000Z", { parentId: "s" }),
+    ],
+    ownerMessages: [
+      { sessionId: "s", at: "2026-10-14T09:30:00.000Z", text: "now add the printer", agentBefore: TOLD },
+    ],
+    skillLoads: [
+      { sessionId: "s", at: "2026-10-14T09:01:00.000Z", skill: "plan", sha256: V1, install: "41c40cc68eb7" },
+      { sessionId: "sub", at: "2026-10-14T09:06:00.000Z", skill: "plan", sha256: V2, install: null },
+      { sessionId: "s", at: "2026-10-14T09:31:00.000Z", skill: "build", sha256: null, install: null },
+    ],
+  });
+
+  test("names each load by its skill, the start of its hash and its install, on its top-level session", () => {
+    const kinds = eventsOf("skill-usage", record).map((e) => [e.kind, e.sessionId]);
+    expect(kinds).toEqual([
+      ["plan 1a2b3c4d/41c40cc68eb7", "s"],
+      ["plan 9f8e7d6c/-", "s"],
+      ["build -/-", "s"],
+      ["task", "s"],
+      ["task", "s"],
+    ]);
+  });
+
+  test("divides the loads by the tasks", () => {
+    expect(rateOf("skill-usage", record)).toEqual({ value: 1.5, count: 3, of: 2 });
   });
 });
 

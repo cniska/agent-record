@@ -8,7 +8,7 @@ import {
   REVIEW_KINDS,
 } from "./query-hook-timeline";
 import { CAUSES } from "./query-interrupt";
-import type { Placed, Timeline } from "./query-timeline";
+import type { Placed, SkillLoaded, Timeline } from "./query-timeline";
 
 export type SignalEvent<Kind extends string = string> = Placed & {
   readonly kind: Kind;
@@ -38,6 +38,13 @@ const HOUR_MS = 3_600_000;
 const MINUTE_MS = 60_000;
 
 const RATE_DECIMALS = 100;
+
+const HASH_SHOWN = 8;
+
+const UNKNOWN_PART = "-";
+
+export const versionOf = (load: SkillLoaded): string =>
+  `${load.sha256?.slice(0, HASH_SHOWN) ?? UNKNOWN_PART}/${load.install ?? UNKNOWN_PART}`;
 
 function signalOf<Kind extends string>(definition: Definition<Kind>): Signal {
   return {
@@ -206,6 +213,24 @@ const blocks = signalOf({
   },
 });
 
+const skillUsage = signalOf<string>({
+  name: "skill-usage",
+  value: "skill loads per task, each named by its skill and version",
+  note:
+    "A version is the first 8 characters of the skill body's hash and the plugin install it was loaded from, " +
+    "- where the load carried no body or came from outside the plugin cache. A load counts in its top-level " +
+    "session's task, a subagent's preload too.",
+  kinds: ["task"],
+  events: (timeline) => [
+    ...timeline.skillLoads.map((load) => event(load, `${load.skill} ${versionOf(load)}`)),
+    ...timeline.tasks.map((task) => event(task, "task")),
+  ],
+  rate: (count, events) => {
+    const loads = events.length - count("task");
+    return { value: ratio(loads, count("task")), count: loads, of: count("task") };
+  },
+});
+
 export const SIGNALS: readonly Signal[] = [
   ownerInterrupts,
   timeToLand,
@@ -214,6 +239,7 @@ export const SIGNALS: readonly Signal[] = [
   falseStops,
   reviewReturns,
   blocks,
+  skillUsage,
 ];
 
 export function signalNamed(name: string): Signal {

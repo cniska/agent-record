@@ -28,6 +28,12 @@ type RouteReadRow = TimedRow & { readonly path: string };
 
 export type CheckoutRow = { readonly path: string; readonly repo: string };
 
+export type SkillLoadRow = TimedRow & {
+  readonly skill: string;
+  readonly sha256: string | null;
+  readonly install: string | null;
+};
+
 type HookColumns = {
   readonly at: string;
   readonly event: HookEvent;
@@ -95,6 +101,7 @@ export type SignalRecord = {
   readonly gitRuns: readonly GitRunRow[];
   readonly routeReads: readonly RouteReadRow[];
   readonly hookEvents: readonly HookRow[];
+  readonly skillLoads: readonly SkillLoadRow[];
   readonly checkouts: readonly CheckoutRow[];
   readonly labels: ReadonlyMap<string, string>;
   readonly newest: string | null;
@@ -164,6 +171,12 @@ export function readSignalRecord(db: Database): SignalRecord {
     )
     .all()
     .map(hookRowOf);
+  const skillLoads = db
+    .query<SkillLoadRow, []>(
+      `SELECT session_id AS sessionId, ts AS at, skill_name AS skill, body_sha256 AS sha256, install
+       FROM skill_load ORDER BY ts`,
+    )
+    .all();
   const checkouts = db.query<CheckoutRow, []>("SELECT path, repo FROM checkout").all();
   const labels = new Map(
     db
@@ -174,5 +187,16 @@ export function readSignalRecord(db: Database): SignalRecord {
       .map(({ repo, label }) => [repo, label]),
   );
   const newest = db.query<{ ts: string | null }, []>("SELECT max(ts) AS ts FROM message").get()?.ts ?? null;
-  return { sessions, ownerMessages, rejections, gitRuns, routeReads, hookEvents, checkouts, labels, newest };
+  return {
+    sessions,
+    ownerMessages,
+    rejections,
+    gitRuns,
+    routeReads,
+    hookEvents,
+    skillLoads,
+    checkouts,
+    labels,
+    newest,
+  };
 }

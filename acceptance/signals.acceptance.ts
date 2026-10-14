@@ -257,7 +257,8 @@ test("AC-44 signal splits each week by repo or route, newest first, and refuses 
   expect({ code: unknown.code, resolve: unknown.resolve }).toEqual({
     code: "unknown_signal",
     resolve:
-      "one of: owner-interrupts, time-to-land, stranded-work, review-loops, false-stops, review-returns, blocks",
+      "one of: owner-interrupts, time-to-land, stranded-work, review-loops, false-stops, review-returns, blocks, " +
+      "skill-usage",
   });
   const grouping = refused(runCli(home, ["query", "signal", "stranded-work", "--by", "day"]), "query");
   expect({ code: grouping.code, resolve: grouping.resolve }).toEqual({
@@ -299,6 +300,7 @@ test("AC-45 before-after compares every signal on either side of a commit, from 
     "false-stops",
     "review-returns",
     "blocks",
+    "skill-usage",
   ]);
   expect(around.denominator).toBe(
     `commit ${sha} at 2026-09-18T00:00:00.000Z; before 2026-09-04T00:00:00.000Z to 2026-09-18T00:00:00.000Z, ` +
@@ -318,4 +320,59 @@ test("AC-45 before-after compares every signal on either side of a commit, from 
     ["before-after", prefix, "--from", "2026-09-22T00:00"],
   ].map((args) => refused(runCli(home, ["query", ...args]), "query").code);
   expect(codes).toEqual(["unknown_commit", "not_a_count", "from_before_commit", "not_a_time"]);
+});
+
+test("AC-50 skill-usage counts each skill version loaded per task, an agent's preload too", () => {
+  const cache = (install: string, name: string) =>
+    `/Users/x/.claude/plugins/cache/m/acme/${install}/skills/${name}`;
+  const plan = "# Plan\n\nWrite the plan.";
+  const home = synced([
+    {
+      id: "first",
+      cwd: "/Users/x/code/demo",
+      steps: [
+        { owner: "plan the parser", at: "2026-09-16T09:00:00Z" },
+        {
+          skill: "acme:plan",
+          at: "2026-09-16T09:01:00Z",
+          dir: cache("aaa", "plan"),
+          body: `${plan}\n\n\nARGUMENTS: the parser`,
+        },
+        { skill: "plan", at: "2026-09-16T09:02:00Z", dir: cache("aaa", "plan"), body: `${plan}\n` },
+      ],
+      subagents: [
+        {
+          id: "judge",
+          agentType: "acme:reviewer",
+          steps: [
+            { owner: "review the plan", at: "2026-09-16T09:03:00Z" },
+            {
+              preload: "acme:review",
+              at: "2026-09-16T09:03:01Z",
+              dir: cache("aaa", "review"),
+              body: "# Review\n\nJudge the change.",
+            },
+          ],
+        },
+      ],
+    },
+    {
+      id: "second",
+      cwd: "/Users/x/code/demo",
+      steps: [
+        { owner: "plan the printer", at: "2026-09-22T09:00:00Z" },
+        {
+          skill: "acme:plan",
+          at: "2026-09-22T09:01:00Z",
+          dir: cache("bbb", "plan"),
+          body: "# Plan\n\nWrite the plan, then ask.",
+        },
+      ],
+    },
+  ]);
+
+  expect(query(home, ["signal", "skill-usage"]).rows).toEqual([
+    ["2026-09-21", 1, 1, 1, "task 1, plan ed00dff6/bbb 1"],
+    ["2026-09-14", 3, 3, 1, "plan 002f7b2a/aaa 2, task 1, review 43e4e411/aaa 1"],
+  ]);
 });
