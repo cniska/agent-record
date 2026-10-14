@@ -210,7 +210,7 @@ type ClaudeBlock = z.infer<typeof ClaudeAssistantBlock> | z.infer<typeof ClaudeU
 
 const HANDBACK_TOOL = "SubagentHandback";
 
-function textBlocks(content: readonly (ClaudeBlock | null)[]): readonly string[] {
+function messageTexts(content: readonly (ClaudeBlock | null)[]): readonly string[] {
   return content.flatMap((b) => {
     if (b?.kind === "text" && b.text !== null) return [b.text];
     if (b?.kind === "tool_use" && b.name === HANDBACK_TOOL && typeof b.input.message === "string")
@@ -221,7 +221,7 @@ function textBlocks(content: readonly (ClaudeBlock | null)[]): readonly string[]
 
 function textsOf(content: string | readonly (ClaudeBlock | null)[] | undefined): readonly string[] {
   if (typeof content === "string") return [content];
-  return Array.isArray(content) ? textBlocks(content) : [];
+  return Array.isArray(content) ? messageTexts(content) : [];
 }
 
 function visibleText(texts: readonly string[]): string | null {
