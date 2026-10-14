@@ -37,7 +37,7 @@ The record is what agent workflows improve from. Its first use is search: an age
 - **FR-14** — A message's text that a tool wrote across several lines under one id is recorded as one message.
 - **FR-15** — A model response recorded several times while it streamed is counted once, with its final token counts.
 - **FR-16** — For every tool, `input_tokens` counts input tokens excluding cache reads; cache reads and cache writes have their own counts.
-- **FR-17** — Each skill load is recorded once, tied to what caused it: the tool call, for a load a tool caused (the Skill tool, or reading a `SKILL.md`); the user's message, for a skill the user typed as a slash command.
+- **FR-17** — Each skill load is recorded once, tied to what caused it: the tool call, for a load a tool caused (the Skill tool, or reading a `SKILL.md`); the user's message, for a skill the user typed as a slash command. A load whose skill body the transcript holds records where the skill was loaded from, and the body's length and SHA-256 as the skill's file holds it below its frontmatter: without the line naming the skill's directory, the `ARGUMENTS:` block the harness appends with what the caller passed, and the line breaks at either end. So every load of one version of a skill carries one hash, whatever it was asked.
 - **FR-18** — A session that ran in a Claude worktree records the checkout it belongs to as its project, and the worktree's name apart.
 
 ### 2.3 Git history

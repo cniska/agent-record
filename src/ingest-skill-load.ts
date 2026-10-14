@@ -33,8 +33,16 @@ const BODY_PREFIX = "Base directory for this skill:";
 const COMMAND_NAME = /<command-name>\/?([a-z0-9][a-z0-9-]*(?::[a-z0-9][a-z0-9-]*)?)<\/command-name>/i;
 const SKILL_FILE = /(?:^|[\s"'/])skills\/([a-z0-9][a-z0-9-]*)\/SKILL\.md/i;
 
+const APPENDED_ARGUMENTS = "\n\nARGUMENTS: ";
+const EDGE_NEWLINES = /^\n+|\n+$/g;
+
 function sha256(text: string): string {
   return createHash("sha256").update(text, "utf8").digest("hex");
+}
+
+function withoutAppendedArguments(body: string): string {
+  const at = body.lastIndexOf(APPENDED_ARGUMENTS);
+  return at === -1 ? body : body.slice(0, at);
 }
 
 export function parseSkillBody(text: string): ({ readonly name: string } & SkillBodyFields) | null {
@@ -44,7 +52,8 @@ export function parseSkillBody(text: string): ({ readonly name: string } & Skill
   if (path.length === 0) return null;
   const name = path.split("/").filter(Boolean).pop();
   if (!name) return null;
-  const body = newline === -1 ? "" : text.slice(newline + 1).replace(/^\n+/, "");
+  const body =
+    newline === -1 ? "" : withoutAppendedArguments(text.slice(newline + 1)).replace(EDGE_NEWLINES, "");
   return { name, skillPath: path, bodyChars: body.length, bodySha256: sha256(body) };
 }
 
