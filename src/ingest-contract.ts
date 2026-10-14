@@ -1,14 +1,7 @@
-import { existsSync } from "node:fs";
 import { dirname } from "node:path";
 import { BUG, faulter, refuser } from "./coded-error";
 
 export type Failure = (path: string, error: unknown) => void;
-
-export const skippingGoneCheckouts =
-  (fail: Failure): Failure =>
-  (checkout, error) => {
-    if (existsSync(checkout)) fail(checkout, error);
-  };
 
 export const refuseIngest = refuser<{
   readonly source_unreadable: { readonly path: string; readonly detail: string };

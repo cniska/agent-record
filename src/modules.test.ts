@@ -19,6 +19,7 @@ const PUBLIC: Readonly<Record<string, readonly string[]>> = {
   mirror: ["mirror"],
   git: ["git", "git-checkout", "git-operations", "git-probe", "git-remote"],
   ingest: [
+    "ingest-checkout-failure",
     "ingest-event-kinds",
     "ingest-session-records",
     "ingest-skill-load",

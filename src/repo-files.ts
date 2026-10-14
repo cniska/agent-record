@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { writeTransaction } from "./db";
 import { nulFields, ran } from "./git";
 import type { Checkout } from "./git-probe";
-import { type Failure, skippingGoneCheckouts } from "./ingest-contract";
+import { skippingGoneCheckouts } from "./ingest-checkout-failure";
+import type { Failure } from "./ingest-contract";
 
 export type RepoFileReport = { repos: number; files: number; unchanged: number };
 
