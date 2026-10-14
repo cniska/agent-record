@@ -2,4 +2,4 @@
 bun = "1.4.2"
 
 [hooks]
-postinstall = "{ bun install --frozen-lockfile && bun link --silent; } >&2"
+postinstall = "{ bun install --frozen-lockfile && if [ \"$(git rev-parse --path-format=absolute --git-dir)\" = \"$(git rev-parse --path-format=absolute --git-common-dir)\" ]; then bun link --silent; fi; } >&2"
