@@ -25,8 +25,6 @@ import {
 import { parseSkillBody, type SkillLoadRow, skillFromCommand } from "./ingest-skill-load";
 import { Timestamp, timestampMinus } from "./timestamp";
 
-const SKILL_BODY_PREFIX = "Base directory for this skill:";
-
 const ClaudeToolUse = z
   .looseObject({
     type: z.literal("tool_use"),
@@ -395,7 +393,7 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
           promptSource: nonEmpty(line.promptSource),
           originKind: nonEmpty(line.originKind),
           isMeta: line.isMeta === true,
-          isSkillBody: line.isMeta === true && text !== null && text.startsWith(SKILL_BODY_PREFIX),
+          isSkillBody: body !== null,
           attributionSkill: null,
           slashCommand: text ? skillFromCommand(text) : null,
           denialKind: nonEmpty(line.toolDenialKind),
