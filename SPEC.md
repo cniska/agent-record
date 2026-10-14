@@ -83,7 +83,7 @@ The record is what agent workflows improve from. Its first use is search: an age
 
 ### 2.8 Health
 
-- **FR-45** — `doctor` reports three checks, each `ok`, `warn` or `fail` with a detail and a fix: the record, the last sync, and the launchd agent.
+- **FR-45** — `doctor` reports four checks, each `ok`, `warn` or `fail` with a detail and a fix: the record, the last sync, the launchd agent, and the archive's mirror.
 - **FR-46** — The record check fails when the record is missing, of another schema version, or busy, with the refusal's fix.
 - **FR-47** — The sync check fails when no sync has finished, when the last sync failed, or when its outcome cannot be read; it warns when the last sync reported failed files, or finished longer ago than a threshold well past the agent's interval, which the detail states.
 - **FR-48** — The agent check warns when the launchd agent is missing, runs another checkout or Bun than this agent-record, or is written but not loaded.
@@ -106,10 +106,24 @@ The record is what agent workflows improve from. Its first use is search: an age
 - **FR-59** — A query or `sql` against a record that does not exist is refused, naming `agent-record sync`, and creates nothing.
 - **FR-60** — A Codex token record that claims more cached input than input is skipped as malformed.
 
+### 2.11 Mirror
+
+The archive holds the only copy of sessions a tool has deleted, so `sync` keeps a second copy of it, the mirror, in a folder a backup service carries off the machine.
+
+- **FR-61** — The mirror folder is `~/Library/Mobile Documents/com~apple~CloudDocs/agent-record/`, in iCloud Drive, unless `AGENT_RECORD_MIRROR` names an absolute path, which then is the mirror folder.
+- **FR-62** — Every `sync` copies each archive file that its mirror copy lacks, or that differs from its mirror copy in size or modification time, into the mirror's `archive/`, at the same path relative to the archive, so the mirror holds what the archive held when that `sync` ran.
+- **FR-63** — No `sync` loses what a mirror copy holds: it deletes no mirror copy, so a file the archive no longer holds, such as a Codex rollout the archive moved (FR-5), keeps its mirror copy; and before it replaces a mirror copy with a smaller archive file, an empty one included, it first sets the copy aside beside it under a name no other file has, and never empties a copy without that.
+- **FR-64** — When the mirror folder's parent does not exist, as when iCloud Drive is off or a volume is not mounted, `sync` writes nothing there, reads its sessions as usual, and its result says the mirror is unreachable.
+- **FR-65** — A file that cannot be mirrored does not stop the sync: the other files are mirrored, and the sync's result lists the failure with its fix (FR-11).
+- **FR-66** — A `sync` that mirrored every archive file without a failure records, in the mirror folder, when it did.
+- **FR-67** — No command reads a session from the mirror: `rebuild` reads the archive alone (FR-24).
+- **FR-68** — The mirror check warns when the mirror folder's parent does not exist or cannot be read, when no `sync` has yet mirrored the whole archive, or when the last `sync` that did finished more than a day ago, and its detail names the mirror folder.
+- **FR-69** — A `sync` whose record write fails still mirrors the archive before it reports the failure.
+
 ## 3. Non-functional requirements
 
-- **NF-1** — agent-record needs no network and no credential, and sends nothing off the machine.
-- **NF-2** — A sync that finds nothing new reads no session file, copies no bytes into the archive, and reads no checkout again.
+- **NF-1** — agent-record needs no network and no credential, and sends nothing off the machine itself: the mirror is a folder on this machine that a backup service, such as iCloud Drive, may carry off it (FR-61).
+- **NF-2** — A sync that finds nothing new reads no session file, copies no bytes into the archive or the mirror, and reads no checkout again.
 - **NF-3** — On APFS, the first archive copy of a file takes no space of its own.
 - **NF-4** — No command leaves the record half-written: a file's rows and its cursor are written together or not at all.
 - **NF-5** — No command crashes with an uncoded error on a common failure: a missing record, a busy record, a held lock, an unreadable or unwritable file, a missing git, a malformed tool file.
@@ -122,6 +136,8 @@ The record is what agent workflows improve from. Its first use is search: an age
 - Judging quality: `prior-art` ranks by recency and commit count only.
 - Restoring the git history of a checkout no longer on disk (FR-23).
 - Any platform but macOS.
+- Keeping earlier versions of a mirror copy, other than the one set aside when a smaller archive file replaces it (FR-63).
+- A command that restores the archive from the mirror; `README.md` documents the copy back.
 
 ## 5. Acceptance criteria
 
@@ -151,25 +167,33 @@ The record is what agent workflows improve from. Its first use is search: an age
 - **AC-24** — `query` and `sql` with no record: refused naming `agent-record sync`, and no file is created. (FR-59)
 - **AC-25** — A Codex token record with more cached input than input: skipped and reported as a dropped line. (FR-60)
 - **AC-26** — Sync with the network unavailable: it succeeds. (NF-1)
-- **AC-27** — Sync fixtures, then sync again with nothing changed: the second report reads no file, archives no bytes, and counts every checkout unchanged. (NF-2)
+- **AC-27** — Sync fixtures with an iCloud Drive folder in the home, then sync again with nothing changed: the second report reads no file, archives no bytes, mirrors no file, and counts every checkout unchanged. (NF-2)
 - **AC-28** — A sync whose record write fails after it archived a file leaves the record as the sync before left it; the next sync records the file once, from where the last committed write left it. (NF-4)
 - **AC-29** — Each failure in NF-5 produces a refusal with a code and fix, never `command_failed`. (NF-5)
 - **AC-30** — On APFS, sync a large session file: the archive holds a copy, and the volume's free space drops by far less than the file's size. (NF-3)
 - **AC-31** — Sync with a fixture repo, delete the repo, sync, then `rebuild`: the sync keeps its commits, the rebuild has none. (FR-23)
+- **AC-32** — Sync fixtures with no `AGENT_RECORD_MIRROR` and an iCloud Drive folder in the home: every archive file is in the iCloud Drive mirror with the archive's bytes. Append to a fixture transcript and sync: its mirror copy matches the archive's again. Sync with `AGENT_RECORD_MIRROR` set: the archive is mirrored there instead. (FR-61, FR-62)
+- **AC-33** — Move a Codex rollout into `archived_sessions` and sync: the mirror holds the rollout at both its old and its new path. (FR-63)
+- **AC-34** — Sync fixtures with an iCloud Drive folder, then empty one fixture transcript and rewrite another shorter, and sync again: each mirror copy holds what the archive now holds, and the copy each replaced is set aside beside it with the content it held. (FR-63)
+- **AC-35** — Sync with no iCloud Drive folder in the home: the sync succeeds, its result says the mirror is unreachable, nothing is created at the mirror path, and `doctor` warns that the mirror is unreachable. (FR-64, FR-68)
+- **AC-36** — Sync with a mirror copy that cannot be written: the sync succeeds, the other files are mirrored, its result lists the failure with its fix, and `doctor` warns that the archive was never mirrored whole; fix the copy and sync: `doctor` passes the mirror. (FR-65, FR-66, FR-68)
+- **AC-37** — Plant a session in the mirror that the archive lacks, then `rebuild`: the record does not hold it. (FR-67)
+- **AC-38** — `doctor` after a sync that mirrored the archive, and with a mirror time over a day old: the mirror check passes, then warns, naming the mirror folder. (FR-45, FR-68)
+- **AC-39** — Sync with an iCloud Drive folder and a record of another schema version: the sync is refused, and the archive is mirrored. (FR-69)
 
 ## 6. Deliverables
 
 - **D-1** — The `agent-record` CLI, run by Bun from a checkout and linked onto PATH by `mise install`.
 - **D-2** — The `cniska-record` Claude Code plugin in `plugin/`.
-- **D-3** — `README.md` (install, commands, where the record lives), `AGENTS.md` (repository rules), `src/README.md` (module map), and this spec.
-- **D-4** — The test suite, run by `bun run check`, and the acceptance suite in `acceptance/`, run by `bun run acceptance`. The acceptance suite drives only the CLI, and reaches past it only in two files. `acceptance/cli.ts` plants or reads state no command makes or reports without waiting real time (the record's schema version, the last-sync stamp, a held lock, a held record) or stands in for the OS (a `launchctl` on PATH). `acceptance/cli-no-wait.ts` runs the CLI with no wait for a held record, so a busy record is refused at once.
+- **D-3** — `README.md` (install, commands, where the record and its mirror live, and how to restore the archive from the mirror), `AGENTS.md` (repository rules), `src/README.md` (module map), and this spec.
+- **D-4** — The test suite, run by `bun run check`, and the acceptance suite in `acceptance/`, run by `bun run acceptance`. The acceptance suite drives only the CLI, and reaches past it only in two files. `acceptance/cli.ts` plants or reads state no command makes or reports without waiting real time (the record's schema version, the last-sync stamp, the mirror's time, a held lock, a held record) or stands in for the OS (a `launchctl` on PATH). `acceptance/cli-no-wait.ts` runs the CLI with no wait for a held record, so a busy record is refused at once.
 
 ## 7. Constraints (fixed)
 
 - **C-1** — TypeScript on Bun.
 - **C-2** — The record is one SQLite database under `$XDG_DATA_HOME/agent-record/`, beside the archive.
 - **C-3** — Local only: no server, no network, no account.
-- **C-4** — The archive is the source of truth for sessions; the session record is derived from it and can always be rebuilt.
+- **C-4** — The archive is the source of truth for sessions; the session record is derived from it and can always be rebuilt. The mirror is a copy of the archive, never a source.
 - **C-5** — Every command's output is one JSON line, for agents to read.
 
 ## 8. Open decisions (left to the builder)
@@ -189,6 +213,8 @@ The record is what agent workflows improve from. Its first use is search: an age
 - A busy record is a `fail` in `doctor`, not a `warn` (FR-46).
 - A busy record is SQLite reporting the database held; a race for agent-record's own lock is a separate refusal (FR-55, FR-58).
 - The launchd agent's 15-minute interval is promised to the user (FR-51).
+- An unreachable or stale mirror is a `warn` in `doctor`, not a `fail`: the record still works without it (FR-68).
+- The mirror keeps only the archive, not the record: the record is rebuilt from the archive (FR-24).
 
 ## 9. Open questions and known gaps
 

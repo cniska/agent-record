@@ -31,6 +31,7 @@ import {
   scratchTempDir,
   sync,
   withFixtures,
+  withICloudDrive,
 } from "./cli";
 import {
   CLAUDE,
@@ -369,7 +370,7 @@ test("AC-25 a Codex token record with more cached input than input is reported a
 
 test("AC-27 a sync with nothing changed reads no file, archives no bytes and finds every checkout unchanged", () => {
   const { home } = homeWithRepo();
-  withFixtures(home, EVERY_TOOL);
+  withFixtures(withICloudDrive(home), EVERY_TOOL);
   sync(home);
 
   expect(sync(home)).toEqual({
@@ -387,6 +388,7 @@ test("AC-27 a sync with nothing changed reads no file, archives no bytes and fin
     dropped: [],
     git: { repos: 0, commits: 0, files: 0, unchanged: 1 },
     repoFiles: { repos: 0, files: 0, unchanged: 1 },
+    mirror: { state: "mirrored", path: home.mirror, files: 0, bytes: 0 },
   });
 });
 

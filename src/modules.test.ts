@@ -15,7 +15,8 @@ const PUBLIC: Readonly<Record<string, readonly string[]>> = {
   doctor: [],
   env: ["env"],
   error: ["error-read"],
-  file: ["file-backup"],
+  file: ["file-backup", "file-copy"],
+  mirror: ["mirror"],
   git: ["git", "git-checkout", "git-operations", "git-probe", "git-remote"],
   ingest: [
     "ingest-session-records",

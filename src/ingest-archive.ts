@@ -1,20 +1,18 @@
 import {
   appendFileSync,
   closeSync,
-  constants,
-  copyFileSync,
   existsSync,
   mkdirSync,
   openSync,
   renameSync,
   type Stats,
   statSync,
-  utimesSync,
 } from "node:fs";
 import { dirname, join, relative, sep } from "node:path";
 import { invariant } from "./assert";
 import type { Env } from "./env";
 import { isEnvironmentError } from "./error-read";
+import { copyIfChanged, copyWhole, sameStamp, stampLike } from "./file-copy";
 import { type Failure, refuseIngest } from "./ingest-contract";
 import { readAt } from "./ingest-read-at";
 import { scan } from "./ingest-scan";
@@ -27,11 +25,9 @@ const COMPARE_CHUNK_BYTES = 1 << 20;
 
 export type ArchiveReport = { readonly files: number; readonly bytes: number };
 
-type Mirror = (live: string, copy: string) => number;
+type Archiver = (live: string, copy: string) => number;
 
 const UNTOUCHED = 0;
-
-function nothingToReset(): void {}
 
 export function archiveRootOf(tool: Tool, env: Env): string {
   return join(archiveDir(env), tool);
@@ -48,15 +44,6 @@ function rebaseScanned(fromRoot: string, toRoot: string, path: string): string {
   return rebased;
 }
 
-function sameStamp(a: Stats, b: Stats): boolean {
-  return a.size === b.size && Math.trunc(a.mtimeMs) === Math.trunc(b.mtimeMs);
-}
-
-function stampLike(path: string, live: Stats): void {
-  const at = new Date(Math.trunc(live.mtimeMs));
-  utimesSync(path, at, at);
-}
-
 function startsWithCopy(live: string, copy: string, copySize: number): boolean {
   const length = Math.min(copySize, TAIL_BYTES);
   const offset = copySize - length;
@@ -71,16 +58,6 @@ function sameBytes(live: string, copy: string, size: number): boolean {
   return true;
 }
 
-function copyWhole(live: string, copy: string, liveStat: Stats, beforeRename: () => void): number {
-  mkdirSync(dirname(copy), { recursive: true });
-  const part = `${copy}.part`;
-  copyFileSync(live, part, constants.COPYFILE_FICLONE);
-  stampLike(part, liveStat);
-  beforeRename();
-  renameSync(part, copy);
-  return statSync(copy).size;
-}
-
 function appendTail(live: string, copy: string, copySize: number, liveStat: Stats): number {
   const tail = readAt(live, copySize, liveStat.size - copySize);
   appendFileSync(copy, tail);
@@ -88,11 +65,11 @@ function appendTail(live: string, copy: string, copySize: number, liveStat: Stat
   return tail.length;
 }
 
-function mirrorSession(beforeReplace: (copy: string) => void): Mirror {
+function archiveSession(beforeReplace: (copy: string) => void): Archiver {
   return (live, copy) => {
     const liveStat = statSync(live);
     const copyStat = statSync(copy, { throwIfNoEntry: false });
-    if (!copyStat) return copyWhole(live, copy, liveStat, nothingToReset);
+    if (!copyStat) return copyWhole(live, copy, liveStat);
     if (sameStamp(copyStat, liveStat)) return UNTOUCHED;
     if (copyStat.size === liveStat.size && sameBytes(live, copy, liveStat.size)) {
       stampLike(copy, liveStat);
@@ -105,12 +82,7 @@ function mirrorSession(beforeReplace: (copy: string) => void): Mirror {
   };
 }
 
-const mirrorWhole: Mirror = (live, copy) => {
-  const liveStat = statSync(live);
-  const copyStat = statSync(copy, { throwIfNoEntry: false });
-  if (copyStat && sameStamp(copyStat, liveStat)) return UNTOUCHED;
-  return copyWhole(live, copy, liveStat, nothingToReset);
-};
+const archiveWhole: Archiver = (live, copy) => copyIfChanged(live, copy) ?? UNTOUCHED;
 
 function followMoves(
   source: SessionSource,
@@ -170,7 +142,7 @@ export function archiveSources(
     else fail(live, refuseIngest("source_unreadable", { path: live, detail: error.message }));
   };
 
-  const mirror = (live: string, copy: string, how: Mirror): void => {
+  const archiveOne = (live: string, copy: string, how: Archiver): void => {
     try {
       const written = how(live, copy);
       if (written > 0) {
@@ -182,7 +154,7 @@ export function archiveSources(
     }
   };
 
-  const mirrorSessionFile = mirrorSession(beforeReplace);
+  const archiveSessionFile = archiveSession(beforeReplace);
 
   for (const tool of TOOLS) {
     const source = SESSION_SOURCES[tool];
@@ -196,14 +168,14 @@ export function archiveSources(
       failArchiving(liveRoot, copyRoot, error);
     }
     for (const live of sessions) {
-      mirror(live, copyOf(live), mirrorSessionFile);
+      archiveOne(live, copyOf(live), archiveSessionFile);
       for (const sidecar of source.sidecars(live)) {
-        if (existsSync(sidecar)) mirror(sidecar, copyOf(sidecar), mirrorWhole);
+        if (existsSync(sidecar)) archiveOne(sidecar, copyOf(sidecar), archiveWhole);
       }
     }
     if (source.titles !== null) {
       const titles = join(liveRoot, source.titles.file);
-      if (existsSync(titles)) mirror(titles, copyOf(titles), mirrorWhole);
+      if (existsSync(titles)) archiveOne(titles, copyOf(titles), archiveWhole);
     }
   }
 

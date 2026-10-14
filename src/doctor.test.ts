@@ -11,7 +11,8 @@ import { recordDoctor } from "./doctor";
 import type { Env } from "./env";
 import { runCli, scratchEnv } from "./fixtures.test-support";
 import { sync } from "./ingest-sync";
-import { claudeProjectsDir, dbPath, syncStampPath } from "./paths";
+import { mirrorArchive } from "./mirror";
+import { claudeProjectsDir, dbPath, mirrorStampPath, syncStampPath } from "./paths";
 import { stampingOutcome } from "./sync-stamp";
 
 const roots: string[] = [];
@@ -183,6 +184,50 @@ describe("agent-record doctor", () => {
     writeRecord(env);
     syncFinishedAt(env, "2026-10-11T12:00:00Z");
     expect(recordDoctor({ ...testRuntime(env), agentLoaded: () => true }).failing).toBe(0);
+  });
+
+  test("warns on a mirror out of reach, never whole, unreadable or over a day old, and passes a fresh one", () => {
+    const base = newEnv();
+    const away = { ...base, mirrorDir: join(base.home, "iCloud Drive", "agent-record") };
+    expect(check(away, "mirror")).toEqual({
+      name: "mirror",
+      state: "warn",
+      detail: `the archive cannot be mirrored to ${away.mirrorDir}: there is no folder at ${join(base.home, "iCloud Drive")}`,
+      fix: `make ${join(base.home, "iCloud Drive")} reachable (for the default, turn on iCloud Drive), or set AGENT_RECORD_MIRROR to an absolute path whose parent folder exists, then run agent-record sync`,
+    });
+
+    const env = newEnv();
+    expect(check(env, "mirror")).toEqual({
+      name: "mirror",
+      state: "warn",
+      detail: `no sync has mirrored the whole archive to ${env.mirrorDir} yet`,
+      fix: "agent-record sync, and fix any mirror failure it reports",
+    });
+
+    mkdirSync(env.mirrorDir, { recursive: true });
+    writeFileSync(mirrorStampPath(env), "yesterday\n");
+    expect(check(env, "mirror")).toEqual({
+      name: "mirror",
+      state: "warn",
+      detail: `${mirrorStampPath(env)} holds no mirror time`,
+      fix: "agent-record sync",
+    });
+
+    mirrorArchive(env, new Date("2026-10-10T11:00:00Z"));
+    expect(check(env, "mirror")).toEqual({
+      name: "mirror",
+      state: "warn",
+      detail: `the whole archive was last mirrored to ${env.mirrorDir} 25 hours ago`,
+      fix: "agent-record sync, and fix any mirror failure it reports",
+    });
+
+    mirrorArchive(env, new Date("2026-10-10T13:00:00Z"));
+    expect(check(env, "mirror")).toEqual({
+      name: "mirror",
+      state: "ok",
+      detail: `the whole archive was last mirrored to ${env.mirrorDir} 23 hours ago`,
+      fix: null,
+    });
   });
 });
 

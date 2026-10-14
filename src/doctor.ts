@@ -1,3 +1,4 @@
+import { dirname } from "node:path";
 import { type AgentPlan, bootoutCommand, bootstrapCommand, planAgent } from "./agent-launchd";
 import { unreachable } from "./assert";
 import type { Runtime } from "./cli-contract";
@@ -6,12 +7,15 @@ import type { HeldRecordWait } from "./db";
 import { readingRecord } from "./db-read";
 import { SCHEMA_VERSION } from "./db-schema";
 import type { Env } from "./env";
+import { type MirrorState, readMirror } from "./mirror";
 import { dbPath } from "./paths";
 import { readSyncStamp, type SyncStamp } from "./sync-stamp";
 
 const HOUR_MS = 3_600_000;
 const SYNC_STOPPED_AFTER_MS = 24 * HOUR_MS;
+const MIRROR_STALE_AFTER_MS = 24 * HOUR_MS;
 const SYNC = "agent-record sync";
+const SYNC_AND_FIX_MIRROR = `${SYNC}, and fix any mirror failure it reports`;
 
 type Health = {
   readonly name: string;
@@ -110,12 +114,43 @@ function agentHealth(plan: AgentPlan, loaded: () => boolean): Health {
   }
 }
 
+function mirrorHealth(mirror: MirrorState, now: Date): Health {
+  const name = "mirror";
+  switch (mirror.kind) {
+    case "unreachable":
+      return {
+        name,
+        state: "warn",
+        detail: `the archive cannot be mirrored to ${mirror.path}: ${mirror.detail}`,
+        fix: `make ${dirname(mirror.path)} reachable (for the default, turn on iCloud Drive), or set AGENT_RECORD_MIRROR to an absolute path whose parent folder exists, then run ${SYNC}`,
+      };
+    case "never":
+      return {
+        name,
+        state: "warn",
+        detail: `no sync has mirrored the whole archive to ${mirror.path} yet`,
+        fix: SYNC_AND_FIX_MIRROR,
+      };
+    case "unreadable":
+      return { name, state: "warn", detail: `${mirror.stamp} holds no mirror time`, fix: SYNC };
+    case "mirrored": {
+      const age = now.getTime() - mirror.at.getTime();
+      const detail = `the whole archive was last mirrored to ${mirror.path} ${Math.round(age / HOUR_MS)} hours ago`;
+      if (age > MIRROR_STALE_AFTER_MS) return { name, state: "warn", detail, fix: SYNC_AND_FIX_MIRROR };
+      return { name, state: "ok", detail, fix: null };
+    }
+    default:
+      return unreachable(mirror);
+  }
+}
+
 export function recordDoctor(probes: DoctorProbes): DoctorReport {
   const { env, agentLoaded, now } = probes;
   const checks = [
     recordHealth(env, probes),
     syncHealth(readSyncStamp(env), now()),
     agentHealth(planAgent(probes), agentLoaded),
+    mirrorHealth(readMirror(env), now()),
   ];
   return { checks, failing: checks.filter(({ state }) => state === "fail").length };
 }

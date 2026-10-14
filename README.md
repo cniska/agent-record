@@ -48,7 +48,7 @@ Each command prints one JSON line.
 
 | Command | Does |
 | --- | --- |
-| `agent-record sync` | Copy every new byte of every tool's session files into the archive and read them from there, then the commits and files of the checkouts they name that changed since the last sync |
+| `agent-record sync` | Copy every new byte of every tool's session files into the archive and read them from there, then the commits and files of the checkouts they name that changed since the last sync, then mirror the archive |
 | `agent-record rebuild` | Drop the record and read it again from the archive |
 | `agent-record agent install` | Write a launchd agent that runs `sync` every 15 minutes |
 | `agent-record doctor` | Judge whether the record is current and readable, naming the fix for each problem; exits 1 when a check fails |
@@ -63,6 +63,26 @@ The record lives at `$XDG_DATA_HOME/agent-record/sessions.db` (`~/.local/share/a
 The archive beside it, `$XDG_DATA_HOME/agent-record/archive/<tool>/`, keeps a copy of every session file `sync` has seen, laid out as the tool lays it out, and the record reads only those copies. A tool deleting its old transcripts loses nothing the archive holds: `rebuild` gives back every session whose file `sync` archived, as it last saw it. A file the tool shrank or rewrote is kept as rewritten.
 
 On APFS the first copy of a file is a clone and takes no space of its own. Bytes a session gains after that are appended to the copy, so they are stored twice.
+
+## Mirror
+
+Once a tool deletes a transcript, the archive holds its only copy. Every `sync` therefore mirrors the archive into `~/Library/Mobile Documents/com~apple~CloudDocs/agent-record/archive/`, in iCloud Drive, which carries it off the machine. Set `AGENT_RECORD_MIRROR` to an absolute path to mirror into `$AGENT_RECORD_MIRROR/archive/` instead. The launchd agent does not see a variable set in your shell, so it mirrors to the default.
+
+- A sync copies each archive file that is new or changed since the last; it never deletes a mirror copy, so a file the archive moved stays at its old path too. Before a smaller or empty archive file replaces a mirror copy, the old copy is set aside beside it as `<name>.agent-record-backup` (then `-2`, `-3`, ...).
+- A sync whose record write fails still mirrors the archive.
+- The mirror keeps the archive only. The record is rebuilt from the archive, and no command reads the mirror.
+- When the mirror folder's parent is missing, as when iCloud Drive is off, a sync mirrors nothing and says so in its `mirror` result; the sessions are read as usual.
+- `agent-record doctor` warns when the mirror is out of reach, has never held the whole archive, or was last brought up to date more than a day ago.
+
+To restore a lost archive, stop anything that syncs (`launchctl bootout gui/$(id -u)/dev.agentrecord.sync` for the launchd agent; Claude Code sessions start a sync too), have iCloud download the folder (in Finder, Download Now on `agent-record` in iCloud Drive), then copy it back and rebuild:
+
+```bash
+mkdir -p ~/.local/share/agent-record
+ditto ~/Library/Mobile\ Documents/com~apple~CloudDocs/agent-record/archive ~/.local/share/agent-record/archive
+agent-record rebuild
+```
+
+`ditto` adds to an archive that is still partly there and replaces the files both hold with the mirror's copy, so restore into an empty archive unless you mean that. A Codex rollout the archive moved comes back at both its paths; the record still holds its session once.
 
 ## Claude Code plugin
 

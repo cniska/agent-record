@@ -6,6 +6,7 @@ export type Env = {
   readonly dataHome: string;
   readonly stateHome: string;
   readonly tmpDir: string;
+  readonly mirrorDir: string;
 };
 
 export type RawEnv = Readonly<Record<string, string | undefined>>;
@@ -27,7 +28,9 @@ function tempOf(raw: RawEnv): string {
   return temp.length > 1 && temp.endsWith("/") ? temp.slice(0, -1) : temp;
 }
 
-function xdgBase(raw: RawEnv, variable: string, home: string, fallback: readonly string[]): string {
+const ICLOUD_DRIVE_MIRROR = ["Library", "Mobile Documents", "com~apple~CloudDocs", "agent-record"] as const;
+
+function absoluteOr(raw: RawEnv, variable: string, home: string, fallback: readonly string[]): string {
   const value = raw[variable];
   return value !== undefined && isAbsolute(value) ? value : join(home, ...fallback);
 }
@@ -36,8 +39,9 @@ export function parseEnv(raw: RawEnv): Env {
   const home = homeOf(raw);
   return {
     home,
-    dataHome: xdgBase(raw, "XDG_DATA_HOME", home, [".local", "share"]),
-    stateHome: xdgBase(raw, "XDG_STATE_HOME", home, [".local", "state"]),
+    dataHome: absoluteOr(raw, "XDG_DATA_HOME", home, [".local", "share"]),
+    stateHome: absoluteOr(raw, "XDG_STATE_HOME", home, [".local", "state"]),
     tmpDir: tempOf(raw),
+    mirrorDir: absoluteOr(raw, "AGENT_RECORD_MIRROR", home, ICLOUD_DRIVE_MIRROR),
   };
 }

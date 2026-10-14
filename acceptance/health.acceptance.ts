@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
 import { chmodSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { z } from "zod";
 import {
   doctor,
@@ -17,6 +17,7 @@ import {
   sync,
   syncedHome,
   withFixtures,
+  withICloudDrive,
   withLaunchctl,
   withSyncFinishedAt,
 } from "./cli";
@@ -53,7 +54,8 @@ const syncRefusedOverSchemaVersion = (home: Home) => {
 };
 
 test("AC-18 doctor with no record fails the record and sync checks with their fixes and exits 1", () => {
-  expect(doctor(scratchHome())).toEqual({
+  const home = scratchHome();
+  expect(doctor(home)).toEqual({
     exitCode: 1,
     report: {
       checks: [
@@ -70,6 +72,12 @@ test("AC-18 doctor with no record fails the record and sync checks with their fi
           detail: "no launchd agent, so the record syncs only when something runs agent-record sync",
           fix: "claude plugin install cniska-record@cniska, or agent-record agent install to sync while Claude Code is not running",
         },
+        {
+          name: "mirror",
+          state: "warn",
+          detail: `the archive cannot be mirrored to ${home.mirror}: there is no folder at ${dirname(home.mirror)}`,
+          fix: expect.stringContaining("turn on iCloud Drive"),
+        },
       ],
       failing: 2,
     },
@@ -77,7 +85,7 @@ test("AC-18 doctor with no record fails the record and sync checks with their fi
 });
 
 test("AC-18 doctor after a sync with a loaded agent passes every check and exits 0", () => {
-  const home = withLaunchctl(syncedHome(), true);
+  const home = withLaunchctl(syncedHome(withICloudDrive(scratchHome())), true);
   agentInstall(home);
   expect(doctor(home)).toEqual({
     exitCode: 0,
@@ -86,6 +94,12 @@ test("AC-18 doctor after a sync with a loaded agent passes every check and exits
         { name: "record", state: "ok", detail: `schema version ${schemaVersion(home)}`, fix: null },
         { name: "sync", state: "ok", detail: "last sync finished 0 hours ago", fix: null },
         { name: "agent", state: "ok", detail: "the launchd agent is loaded", fix: null },
+        {
+          name: "mirror",
+          state: "ok",
+          detail: `the whole archive was last mirrored to ${home.mirror} 0 hours ago`,
+          fix: null,
+        },
       ],
       failing: 0,
     },

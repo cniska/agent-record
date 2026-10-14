@@ -48,11 +48,11 @@ function finishedOf(report: SyncReport, at: Date): SyncOutcome {
   };
 }
 
-export function stampingOutcome(
+export function stampingOutcome<Report extends SyncReport>(
   { now, env }: Pick<Runtime, "now" | "env">,
-  run: () => SyncReport,
-): SyncReport {
-  let report: SyncReport;
+  run: () => Report,
+): Report {
+  let report: Report;
   try {
     report = run();
   } catch (error) {

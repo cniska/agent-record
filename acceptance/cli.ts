@@ -40,6 +40,7 @@ export type Home = {
   readonly archive: string;
   readonly state: string;
   readonly bin: string;
+  readonly mirror: string;
 };
 
 type Ran = { readonly exitCode: number; readonly stdout: string; readonly stderr: string };
@@ -70,6 +71,7 @@ export function scratchHome(): Home {
     archive: join(data, "archive"),
     state: join(root, "state", "agent-record"),
     bin: join(root, "bin"),
+    mirror: join(root, "Library", "Mobile Documents", "com~apple~CloudDocs", "agent-record"),
   };
 }
 
@@ -153,8 +155,8 @@ function commitIn(checkout: string, { subject, file, at }: Commit): void {
   git(checkout, ["commit", "--quiet", "-m", subject], at);
 }
 
-export function sync(home: Home): SyncResult {
-  return succeeded(runCli(home, ["sync"]), "sync", SYNC_RESULT);
+export function sync(home: Home, env: RunEnv = {}): SyncCommandResult {
+  return succeeded(runCli(home, ["sync"], env), "sync", SYNC_COMMAND_RESULT);
 }
 
 export function rebuild(home: Home): SyncResult {
@@ -174,7 +176,14 @@ export function syncedHome(home: Home = scratchHome()): Home {
   return home;
 }
 
-export function runCli(home: Home, args: readonly string[]): Ran {
+type RunEnv = Readonly<Record<string, string>>;
+
+export function withICloudDrive(home: Home): Home {
+  mkdirSync(dirname(home.mirror), { recursive: true });
+  return home;
+}
+
+export function runCli(home: Home, args: readonly string[], env: RunEnv = {}): Ran {
   const ran = Bun.spawnSync([process.execPath, CLI, ...args], {
     env: {
       PATH: `${home.bin}:${process.env.PATH}`,
@@ -182,6 +191,7 @@ export function runCli(home: Home, args: readonly string[]): Ran {
       HOME: home.root,
       XDG_DATA_HOME: join(home.root, "data"),
       XDG_STATE_HOME: join(home.root, "state"),
+      ...env,
     },
   });
   return { exitCode: ran.exitCode, stdout: ran.stdout.toString(), stderr: ran.stderr.toString() };
@@ -211,6 +221,15 @@ const SYNC_RESULT = z.strictObject({
 });
 
 type SyncResult = z.infer<typeof SYNC_RESULT>;
+
+const SYNC_COMMAND_RESULT = SYNC_RESULT.extend({
+  mirror: z.discriminatedUnion("state", [
+    z.strictObject({ state: z.literal("mirrored"), path: z.string(), files: COUNT, bytes: COUNT }),
+    z.strictObject({ state: z.literal("unreachable"), path: z.string(), detail: z.string() }),
+  ]),
+});
+
+type SyncCommandResult = z.infer<typeof SYNC_COMMAND_RESULT>;
 
 export const QUERY_RESULT = z.strictObject({
   denominator: z.string(),
@@ -287,6 +306,12 @@ export function withSyncFinishedAt(home: Home, at: string): Home {
     join(home.state, "last-sync"),
     `${JSON.stringify({ kind: "finished", at, failures: null })}\n`,
   );
+  return home;
+}
+
+export function withMirroredAt(home: Home, at: string): Home {
+  mkdirSync(home.mirror, { recursive: true });
+  writeFileSync(join(home.mirror, "last-mirror"), `${JSON.stringify({ at })}\n`);
   return home;
 }
 

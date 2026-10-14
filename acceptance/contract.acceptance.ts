@@ -98,6 +98,7 @@ test("AC-11 a failing doctor still prints ok on stdout and exits 1", () => {
       { name: "record", state: "fail" },
       { name: "sync", state: "fail" },
       { name: "agent", state: "warn" },
+      { name: "mirror", state: "warn" },
     ],
     failing: 2,
   });

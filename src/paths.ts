@@ -19,6 +19,14 @@ export function archiveDir(env: Env): string {
   return join(dataDir(env), "archive");
 }
 
+export function mirrorArchiveDir(env: Env): string {
+  return join(env.mirrorDir, "archive");
+}
+
+export function mirrorStampPath(env: Env): string {
+  return join(env.mirrorDir, "last-mirror");
+}
+
 export function syncStampPath(env: Env): string {
   return join(stateDir(env), "last-sync");
 }

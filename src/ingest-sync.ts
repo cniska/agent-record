@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { join } from "node:path";
-import { type ErrorRecord, errorRecord, isRefusal } from "./coded-error";
+import { errorRecord, isRefusal, type PathFailure } from "./coded-error";
 import { writeTransaction } from "./db";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
 import type { Env } from "./env";
@@ -18,7 +18,7 @@ export type SyncReport = {
   sources: { tool: Tool; files: number }[];
   filesRead: number;
   orphanSubagents: SessionId[];
-  failures: { path: string; error: ErrorRecord }[];
+  failures: PathFailure[];
   dropped: { path: string; lines: readonly number[] }[];
   git: GitReport;
   repoFiles: RepoFileReport;

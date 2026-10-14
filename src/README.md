@@ -19,14 +19,15 @@ The rest are named by the step they take (`ingest-parse-claude.ts`, `ingest-arch
 | `sync`, `rebuild` | The commands that run ingest, and the stamp a sync leaves |
 | `agent` | Install the launchd agent that syncs on a schedule, and read whether it is loaded |
 | `db` | Open, lock and read the SQLite record, and its schema |
-| `doctor` | Judge the record's readability and freshness, and the launchd agent |
+| `doctor` | Judge the record's readability and freshness, the launchd agent, and the mirror |
+| `mirror` | Copy the archive into the mirror folder, and read when it last held the whole archive |
 | `query`, `sql` | The named queries over the record, and raw read-only SQL |
 | `git`, `repo`, `worktree` | Run git, index a repo's files, and fold worktree paths onto their checkout |
 | `plugin` | Tests for the Claude Code plugin's hook in `plugin/`, kept here so the plugin ships no tests |
 | `spec` | Tie the IDs in `SPEC.md` to the acceptance suite's test names |
 | `modules` | Hold each module to the files it publishes |
 | `cli` | Dispatch a command and print its result or error (a refusal or a fault) as one JSON line |
-| `coded-error`, `error`, `assert`, `env`, `paths`, `file`, `timestamp` | Coded errors, refusals and faults; reading a code, a message or an errno off a thrown value; `unreachable` and `invariant`; the environment, parsed once by `cli.ts`; where every file lives; copying a file aside before it is replaced; parsing a time into its canonical UTC text |
+| `coded-error`, `error`, `assert`, `env`, `paths`, `file`, `timestamp` | Coded errors, refusals and faults; reading a code, a message or an errno off a thrown value; `unreachable` and `invariant`; the environment, parsed once by `cli.ts`; where every file lives; copying a file aside before it is replaced, and copying one over a stale copy; parsing a time into its canonical UTC text |
 
 ## Terms
 

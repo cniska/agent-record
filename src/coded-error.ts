@@ -41,6 +41,8 @@ export const ErrorRecord = z
   .readonly();
 export type ErrorRecord = z.infer<typeof ErrorRecord>;
 
+export type PathFailure = { readonly path: string; readonly error: ErrorRecord };
+
 export function errorRecord({ kind, code, message, meta, resolve }: CodedError): ErrorRecord {
   return { kind, code, message, meta: { ...meta }, resolve };
 }

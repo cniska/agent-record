@@ -9,7 +9,13 @@ import type { Tool } from "./ingest-tools";
 import { claudeProjectsDir, codexDir } from "./paths";
 
 export function scratchEnv(root: string): Env {
-  return { home: root, dataHome: join(root, "data"), stateHome: join(root, "state"), tmpDir: tmpdir() };
+  return {
+    home: root,
+    dataHome: join(root, "data"),
+    stateHome: join(root, "state"),
+    tmpDir: tmpdir(),
+    mirrorDir: join(root, "mirror"),
+  };
 }
 
 const UNPRIVILEGED_UID = 65534;
@@ -437,7 +443,13 @@ export function runCli(
   args: readonly string[],
 ): { exitCode: number; stdout: string; stderr: string } {
   const ran = Bun.spawnSync([process.execPath, join(import.meta.dir, "cli.ts"), ...args], {
-    env: { ...process.env, HOME: env.home, XDG_DATA_HOME: env.dataHome, XDG_STATE_HOME: env.stateHome },
+    env: {
+      ...process.env,
+      HOME: env.home,
+      XDG_DATA_HOME: env.dataHome,
+      XDG_STATE_HOME: env.stateHome,
+      AGENT_RECORD_MIRROR: env.mirrorDir,
+    },
   });
   return { exitCode: ran.exitCode, stdout: ran.stdout.toString(), stderr: ran.stderr.toString() };
 }
