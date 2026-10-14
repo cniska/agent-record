@@ -46,14 +46,10 @@ if (mode === "hold") {
   db.run("INSERT INTO probe (who) VALUES (?)", [who]);
   db.close();
 } else if (mode === "close") {
-  withDb(
-    path,
-    (db) => {
-      db.run("INSERT INTO probe (who) VALUES (?)", [who]);
-      console.log("closing");
-    },
-    { heldRecordWaitMs: CONTENDED_WAIT_MS },
-  );
+  withDb(path, { heldRecordWaitMs: CONTENDED_WAIT_MS }, (db) => {
+    db.run("INSERT INTO probe (who) VALUES (?)", [who]);
+    console.log("closing");
+  });
 } else if (mode === "initialize") {
   console.log("ready");
   await nextLine();

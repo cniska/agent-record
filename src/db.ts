@@ -28,11 +28,13 @@ function failNowIfUnopenable(db: Database): void {
   recordVersion(db);
 }
 
+export type HeldRecordWait = { readonly heldRecordWaitMs: number };
+
 const UNOPENABLE_CODES = ["SQLITE_CANTOPEN", "SQLITE_NOTADB"] as const;
 
 export function openRecordFile(
   path: string,
-  { heldRecordWaitMs, ...options }: DatabaseOptions & { readonly heldRecordWaitMs: number },
+  { heldRecordWaitMs, ...options }: DatabaseOptions & HeldRecordWait,
 ): Database {
   let db: Database | null = null;
   try {
@@ -48,8 +50,6 @@ export function openRecordFile(
     throw error;
   }
 }
-
-export type HeldRecordWait = { readonly heldRecordWaitMs: number };
 
 export type RecordOpening = HeldRecordWait & { readonly forRebuild?: boolean };
 
@@ -94,7 +94,7 @@ export function refusingBusy<T>(path: string, run: () => T): T {
   }
 }
 
-export function withDb<T>(path: string, use: (db: Database) => T, opts: RecordOpening): T {
+export function withDb<T>(path: string, opts: RecordOpening, use: (db: Database) => T): T {
   return refusingBusy(path, () => {
     const db = openDb(path, opts);
     try {

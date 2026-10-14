@@ -231,7 +231,7 @@ describe("a writer on a record another process holds", () => {
     holder.run("PRAGMA locking_mode = EXCLUSIVE");
     holder.run("BEGIN IMMEDIATE");
     try {
-      expect(() => withDb(path, () => null, { heldRecordWaitMs: NO_WAIT_MS })).toThrow(
+      expect(() => withDb(path, { heldRecordWaitMs: NO_WAIT_MS }, () => null)).toThrow(
         expect.objectContaining({ kind: "refusal", code: "record_busy", meta: { path } }),
       );
     } finally {

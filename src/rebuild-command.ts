@@ -13,10 +13,7 @@ export const rebuildCommand: Command = {
   run(args, runtime) {
     parseFlags(args, [], rebuildCommand.usage);
     const report = withLock(() =>
-      stampingOutcome(
-        () => withDb(dbPath(), rebuild, { forRebuild: true, heldRecordWaitMs: runtime.heldRecordWaitMs }),
-        runtime.now,
-      ),
+      stampingOutcome(() => withDb(dbPath(), { ...runtime, forRebuild: true }, rebuild), runtime.now),
     );
     return { value: report, exitCode: 0 };
   },

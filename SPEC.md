@@ -160,7 +160,7 @@ A coding agent's context ends at compaction, at a handoff, or when another agent
 - **D-1** — The `agent-record` CLI, run by Bun from a checkout and linked onto PATH by `mise install`.
 - **D-2** — The `cniska-record` Claude Code plugin in `plugin/`.
 - **D-3** — `README.md` (install, commands, where the record lives), `AGENTS.md` (repository rules), `src/README.md` (module map), and this spec.
-- **D-4** — The test suite, run by `bun run check`, and the acceptance suite in `acceptance/`, run by `bun run acceptance`. The acceptance suite drives only the CLI, and reaches past it only in two files. `acceptance/cli.ts` plants state no command makes without waiting real time (the record's schema version, the last-sync stamp, a held lock, a held record) or stands in for the OS (a `launchctl` on PATH). `acceptance/cli-no-wait.ts` runs the CLI with no wait for a held record, so a busy record is refused at once.
+- **D-4** — The test suite, run by `bun run check`, and the acceptance suite in `acceptance/`, run by `bun run acceptance`. The acceptance suite drives only the CLI, and reaches past it only in two files. `acceptance/cli.ts` plants or reads state no command makes or reports without waiting real time (the record's schema version, the last-sync stamp, a held lock, a held record) or stands in for the OS (a `launchctl` on PATH). `acceptance/cli-no-wait.ts` runs the CLI with no wait for a held record, so a busy record is refused at once.
 
 ## 7. Constraints (fixed)
 
