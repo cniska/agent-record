@@ -10,8 +10,6 @@ const DAY_MS = 86_400_000;
 
 type Found = { readonly sha: string; readonly ts: string };
 
-const iso = (ms: number): string => EpochMs.parse(ms);
-
 const eventsWithin = (events: readonly SignalEvent[], from: number, until: number): readonly SignalEvent[] =>
   events.filter((event) => {
     const at = Date.parse(event.at);
@@ -63,8 +61,8 @@ export const beforeAfter: Query<"days" | "from"> = {
       columns: ["signal", "value", "before", "after", "before_count", "before_of", "after_count", "after_of"],
       rows,
       denominator:
-        `commit ${commit.sha} at ${commit.ts}; before ${iso(at - span)} to ${commit.ts}, ` +
-        `after ${iso(start)} to ${iso(end)}`,
+        `commit ${commit.sha} at ${commit.ts}; before ${EpochMs.parse(at - span)} to ${commit.ts}, ` +
+        `after ${EpochMs.parse(start)} to ${EpochMs.parse(end)}`,
       note:
         end - start < span
           ? `The after window is ${Math.round((end - start) / DAY_MS)} of ${days} days so far; compare the rates, not the counts.`

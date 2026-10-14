@@ -117,8 +117,9 @@ const strandedWork = signalOf({
       if (timeline.newest === null || Date.parse(timeline.newest) - Date.parse(run.at) <= HOUR_MS) return [];
       if (run.onOriginAt === null) return [event(run, run.lastOfSession ? "ended unpushed" : "stranded")];
       const pushedAfter = Date.parse(run.onOriginAt) - Date.parse(run.at);
-      const minutes = Math.round(pushedAfter / MINUTE_MS);
-      return [event(run, pushedAfter <= HOUR_MS ? "pushed" : "stranded", minutes)];
+      return [
+        event(run, pushedAfter <= HOUR_MS ? "pushed" : "stranded", minutesBetween(run.at, run.onOriginAt)),
+      ];
     }),
   rate: (count) => {
     const stranded = count("stranded") + count("ended unpushed");
