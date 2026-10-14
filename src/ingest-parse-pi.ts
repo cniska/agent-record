@@ -118,7 +118,7 @@ const PiLine = byKind(
   UnkeptLine,
 );
 
-function textOf(parts: PiAssistantLine["parts"]): string | null {
+function textOf(parts: readonly z.output<typeof PiAssistantPart>[]): string | null {
   return nonEmpty(parts.flatMap((part) => (part.kind === "text" && part.text ? [part.text] : [])).join("\n"));
 }
 

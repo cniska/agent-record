@@ -46,6 +46,8 @@ const CodexTurnEnd = {
   time_to_first_token_ms: z.number().optional(),
 };
 
+const CODEX_TOOL_ITEMS = ["CommandExecution", "FileChange", "McpToolCall"] as const;
+
 const CodexItemLine = codexLine(
   "item",
   z.object({
@@ -53,7 +55,7 @@ const CodexItemLine = codexLine(
     completed_at_ms: EpochMs.optional(),
     item: z.object({
       id: ToolCallId,
-      type: z.enum(["CommandExecution", "FileChange", "McpToolCall"]),
+      type: z.enum(CODEX_TOOL_ITEMS),
       command: z.unknown().optional(),
       changes: z.record(z.string(), z.unknown()).optional(),
       status: z.string().nullish(),
@@ -74,16 +76,21 @@ const CodexMessageLine = codexLine(
   }),
 );
 
+function isToolItem(type: string): boolean {
+  return CODEX_TOOL_ITEMS.some((item) => item === type);
+}
+
 function codexKind(value: unknown): string {
   const type = typeOf(value);
   const payloadType = textAt(value, "payload", "type");
   switch (type) {
     case "response_item":
       return `response_item/${payloadType}/${textAt(value, "payload", "role")}`;
-    case "event_msg":
-      return payloadType === "item_completed"
-        ? `item_completed/${textAt(value, "payload", "item", "type")}`
-        : `event_msg/${payloadType}`;
+    case "event_msg": {
+      if (payloadType !== "item_completed") return `event_msg/${payloadType}`;
+      const itemType = textAt(value, "payload", "item", "type");
+      return isToolItem(itemType) ? "item_completed" : `item_completed/${itemType}`;
+    }
     default:
       return type;
   }
@@ -113,9 +120,7 @@ const CodexLine = byKind(
       "turnAborted",
       z.object({ ...CodexTurnEnd, reason: z.string().min(1) }),
     ),
-    "item_completed/CommandExecution": CodexItemLine,
-    "item_completed/FileChange": CodexItemLine,
-    "item_completed/McpToolCall": CodexItemLine,
+    item_completed: CodexItemLine,
     token_usage_record: codexLine(
       "usage",
       z
