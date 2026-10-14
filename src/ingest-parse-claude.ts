@@ -21,13 +21,7 @@ import {
   type TurnRow,
   type UsageRow,
 } from "./ingest-session-records";
-import {
-  bareSkillName,
-  parseSkillBody,
-  preloadOf,
-  type SkillLoadRow,
-  skillFromCommand,
-} from "./ingest-skill-load";
+import { bareSkillName, type SkillLoadRow, skillBodyOf, skillFromCommand } from "./ingest-skill-load";
 import { Timestamp, timestampMinus } from "./timestamp";
 
 const ClaudeToolUse = z
@@ -218,6 +212,11 @@ function textBlocks(content: readonly (ClaudeBlock | null)[]): readonly string[]
   return content.flatMap((b) => (b?.kind === "text" && b.text !== null ? [b.text] : []));
 }
 
+function textsOf(content: string | readonly (ClaudeBlock | null)[] | undefined): readonly string[] {
+  if (typeof content === "string") return [content];
+  return Array.isArray(content) ? textBlocks(content) : [];
+}
+
 function visibleText(content: string | readonly (ClaudeBlock | null)[] | undefined): string | null {
   if (typeof content === "string") return nonEmpty(content);
   if (!Array.isArray(content)) return null;
@@ -393,16 +392,12 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
           }
         }
         session.push(sessionFactsOf(line));
-        const preload =
-          line.isMeta === true && Array.isArray(content) ? preloadOf(textBlocks(content)) : null;
-        if (preload) {
-          const { name, ...fields } = preload;
-          skillLoads.push({ kind: "preload", messageId: line.uuid, ts, skillName: name, ...fields });
-        }
-        const body = preload === null && line.isMeta === true && text ? parseSkillBody(text) : null;
-        if (body) {
-          const { name, ...fields } = body;
-          if (line.sourceToolUseID)
+        const skillBody = line.isMeta === true ? skillBodyOf(textsOf(content)) : null;
+        if (skillBody) {
+          const { kind, name, ...fields } = skillBody;
+          if (kind === "preload")
+            skillLoads.push({ kind: "preload", messageId: line.uuid, ts, skillName: name, ...fields });
+          else if (line.sourceToolUseID)
             skillLoads.push({ kind: "called-body", toolCallId: line.sourceToolUseID, ...fields });
           else if (line.parentUuid)
             skillLoads.push({ kind: "typed-body", parentUuid: line.parentUuid, skillName: name, ...fields });
@@ -416,12 +411,12 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
           promptSource: nonEmpty(line.promptSource),
           originKind: nonEmpty(line.originKind),
           isMeta: line.isMeta === true,
-          isSkillBody: body !== null || preload !== null,
+          isSkillBody: skillBody !== null,
           attributionSkill: null,
-          slashCommand: text && preload === null ? skillFromCommand(text) : null,
+          slashCommand: text && skillBody === null ? skillFromCommand(text) : null,
           denialKind: nonEmpty(line.toolDenialKind),
           userFeedback: feedbackText(line.userFeedback),
-          text: body || preload ? null : text,
+          text: skillBody ? null : text,
           srcLine,
           extra: jsonOrNull({
             isSidechain: line.isSidechain,

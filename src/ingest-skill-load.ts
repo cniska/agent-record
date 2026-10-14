@@ -64,7 +64,11 @@ export const bareSkillName = (name: string): string => name.slice(name.indexOf(Q
 
 export const BARE_SKILL_NAME_SQL = `substr(skill_name, instr(skill_name, '${QUALIFIER}') + 1)`;
 
-export function parseSkillBody(text: string): ({ readonly name: string } & SkillBodyFields) | null {
+type ParsedBody = { readonly name: string } & SkillBodyFields;
+
+export type SkillBody = { readonly kind: "preload" | "injected" } & ParsedBody;
+
+function parseSkillBody(text: string): ParsedBody | null {
   if (!text.startsWith(BODY_PREFIX)) return null;
   const newline = text.indexOf("\n");
   const path = text.slice(BODY_PREFIX.length, newline === -1 ? undefined : newline).trim();
@@ -77,11 +81,13 @@ export function parseSkillBody(text: string): ({ readonly name: string } & Skill
   return { name, skillPath: path, bodyChars: body.length, bodySha256: sha256(body), install };
 }
 
-export function preloadOf(texts: readonly string[]): ({ readonly name: string } & SkillBodyFields) | null {
+export function skillBodyOf(texts: readonly string[]): SkillBody | null {
   const [command, text] = texts;
-  if (command === undefined || text === undefined) return null;
-  if (skillFromCommand(command) === null) return null;
-  return parseSkillBody(text);
+  const preload = command !== undefined && text !== undefined && skillFromCommand(command) !== null;
+  const body = preload ? parseSkillBody(text) : null;
+  if (body !== null) return { kind: "preload", ...body };
+  const injected = parseSkillBody(texts.join("\n"));
+  return injected === null ? null : { kind: "injected", ...injected };
 }
 
 export function skillFromCommand(text: string): string | null {
