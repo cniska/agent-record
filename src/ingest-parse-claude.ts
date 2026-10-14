@@ -217,11 +217,8 @@ function textsOf(content: string | readonly (ClaudeBlock | null)[] | undefined):
   return Array.isArray(content) ? textBlocks(content) : [];
 }
 
-function visibleText(content: string | readonly (ClaudeBlock | null)[] | undefined): string | null {
-  if (typeof content === "string") return nonEmpty(content);
-  if (!Array.isArray(content)) return null;
-  const parts = textBlocks(content);
-  return parts.length > 0 ? parts.join("\n") : null;
+function visibleText(texts: readonly string[]): string | null {
+  return nonEmpty(texts.join("\n"));
 }
 
 function resultSize(content: unknown, result: ClaudeToolUseResult | undefined): number | null {
@@ -311,7 +308,7 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
           slashCommand: null,
           denialKind: null,
           userFeedback: null,
-          text: visibleText(message.content),
+          text: visibleText(textsOf(message.content)),
           srcLine,
           extra: jsonOrNull({
             requestId: line.requestId,
@@ -372,7 +369,8 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
       case "user": {
         const { ts } = line;
         const { content } = line;
-        const text = visibleText(content);
+        const texts = textsOf(content);
+        const text = visibleText(texts);
         if (Array.isArray(content)) {
           for (const block of content) {
             if (block?.kind !== "tool_result") continue;
@@ -392,7 +390,7 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
           }
         }
         session.push(sessionFactsOf(line));
-        const skillBody = line.isMeta === true ? skillBodyOf(textsOf(content)) : null;
+        const skillBody = line.isMeta === true ? skillBodyOf(texts) : null;
         if (skillBody) {
           const { kind, name, ...fields } = skillBody;
           if (kind === "preload")
