@@ -4,6 +4,7 @@ import type { Home } from "./cli";
 
 export type Step =
   | { readonly owner: string; readonly at: string }
+  | { readonly queued: string; readonly at: string; readonly from: "owner" | "harness" }
   | { readonly agent: string; readonly at: string; readonly usage?: Usage }
   | { readonly handback: string; readonly at: string }
   | { readonly bash: string; readonly at: string; readonly done: string }
@@ -69,6 +70,21 @@ function linesOf(sessionId: string, cwd: string, steps: readonly Step[], prefix:
           timestamp: step.at,
           promptSource: "typed",
           message: { role: "user", content: step.owner },
+        },
+      ];
+    }
+    if ("queued" in step) {
+      const origin =
+        step.from === "owner"
+          ? { commandMode: "prompt", origin: { kind: "human" } }
+          : { commandMode: "task-notification" };
+      return [
+        {
+          ...base,
+          type: "attachment",
+          uuid,
+          timestamp: step.at,
+          attachment: { type: "queued_command", prompt: step.queued, timestamp: step.at, ...origin },
         },
       ];
     }

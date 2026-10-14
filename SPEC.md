@@ -124,7 +124,7 @@ The archive holds the only copy of sessions a tool has deleted, so `sync` keeps 
 
 The signals count the friction the owner feels, so a change to the workflow can be checked against them. Each is read from the transcripts the record holds, except those of §2.13, which read the hook event log. These terms hold for every signal:
 
-- **Owner message**: what the owner typed into a top-level session. In Claude Code, a user message the transcript marks as human (or as typed or queued, before Claude Code marked who wrote it), and the `[Request interrupted by user]` marker; in Codex, a typed user message in a session `codex exec` did not run; in Grok, pi and omp, every user message. A slash command, a shell escape and their output are not owner messages, and a subagent session holds none.
+- **Owner message**: what the owner typed into a top-level session. In Claude Code, a user message the transcript marks as human (or as typed or queued, before Claude Code marked who wrote it), a message the owner queued while a turn ran (FR-90), and the `[Request interrupted by user]` marker; in Codex, a typed user message in a session `codex exec` did not run; in Grok, pi and omp, every user message. A slash command, a shell escape and their output are not owner messages, and a subagent session holds none.
 - **Task**: a top-level session and its subagents, from a task prompt to the next one. A task prompt is the session's start, or an owner message that comes after the agent has said something and is not an interrupt (FR-70).
 - **Commit run** and **push run**: a git run (FR-13) of `commit` or `push` whose tool call did not fail, at the time its result came back. It counts in the repo the record holds for the checkout its directory lies in, the innermost when checkouts nest; one outside every checkout the record indexes (FR-19) is not counted. A **commit** stays what `repo_commit` holds.
 - **On origin**: a commit run is on origin from the first push run in its repo at or after it, in any session. A push the owner ran outside every session is not seen.
@@ -187,6 +187,12 @@ Signals for the wastes the workflow is held to that §2.12 to §2.14 leave unmea
 How often the owner asks for another model's read, so a change that makes the agents seek one on their own, such as a researcher run, is judged by the asks it removes.
 
 - **FR-89** — The `second-read-asks` signal counts each owner message that asks for another model's read: with its pasted blocks (`pasted_content`, `system-reminder`) left out, and unless it opens with a Markdown heading, as a pasted document does, it puts an ask verb (ask, have, get, let, task, consult, with, if, until, once, whether, give, tell, send, reframe, use, kick off) up to four words before Fable, has Fable followed by to, should, agree, approve, validate, review, design, plan, check, verify, look or decide, asks what Fable or you and Fable think, names Fable's take, opinion, view or read, or names a second opinion, a second read or a stronger model. Fable's earlier work named as a possessive, as in "fable's review", is no ask. Its value is asks per task, over the tasks of the top-level sessions the owner typed in.
+
+### 2.18 Messages typed during a turn
+
+What the owner types while an agent works, kept beside the messages of §2.2 so search and the signals of §2.12 see it as they see what the owner typed between turns.
+
+- **FR-90** — A message the owner typed into Claude Code while a turn ran, which the transcript keeps as a `queued_command` attachment marked human, is recorded as a user message the owner typed, at that line's time, with the text it carries. What the harness or another agent queued that way, such as a task notification or a peer's message, is not.
 
 ## 3. Non-functional requirements
 
@@ -268,6 +274,7 @@ How often the owner asks for another model's read, so a change that makes the ag
 - **AC-55** — Sync a repo with an accepted feature, an accepted docs commit, a fix gated without review that touches the feature's file, an accepted fix that touches the docs commit's file, and an accepted fix whose subject names the feature, its allow placed by its `head` alone, the fixes by another agent than the feature: `signal escaped-defects` gives two escapes over four accepted commits, `signal-events escaped-defects` names the earlier commit of each, and after `rebuild` it still does. (FR-75, FR-87)
 - **AC-56** — Sync a session that loads `coordinate`, with a worker subagent that loads `task` then `build`, a reviewer that preloads a skill and an Explore subagent, each with usage, and one accepted commit: `signal step-cost` gives their input over one accepted commit with the costliest steps, `--by version` gives a row per version, `signal-events step-cost` names each step's tokens, minutes and version, and after `rebuild` it still does. (FR-74, FR-75, FR-88)
 - **AC-57** — Sync a session whose owner asks Fable to validate a design, asks what Fable's review said, and pastes a handoff that asks Fable to plan: `signal second-read-asks` gives one ask over four tasks, and `signal-events second-read-asks` names the ask. (FR-89)
+- **AC-58** — Sync a session in which the owner queues a correction while a turn runs, beside a task notification the harness queued: `search` finds the correction and not the notification, `signal-events owner-interrupts` counts it as `correct`, and after `rebuild` `search` still finds it. (FR-37, FR-70, FR-90)
 
 ## 6. Deliverables
 

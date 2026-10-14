@@ -112,6 +112,70 @@ describe("parseClaudeChunk", () => {
     expect(chunk.turns).toEqual([]);
   });
 
+  describe("a message queued while a turn runs", () => {
+    const stamp = "2026-09-16T10:03:00.000Z";
+    const queued = (uuid: string, attachment: Record<string, unknown>) =>
+      JSON.stringify({
+        type: "attachment",
+        uuid,
+        parentUuid: "a-1",
+        timestamp: stamp,
+        cwd: "/Users/x/code/demo",
+        isSidechain: false,
+        attachment: { type: "queued_command", commandMode: "prompt", timestamp: stamp, ...attachment },
+      });
+    const chunk = parseClaudeChunk(
+      [
+        queued("q-1", {
+          prompt: "commit msgs should be lowercase",
+          origin: { kind: "human" },
+          source_uuid: "c-1",
+        }),
+        queued("q-2", {
+          prompt: [
+            { type: "text", text: "see this" },
+            { type: "image", source: { type: "base64", data: "AAAA" } },
+          ],
+          origin: { kind: "human" },
+        }),
+        queued("q-3", {
+          prompt: "<task-notification>done</task-notification>",
+          commandMode: "task-notification",
+        }),
+        queued("q-4", { prompt: "from a peer", origin: { kind: "peer" }, isMeta: true }),
+        queued("q-5", { prompt: "<ci-monitor-event>watching</ci-monitor-event>" }),
+        JSON.stringify({
+          type: "attachment",
+          uuid: "q-6",
+          timestamp: stamp,
+          attachment: { type: "todo_reminder" },
+        }),
+      ],
+      7,
+    );
+
+    test("is recorded as a message the owner typed, at the line's time", () => {
+      expect(chunk.dropped).toEqual([]);
+      expect(chunk.messages.find((m) => m.id === "q-1")).toMatchObject({
+        ts: "2026-09-16T10:03:00.000Z",
+        role: "user",
+        originKind: "human",
+        promptSource: "queued",
+        isMeta: false,
+        text: "commit msgs should be lowercase",
+        srcLine: 7,
+      });
+    });
+
+    test("keeps the text of a queued message that carries an image", () => {
+      expect(chunk.messages.find((m) => m.id === "q-2")?.text).toBe("see this");
+    });
+
+    test("leaves out what the harness or another agent queued", () => {
+      expect(chunk.messages.map((m) => m.id)).toEqual<string[]>(["q-1", "q-2"]);
+    });
+  });
+
   test("keeps a user line whose toolUseResult is an array", () => {
     const chunk = parseClaudeChunk(
       [

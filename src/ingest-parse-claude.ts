@@ -167,6 +167,27 @@ const ClaudeUserLine = z
     content: line.message?.content,
   }));
 
+const ClaudeQueuedPromptPart = byKind(typeOf, { text: TextPart }, UnkeptPart);
+
+const ClaudeOwnerQueuedLine = z
+  .looseObject({
+    ...CLAUDE_CONVERSED,
+    uuid: MessageId,
+    parentUuid: MessageId.nullish(),
+    attachment: z.looseObject({
+      prompt: z.union([z.string(), z.array(ClaudeQueuedPromptPart)]),
+      source_uuid: z.string().optional(),
+    }),
+  })
+  .transform((line) => ({
+    kind: "queued" as const,
+    ...conversed(line),
+    uuid: line.uuid,
+    parentUuid: line.parentUuid,
+    sourceUuid: line.attachment.source_uuid,
+    prompt: line.attachment.prompt,
+  }));
+
 const ClaudeAiTitleLine = z
   .looseObject({ timestamp: Timestamp.optional(), aiTitle: z.string().min(1) })
   .transform((line) => ({ kind: "title" as const, ts: line.timestamp ?? null, title: line.aiTitle }));
@@ -194,9 +215,18 @@ const ClaudeCompactLine = z
   .looseObject({ timestamp: Timestamp })
   .transform((line) => ({ kind: "compaction" as const, ts: line.timestamp }));
 
+const OWNER_ORIGIN = "human";
+
+const OWNER_QUEUED = `attachment/queued_command/${OWNER_ORIGIN}`;
+
+const QUEUED_PROMPT = "queued";
+
 function claudeKind(value: unknown): string {
   const type = typeOf(value);
-  return type === "system" ? `system/${textAt(value, "subtype")}` : type;
+  if (type === "system") return `system/${textAt(value, "subtype")}`;
+  if (type === "attachment")
+    return `attachment/${textAt(value, "attachment", "type")}/${textAt(value, "attachment", "origin", "kind")}`;
+  return type;
 }
 
 const ClaudeLine = byKind(
@@ -208,6 +238,7 @@ const ClaudeLine = byKind(
     "system/compact_boundary": ClaudeCompactLine,
     assistant: ClaudeAssistantLine,
     user: ClaudeUserLine,
+    [OWNER_QUEUED]: ClaudeOwnerQueuedLine,
   },
   UnkeptLine,
 );
@@ -451,6 +482,36 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
             parentUuid: line.parentUuid,
             session_id: line.session_id,
             interruptedMessageId: nonEmpty(line.interruptedMessageId),
+          }),
+        });
+        break;
+      }
+
+      case "queued": {
+        const text = visibleText(textsOf(line.prompt));
+        session.push(sessionFactsOf(line));
+        messages.push({
+          id: line.uuid,
+          ts: line.ts,
+          role: "user",
+          model: null,
+          turnId: null,
+          promptSource: QUEUED_PROMPT,
+          originKind: OWNER_ORIGIN,
+          isMeta: false,
+          isSkillBody: false,
+          attributionSkill: null,
+          slashCommand: text ? skillFromCommand(text) : null,
+          denialKind: null,
+          userFeedback: null,
+          text,
+          srcLine,
+          extra: jsonOrNull({
+            isSidechain: line.isSidechain,
+            agentId: line.agentId,
+            parentUuid: line.parentUuid,
+            session_id: line.session_id,
+            sourceUuid: line.sourceUuid,
           }),
         });
         break;

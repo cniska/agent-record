@@ -704,3 +704,41 @@ test("AC-57 second-read-asks counts the owner's asks for another model's read pe
     ["2026-09-16T09:02:00.000Z", "ask fable to validate the design"],
   ]);
 });
+
+test("AC-58 a message the owner queued while a turn ran is searched and counted as an owner message, through sync and rebuild", () => {
+  const home = synced([
+    {
+      id: "queue",
+      cwd: "/Users/x/code/demo",
+      steps: [
+        { owner: "add the parser", at: "2026-09-16T09:00:00Z" },
+        { agent: "Writing it now.", at: "2026-09-16T09:01:00Z" },
+        { queued: "no, commit msgs should be lowercase", at: "2026-09-16T09:02:00Z", from: "owner" },
+        {
+          queued: "<task-notification>lowercase build finished</task-notification>",
+          at: "2026-09-16T09:03:00Z",
+          from: "harness",
+        },
+        { agent: "Lowercased.", at: "2026-09-16T09:04:00Z" },
+      ],
+    },
+  ]);
+  const found = () =>
+    query(home, ["search", "lowercase"]).rows.map(([session, at, role, , , text]) => [
+      session,
+      at,
+      role,
+      text,
+    ]);
+  const queuedHit = [["queue", "2026-09-16T09:02:00.000Z", "user", "no, commit msgs should be [lowercase]"]];
+
+  expect(found()).toEqual(queuedHit);
+  const interrupts = query(home, ["signal-events", "owner-interrupts"]).rows;
+  expect(interrupts.map(([at, kind, , , , , text]) => [at, kind, text])).toEqual([
+    ["2026-09-16T09:02:00.000Z", "correct", "no, commit msgs should be lowercase"],
+    ["2026-09-16T09:00:00.000Z", "task", null],
+  ]);
+
+  rebuild(home);
+  expect(found()).toEqual(queuedHit);
+});
