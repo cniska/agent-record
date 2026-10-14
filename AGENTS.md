@@ -12,3 +12,4 @@ A local record of coding-agent sessions and the queries over it. [`SPEC.md`](SPE
 - No test waits real time: a wait or a clock is passed in, as `now` is.
 - Code carries no comments. `.githooks/pre-commit.d/no-comments` refuses a comment a commit adds, other than a directive a tool reads. A why goes into a name, a test, or this file.
 - Commit directly to `main`. `.githooks/commit-msg` judges the message: one Conventional Commit subject, ASCII, at most 50 characters, and no body.
+- Push each commit to `main` once `bun run check` passes and a fresh reviewer accepts it; that accept is the owner's standing sign-off, so no push waits on them.
