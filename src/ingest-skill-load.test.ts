@@ -58,7 +58,7 @@ describe("naming a skill", () => {
       const bare = (name: string) =>
         db
           .query<{ bare: string }, [string]>(
-            `SELECT ${BARE_SKILL_NAME_SQL("n")} AS bare FROM (SELECT ? AS n)`,
+            `SELECT ${BARE_SKILL_NAME_SQL} AS bare FROM (SELECT ? AS skill_name)`,
           )
           .get(name)?.bare;
       expect(bare("cniska-skills:coordinate")).toBe("coordinate");

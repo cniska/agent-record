@@ -62,8 +62,7 @@ function withoutAppendedArguments(body: string): string {
 
 export const bareSkillName = (name: string): string => name.slice(name.indexOf(QUALIFIER) + 1);
 
-export const BARE_SKILL_NAME_SQL = (column: string): string =>
-  `substr(${column}, instr(${column}, '${QUALIFIER}') + 1)`;
+export const BARE_SKILL_NAME_SQL = `substr(skill_name, instr(skill_name, '${QUALIFIER}') + 1)`;
 
 export function parseSkillBody(text: string): ({ readonly name: string } & SkillBodyFields) | null {
   if (!text.startsWith(BODY_PREFIX)) return null;

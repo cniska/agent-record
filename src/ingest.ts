@@ -247,7 +247,7 @@ export function createIngester(db: Database, home: string) {
   const insertCalledSkillBody = db.prepare(
     `INSERT INTO skill_load (session_id, tool_call_id, ts, model, skill_name, how,
        body_chars, body_sha256, skill_path, install)
-     SELECT $sessionId, id, ts_call, model, ${BARE_SKILL_NAME_SQL("skill_name")}, 'model',
+     SELECT $sessionId, id, ts_call, model, ${BARE_SKILL_NAME_SQL}, 'model',
        $bodyChars, $bodySha256, $skillPath, $install
      FROM tool_call
      WHERE id = $toolCallId AND tool_name = 'Skill' AND ts_call IS NOT NULL AND skill_name IS NOT NULL
