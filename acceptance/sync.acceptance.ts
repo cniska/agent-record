@@ -13,6 +13,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { dirname, join } from "node:path";
+import { withClaudeSessions } from "./claude-sessions";
 import {
   archivedPath,
   type Fixture,
@@ -441,4 +442,34 @@ test("AC-30 a fresh archive copy of a large file takes far less free space than 
 
   expect(readFileSync(archivedPath(home, LARGE)).equals(readFileSync(live))).toBe(true);
   expect(taken).toBeLessThan(size / CLONE_SHARE_BOUND);
+});
+
+test("AC-52 a subagent's hand-back report is its last message text, through sync and rebuild", () => {
+  const report = "## Fix\nnone\n\nRepo: /Users/x/code/demo\nVerdict: accept";
+  const home = withClaudeSessions(scratchHome(), [
+    {
+      id: "parent",
+      cwd: "/Users/x/code/demo",
+      steps: [{ owner: "review the parser", at: "2026-09-16T10:00:00Z" }],
+      subagents: [
+        {
+          id: "judge",
+          agentType: "acme:reviewer",
+          steps: [
+            { owner: "judge the diff", at: "2026-09-16T10:01:00Z" },
+            { read: "/Users/x/code/demo/src/parser.ts", at: "2026-09-16T10:02:00Z" },
+            { handback: report, at: "2026-09-16T10:03:00Z" },
+          ],
+        },
+      ],
+    },
+  ]);
+  const lastText = `select m.text from message m join session s on s.id = m.session_id
+    where s.agent_type = 'acme:reviewer' and m.role = 'assistant' and m.text is not null
+    order by m.ts desc limit 1`;
+
+  sync(home);
+  expect(rowsOf(home, lastText)).toEqual([[report]]);
+  rebuild(home);
+  expect(rowsOf(home, lastText)).toEqual([[report]]);
 });

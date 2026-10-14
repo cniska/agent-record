@@ -5,6 +5,7 @@ import type { Home } from "./cli";
 export type Step =
   | { readonly owner: string; readonly at: string }
   | { readonly agent: string; readonly at: string }
+  | { readonly handback: string; readonly at: string }
   | { readonly bash: string; readonly at: string; readonly done: string }
   | { readonly read: string; readonly at: string }
   | { readonly rejected: string; readonly at: string }
@@ -59,6 +60,13 @@ function linesOf(sessionId: string, cwd: string, steps: readonly Step[], prefix:
       ];
     }
     if ("agent" in step) return [assistant(step.at, [{ type: "text", text: step.agent }])];
+    if ("handback" in step) {
+      return [
+        assistant(step.at, [
+          { type: "tool_use", id: tool, name: "SubagentHandback", input: { message: step.handback } },
+        ]),
+      ];
+    }
     if ("bash" in step) {
       return [
         assistant(step.at, [{ type: "tool_use", id: tool, name: "Bash", input: { command: step.bash } }]),

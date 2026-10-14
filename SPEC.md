@@ -168,6 +168,12 @@ A version of a skill is its body's hash (FR-17), with the plugin install it was 
 - **FR-82** — The `skill-usage` signal counts each skill load (FR-17), a subagent's preload too, in the task of its top-level session, and names it by its skill and version: the first 8 characters of its body's hash and its install, `-` for either the load does not carry. Its value is loads per task, over every task.
 - **FR-83** — `--skill <name>`, on `query signal` and `query before-after`, counts each signal only over the tasks that loaded the skill, named without its plugin, and says so in the denominator. `before-after` also names each version of the skill that loaded on either side, with its count, and notes when the after window ran no version the before window did not, so a change not yet installed reads as such, or loaded the skill in no task. A name no load in the record carries is refused, naming the skills that loaded.
 
+### 2.15 What a run reported
+
+What an agent handed back, and how its commands ended, kept beside the messages of §2.2 so a run's outcome is read from the record, not its transcript.
+
+- **FR-84** — A subagent's hand-back report, which Claude Code carries only in the input of its `SubagentHandback` call, is the text of the assistant message that makes the call, after any text that message shows, so a subagent's report is its last assistant message text.
+
 ## 3. Non-functional requirements
 
 - **NF-1** — agent-record needs no network and no credential, and sends nothing off the machine itself: the mirror is a folder on this machine that a backup service, such as iCloud Drive, may carry off it (FR-61).
@@ -242,6 +248,7 @@ A version of a skill is its body's hash (FR-17), with the plugin install it was 
 - **AC-49** — Sync a session whose first task was given before its log began, with a permission prompt in it, and whose next two came after, holding a permission prompt, an auto-mode denial, a commit-gate denial and a verdict-gate denial, beside an earlier session from before the log: `signal blocks` gives two blocks per task, four blocks over two tasks, one of each source. (FR-81)
 - **AC-50** — Sync a session that loads a plugin skill twice through the Skill tool, once with arguments appended to its body, and whose subagent preloads another, beside a later session that loads a changed body of the first from a newer install: `signal skill-usage` gives three loads in the first week's one task, two of one version, and one in the next week's. (FR-17, FR-82)
 - **AC-51** — Sync three sessions around a fixture commit, the first two loading one version of a skill and the third none: `signal stranded-work --skill` counts only the first two, `before-after --skill` names that version on both sides and notes it is not installed yet, with `--from` after the second session it notes no task loaded the skill, and a skill named with its plugin or never loaded is refused. (FR-74, FR-76, FR-83)
+- **AC-52** — Sync a session whose subagent hands back its report through `SubagentHandback`: `sql` returns the report as the subagent's last assistant message text, and after `rebuild` it still does. (FR-84)
 
 ## 6. Deliverables
 

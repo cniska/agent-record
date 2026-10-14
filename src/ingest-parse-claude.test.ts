@@ -186,6 +186,34 @@ describe("parseClaudeChunk", () => {
     expect(chunk.toolCalls).toMatchObject([{ id: "tu-n", toolName: "Bash" }]);
   });
 
+  test("keeps a subagent's hand-back report as its message text", () => {
+    const chunk = parseClaudeChunk(
+      [
+        JSON.stringify({
+          type: "assistant",
+          uuid: "a-h",
+          timestamp: "2026-09-16T10:03:00.000Z",
+          message: {
+            id: "msg-h",
+            content: [
+              { type: "text", text: "Done." },
+              {
+                type: "tool_use",
+                id: "tu-h",
+                name: "SubagentHandback",
+                input: { message: "No findings.\nVerdict: accept" },
+              },
+              { type: "tool_use", id: "tu-b", name: "Bash", input: { message: "not a report" } },
+            ],
+          },
+        }),
+      ],
+      1,
+    );
+    expect(chunk.messages.map((m) => m.text)).toEqual(["Done.\nNo findings.\nVerdict: accept"]);
+    expect(chunk.toolCalls).toMatchObject([{ id: "tu-h", toolName: "SubagentHandback" }, { id: "tu-b" }]);
+  });
+
   test("stores a time with an offset as UTC", () => {
     const [, first] = claudeTranscriptLines("s-1");
     const offset = withFields(first, { timestamp: "2026-09-16T12:01:00+02:00" });

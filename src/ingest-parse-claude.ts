@@ -208,8 +208,15 @@ const ClaudeLine = byKind(
 
 type ClaudeBlock = z.infer<typeof ClaudeAssistantBlock> | z.infer<typeof ClaudeUserBlock>;
 
+const HANDBACK_TOOL = "SubagentHandback";
+
 function textBlocks(content: readonly (ClaudeBlock | null)[]): readonly string[] {
-  return content.flatMap((b) => (b?.kind === "text" && b.text !== null ? [b.text] : []));
+  return content.flatMap((b) => {
+    if (b?.kind === "text" && b.text !== null) return [b.text];
+    if (b?.kind === "tool_use" && b.name === HANDBACK_TOOL && typeof b.input.message === "string")
+      return [b.input.message];
+    return [];
+  });
 }
 
 function textsOf(content: string | readonly (ClaudeBlock | null)[] | undefined): readonly string[] {
