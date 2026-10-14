@@ -114,3 +114,7 @@ function withPathLock<T>(path: string, fn: () => T): T {
 export function withLock<T>(env: Env, fn: () => T): T {
   return withPathLock(join(locksDir(env), "record"), fn);
 }
+
+export function withUpdateLock<T>(env: Env, fn: () => T): T {
+  return withPathLock(join(locksDir(env), "update"), fn);
+}

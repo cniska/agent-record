@@ -9,6 +9,7 @@ import { stampingOutcome } from "./sync-stamp";
 
 export const syncCommand: Command = {
   name: "sync",
+  startsUpdateCheck: false,
   usage: "agent-record sync",
   summary: "archive every new byte of every tool's session files, read them, and mirror the archive",
   run(args, runtime) {

@@ -11,10 +11,21 @@ import { type MirrorState, readMirror } from "./mirror";
 import { dbPath } from "./paths";
 import { readSyncStamp, type SyncStamp } from "./sync-stamp";
 import { HOUR_MS } from "./timestamp";
+import {
+  checkIsDue,
+  isWanted,
+  readRejected,
+  readUpdateStamp,
+  type StagedBuild,
+  stagedBuilds,
+  type UpdateStamp,
+} from "./update-state";
 
 const SYNC_STOPPED_AFTER_MS = 24 * HOUR_MS;
 const MIRROR_STALE_AFTER_MS = 24 * HOUR_MS;
 const SYNC = "agent-record sync";
+const UPDATE = "agent-record update";
+const LIKELY_OFFLINE = "this machine was likely offline";
 const SYNC_AND_FIX_MIRROR = `${SYNC}, and fix any mirror failure it reports`;
 
 type Health = {
@@ -144,6 +155,97 @@ function mirrorHealth(mirror: MirrorState, now: Date): Health {
   }
 }
 
+type UpdateInput =
+  | { readonly kind: "checkout" }
+  | { readonly kind: "skipped" }
+  | {
+      readonly kind: "release";
+      readonly stamp: UpdateStamp;
+      readonly staged: readonly StagedBuild[];
+      readonly rejected: readonly string[] | CodedError;
+    };
+
+function readUpdateInput({ updates, env }: Runtime): UpdateInput {
+  if (updates === null) return { kind: "checkout" };
+  if (env.skipUpdate) return { kind: "skipped" };
+  return {
+    kind: "release",
+    stamp: readUpdateStamp(env),
+    staged: stagedBuilds(env),
+    rejected: refusalOr(() => readRejected(env)),
+  };
+}
+
+function updateHealth(input: UpdateInput, version: string, now: Date): Health {
+  const name = "update";
+  switch (input.kind) {
+    case "checkout":
+      return {
+        name,
+        state: "ok",
+        detail: "this agent-record runs from a checkout, which updates through git",
+        fix: null,
+      };
+    case "skipped":
+      return { name, state: "ok", detail: "AGENT_RECORD_SKIP_UPDATE=1 turns update checks off", fix: null };
+    case "release":
+      return releaseUpdateHealth(input, version, now);
+    default:
+      return unreachable(input);
+  }
+}
+
+function releaseUpdateHealth(
+  { stamp, staged, rejected }: Extract<UpdateInput, { kind: "release" }>,
+  version: string,
+  now: Date,
+): Health {
+  const name = "update";
+  if (rejected instanceof CodedError)
+    return { name, state: "warn", detail: rejected.message, fix: rejected.resolve };
+  const waiting = staged.find((build) => isWanted(build.version, version, rejected));
+  if (waiting !== undefined)
+    return {
+      name,
+      state: "warn",
+      detail: `agent-record ${waiting.version} is staged but this run is ${version}; the next run through the installed agent-record starts it`,
+      fix: UPDATE,
+    };
+  switch (stamp.kind) {
+    case "never":
+      return { name, state: "warn", detail: `no update check has run; ${LIKELY_OFFLINE}`, fix: UPDATE };
+    case "unreadable":
+      return { name, state: "warn", detail: `${stamp.path} holds no update check`, fix: UPDATE };
+    case "failed":
+      return {
+        name,
+        state: "warn",
+        detail: `the last update check failed, and ${LIKELY_OFFLINE}: ${stamp.detail}`,
+        fix: UPDATE,
+      };
+    case "checking":
+    case "current":
+    case "staged": {
+      const hours = Math.round((now.getTime() - stamp.at.getTime()) / HOUR_MS);
+      if (checkIsDue(stamp, now))
+        return {
+          name,
+          state: "warn",
+          detail: `the last update check began ${hours} hours ago; ${LIKELY_OFFLINE}`,
+          fix: UPDATE,
+        };
+      return {
+        name,
+        state: "ok",
+        detail: `agent-record ${version} is current, checked ${hours} hours ago`,
+        fix: null,
+      };
+    }
+    default:
+      return unreachable(stamp);
+  }
+}
+
 export function recordDoctor(probes: DoctorProbes): DoctorReport {
   const { env, agentLoaded, now } = probes;
   const checks = [
@@ -151,6 +253,7 @@ export function recordDoctor(probes: DoctorProbes): DoctorReport {
     syncHealth(readSyncStamp(env), now()),
     agentHealth(planAgent(probes), probes.command, agentLoaded),
     mirrorHealth(readMirror(env), now()),
+    updateHealth(readUpdateInput(probes), probes.version, now()),
   ];
   return { checks, failing: checks.filter(({ state }) => state === "fail").length };
 }

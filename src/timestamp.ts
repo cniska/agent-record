@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export const StampAt = z.iso.datetime().transform((at) => new Date(at));
+
 export const MINUTE_MS = 60_000;
 
 export const HOUR_MS = 60 * MINUTE_MS;

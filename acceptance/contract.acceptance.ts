@@ -31,6 +31,7 @@ const USAGE = {
   sql: 'agent-record sql "<select>" [--rows <n>]',
   agent: "agent-record agent install",
   doctor: "agent-record doctor",
+  update: "agent-record update [--staged | --rollback]",
 } as const;
 
 const READERS = [
@@ -99,6 +100,7 @@ test("AC-11 a failing doctor still prints ok on stdout and exits 1", () => {
       { name: "sync", state: "fail" },
       { name: "agent", state: "warn" },
       { name: "mirror", state: "warn" },
+      { name: "update", state: "ok" },
     ],
     failing: 2,
   });
@@ -113,6 +115,7 @@ test("AC-11 every command refuses bad input on stderr with a refusal's kind, cod
     { args: ["sql", "select 1 as one", "--bogus"], usage: USAGE.sql },
     { args: ["agent", "install", "--bogus"], usage: USAGE.agent },
     { args: ["doctor", "--bogus"], usage: USAGE.doctor },
+    { args: ["update", "--bogus"], usage: USAGE.update },
   ]) {
     const [command = ""] = args;
     const error = refused(runCli(home, args), command);
@@ -140,6 +143,7 @@ test("AC-12 agent-record alone lists every command with its usage and summary", 
     { name: "sql", usage: USAGE.sql },
     { name: "agent", usage: USAGE.agent },
     { name: "doctor", usage: USAGE.doctor },
+    { name: "update", usage: USAGE.update },
   ]);
   for (const { summary } of result.commands) expect(summary).not.toBe("");
 });

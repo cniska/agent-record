@@ -2,27 +2,15 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { version } from "../package.json";
-
-type Version = { readonly major: number; readonly minor: number; readonly patch: number };
+import { compareVersions, parseVersion } from "../src/update-version";
 
 export type Release = { readonly tag: string; readonly schema: number };
 
 export type Candidate = Release & { readonly version: string };
 
-const VERSION = /^(\d+)\.(\d+)\.(\d+)$/;
 const SCHEMA_LINE = /^export const SCHEMA_VERSION = (\d+);$/m;
 const SCHEMA_FILE = "src/db-schema.ts";
 const TAG_PREFIX = "v";
-
-function parseVersion(text: string): Version | null {
-  const [, major, minor, patch] = VERSION.exec(text) ?? [];
-  if (major === undefined || minor === undefined || patch === undefined) return null;
-  return { major: Number(major), minor: Number(minor), patch: Number(patch) };
-}
-
-function compare(a: Version, b: Version): number {
-  return a.major - b.major || a.minor - b.minor || a.patch - b.patch;
-}
 
 export function schemaOf(source: string): number {
   const [, schema] = SCHEMA_LINE.exec(source) ?? [];
@@ -39,7 +27,7 @@ export function releaseProblems(candidate: Candidate, previous: Release | null):
   if (previous === null) return problems;
   const before = parseVersion(previous.tag.slice(TAG_PREFIX.length));
   if (before === null) return [...problems, `the previous tag ${previous.tag} names no x.y.z version`];
-  if (compare(version, before) <= 0)
+  if (compareVersions(version, before) <= 0)
     problems.push(`${candidate.version} is not newer than the previous release ${previous.tag}`);
   const patchOnly = version.major === before.major && version.minor === before.minor;
   if (candidate.schema !== previous.schema && patchOnly)

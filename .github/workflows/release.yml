@@ -53,6 +53,8 @@ jobs:
         run: bash scripts/build-compiled.sh agent-record
 
       - name: Smoke test binary
+        env:
+          AGENT_RECORD_SKIP_UPDATE: "1"
         run: |
           expected="$(bun -e 'console.log(require("./package.json").version)')"
           test "$(./agent-record --version)" = "$expected"

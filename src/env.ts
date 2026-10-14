@@ -7,6 +7,7 @@ export type Env = {
   readonly stateHome: string;
   readonly tmpDir: string;
   readonly mirrorDir: string;
+  readonly skipUpdate: boolean;
 };
 
 export type RawEnv = Readonly<Record<string, string | undefined>>;
@@ -35,6 +36,9 @@ function absoluteOr(raw: RawEnv, variable: string, home: string, fallback: reado
   return value !== undefined && isAbsolute(value) ? value : join(home, ...fallback);
 }
 
+const SKIP_UPDATE_VARIABLE = "AGENT_RECORD_SKIP_UPDATE";
+const SKIP_UPDATE = "1";
+
 const LAUNCHER_VARIABLE = "AGENT_RECORD_LAUNCHER";
 
 export function launcherOf(raw: RawEnv): string | null {
@@ -50,5 +54,6 @@ export function parseEnv(raw: RawEnv): Env {
     stateHome: absoluteOr(raw, "XDG_STATE_HOME", home, [".local", "state"]),
     tmpDir: tempOf(raw),
     mirrorDir: absoluteOr(raw, "AGENT_RECORD_MIRROR", home, ICLOUD_DRIVE_MIRROR),
+    skipUpdate: raw[SKIP_UPDATE_VARIABLE] === SKIP_UPDATE,
   };
 }

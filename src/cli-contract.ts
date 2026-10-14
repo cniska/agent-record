@@ -1,11 +1,13 @@
 import { refuser } from "./coded-error";
 import type { Env } from "./env";
+import type { UpdateSource } from "./update-contract";
 
 export type Command = {
   name: string;
   usage: string;
   summary: string;
-  run(args: string[], runtime: Runtime): CommandResult;
+  startsUpdateCheck: boolean;
+  run(args: string[], runtime: Runtime): CommandResult | Promise<CommandResult>;
 };
 
 export type Runtime = {
@@ -14,7 +16,12 @@ export type Runtime = {
   readonly env: Env;
   readonly command: ProgramArguments;
   readonly version: string;
+  readonly updates: UpdateSource | null;
 };
+
+export const VERSION_FLAG = "--version";
+
+export type UpdateCheckStarter = (command: Command, runtime: Runtime) => void;
 
 export type ProgramArguments = readonly [string, ...string[]];
 

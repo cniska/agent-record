@@ -4,6 +4,7 @@ import { parseArg } from "./cli-flags";
 
 export const agentCommand: Command = {
   name: "agent",
+  startsUpdateCheck: true,
   usage: "agent-record agent install",
   summary: "write the launchd agent that syncs every 15 minutes",
   run(args, runtime) {

@@ -16,6 +16,7 @@ import { copyBackup } from "./file-backup";
 import { copyIfChanged, PART_SUFFIX } from "./file-copy";
 import { parseJson } from "./ingest-source-read";
 import { archiveDir, mirrorArchiveDir, mirrorStampPath } from "./paths";
+import { StampAt } from "./timestamp";
 
 type MirrorReport =
   | { readonly state: "mirrored"; readonly path: string; readonly files: number; readonly bytes: number }
@@ -32,7 +33,7 @@ export type MirrorState =
   | { readonly kind: "unreadable"; readonly path: string; readonly stamp: string }
   | { readonly kind: "mirrored"; readonly path: string; readonly at: Date };
 
-const MirrorStamp = z.strictObject({ at: z.iso.datetime().transform((at) => new Date(at)) });
+const MirrorStamp = z.strictObject({ at: StampAt });
 
 const refuseMirror = refuser<{
   readonly mirror_unwritable: { readonly path: string; readonly detail: string };

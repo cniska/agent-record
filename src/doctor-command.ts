@@ -5,6 +5,7 @@ import { recordDoctor } from "./doctor";
 
 export const doctorCommand: Command = {
   name: "doctor",
+  startsUpdateCheck: true,
   usage: "agent-record doctor",
   summary: "judge whether the record is current and readable, naming the fix for each problem",
   run(args, runtime) {

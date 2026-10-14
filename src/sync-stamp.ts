@@ -7,16 +7,15 @@ import type { Env } from "./env";
 import { parseJson } from "./ingest-source-read";
 import type { SyncReport } from "./ingest-sync";
 import { syncStampPath } from "./paths";
-
-const At = z.iso.datetime().transform((at) => new Date(at));
+import { StampAt } from "./timestamp";
 
 const SyncOutcome = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("finished"),
-    at: At,
+    at: StampAt,
     failures: z.strictObject({ count: z.int().positive(), first: z.string() }).nullable(),
   }),
-  z.strictObject({ kind: z.literal("failed"), at: At, error: ErrorRecord }),
+  z.strictObject({ kind: z.literal("failed"), at: StampAt, error: ErrorRecord }),
 ]);
 type SyncOutcome = z.infer<typeof SyncOutcome>;
 

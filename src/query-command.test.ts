@@ -46,7 +46,7 @@ describe("agent-record query", () => {
     try {
       const before = recordOf(path);
       for (const query of QUERIES)
-        queryCommand.run([query.name, ARGS[query.name] ?? "stay"], testRuntime(env));
+        await queryCommand.run([query.name, ARGS[query.name] ?? "stay"], testRuntime(env));
       expect(recordOf(path)).toEqual(before);
 
       expect(() => queryCommand.run(["search", "stay"], testRuntime(scratchEnv(empty)))).toThrow(

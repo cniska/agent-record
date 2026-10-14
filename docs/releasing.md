@@ -31,3 +31,7 @@ Step 3 comes before the first tag. Steps 1 and 2 need the first release's files,
 3. The release body is GitHub's generated notes. A release that bumps the record's schema version says so in its first line.
 
 The release check, `scripts/release-check.ts`, runs on every tag in the workflow too: the tag must be `v` and the `package.json` version, newer than the previous tag, and while on 0.x a release whose `SCHEMA_VERSION` differs from the previous tag's must bump the minor version, not only the patch.
+
+## A bad release
+
+A release installed by curl, Homebrew or npm stages each newer release itself (`agent-record update`, and a daily check from any other command), and the launcher runs the newest staged build. To take a bad release back off a machine, run `agent-record update --rollback`: it removes the staged build and records its version as rejected, so no later check stages it again. Then run `agent-record rebuild`, since an older build never rebuilds a newer record by itself. Publish the fix as a new, higher version; a tag is never moved.

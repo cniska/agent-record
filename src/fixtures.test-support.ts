@@ -15,6 +15,7 @@ export function scratchEnv(root: string): Env {
     stateHome: join(root, "state"),
     tmpDir: tmpdir(),
     mirrorDir: join(root, "mirror"),
+    skipUpdate: false,
   };
 }
 

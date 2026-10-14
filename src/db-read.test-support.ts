@@ -19,6 +19,7 @@ export function testRuntime(env: Env): Runtime {
     env,
     command: ["/opt/homebrew/bin/agent-record"],
     version: "0.1.0",
+    updates: null,
   };
 }
 

@@ -59,6 +59,7 @@ function answer(path: string, wait: HeldRecordWait, statement: string, maxRows: 
 
 export const sqlCommand: Command = {
   name: "sql",
+  startsUpdateCheck: true,
   usage: 'agent-record sql "<select>" [--rows <n>]',
   summary: "run one read-only statement against the database",
   run(args, runtime) {

@@ -1,12 +1,10 @@
 import { allCommands, findCommand } from "./cli-commands";
-import { type Runtime, refuseUsage } from "./cli-contract";
+import { type Runtime, refuseUsage, type UpdateCheckStarter, VERSION_FLAG } from "./cli-contract";
 import { listing, writeError, writeResult, writeVersion } from "./cli-output";
 
 export const HELD_RECORD_WAIT_MS = 5000;
 
-const VERSION_FLAG = "--version";
-
-export async function runCli(runtime: Runtime): Promise<void> {
+export async function runCli(runtime: Runtime, startUpdateCheck: UpdateCheckStarter | null): Promise<void> {
   const [name, ...args] = process.argv.slice(2);
   if (name === undefined) {
     writeResult("agent-record", listing(await allCommands()));
@@ -24,7 +22,8 @@ export async function runCli(runtime: Runtime): Promise<void> {
     return;
   }
   try {
-    const ran = command.run(args, runtime);
+    startUpdateCheck?.(command, runtime);
+    const ran = await command.run(args, runtime);
     writeResult(command.name, ran.value);
     process.exitCode = ran.exitCode;
   } catch (error) {

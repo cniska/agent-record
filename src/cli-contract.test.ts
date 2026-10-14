@@ -95,10 +95,12 @@ describe("the command contract", () => {
     ]);
   });
 
-  test("cli-release.ts only runs the CLI with a release's runtime", () => {
+  test("cli-release.ts only runs the CLI with a release's runtime, then the daily update check", () => {
     expect([...importsOf(readFileSync(join(SRC, "cli-release.ts"), "utf8"))].sort()).toEqual([
+      "./cli-contract",
       "./cli-main",
       "./env",
+      "./update-daily",
     ]);
   });
 

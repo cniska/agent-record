@@ -38,6 +38,7 @@ const PUBLIC: Readonly<Record<string, readonly string[]>> = {
   sql: [],
   sync: ["sync-stamp"],
   timestamp: ["timestamp"],
+  update: ["update-daily", "update-state", "update-version"],
   worktree: ["worktree"],
 };
 

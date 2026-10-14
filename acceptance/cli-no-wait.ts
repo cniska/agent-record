@@ -5,10 +5,14 @@ import { parseEnv } from "../src/env";
 
 const NO_WAIT_MS = 0;
 
-await runCli({
-  now: () => new Date(),
-  heldRecordWaitMs: NO_WAIT_MS,
-  env: parseEnv(process.env),
-  command: [process.execPath, resolve(import.meta.dir, "..", "src", "cli.ts")],
-  version,
-});
+await runCli(
+  {
+    now: () => new Date(),
+    heldRecordWaitMs: NO_WAIT_MS,
+    env: parseEnv(process.env),
+    command: [process.execPath, resolve(import.meta.dir, "..", "src", "cli.ts")],
+    version,
+    updates: null,
+  },
+  null,
+);
