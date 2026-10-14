@@ -101,4 +101,31 @@ The plugin brings neither Bun nor the CLI, and does nothing when `agent-record` 
 
 ## Development
 
-`bun run check` runs the lint, the typecheck and the tests. `bun run acceptance` proves the criteria in [`SPEC.md`](SPEC.md) through the CLI alone; each test in `acceptance/` is named for the criteria it proves, and a check in `bun run check` fails when a criterion has no test or a test cites none. `src/query-recall.test.ts` measures search: for each case, a `query search` an agent ran and the message it then opened with `query thread`, it checks the message ranks within the first five hits, and fails when that rate drops below its pinned baseline. The cases sit in `src/query-recall.fixture.json` with every word replaced by a code, so the test needs no live record. `bun run search-recall` takes the cases again from the live record, rewrites the fixture, and prints the rate over the live record and over the fixture, with each miss's words; re-pin the baseline from what it prints. [`AGENTS.md`](AGENTS.md) holds the repository's rules. The Claude Code plugin lives in `plugin/`, apart from the repository root, so the CLI's `bin/` stays off the PATH Claude Code gives a plugin.
+### Setup
+
+```bash
+mise trust && mise install
+agent-worktree create <name>
+agent-gates doctor
+```
+
+- `mise install` sets up the clone as [Install](#install) says, and the `bun install` its postinstall runs calls the `prepare` script, which points `core.hooksPath` at `.githooks/`.
+- `agent-worktree create <name>` makes a task worktree and runs `scripts/worktree-setup.sh` in it, which installs the same way without linking the CLI.
+- `.githooks/` holds the commit-subject, format and no-comments gates that [agent-gates](https://github.com/cniska/agent-gates) installs, and `agent-gates doctor` reports their health.
+
+### Checks
+
+- `bun run check` runs the lint, the typecheck and the tests.
+- `bun run acceptance` proves the criteria in [`SPEC.md`](SPEC.md) through the CLI alone; each test in `acceptance/` is named for the criteria it proves, and `src/spec.test.ts`, in the check, fails when the tests and the criteria do not cite each other.
+- `bun run format` formats `src/`, `acceptance/` and `scripts/` with Biome, and the format gate runs it with the linter off before each commit and stages what it changes in the staged files.
+- `bun run search-recall` rebuilds the search recall fixture from the live record, as [`src/query-recall.md`](src/query-recall.md) describes.
+- `.github/workflows/check.yml` runs the check and the acceptance suite on each push and pull request, and `commits.yml`, `format.yml` and `no-comments.yml` run the gates.
+
+### Layout
+
+- The Claude Code plugin lives in `plugin/`, apart from the repository root, so the CLI's `bin/` stays off the `PATH` Claude Code gives a plugin.
+- [`src/README.md`](src/README.md) maps the modules and the boundaries between them.
+
+### Rules
+
+[`AGENTS.md`](AGENTS.md) holds the repository's rules, and [`SPEC.md`](SPEC.md) states what must hold.
