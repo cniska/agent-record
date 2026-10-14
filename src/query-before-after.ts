@@ -1,6 +1,6 @@
 import { countFlag, timeFlag } from "./query";
 import { type Query, refuseQuery } from "./query-contract";
-import { inScope, tasksLoading, viewRecord } from "./query-signal-view";
+import { scoped, skillScope, viewRecord } from "./query-signal-view";
 import { SIGNALS, versionOf } from "./query-signals";
 import type { Placed, SkillLoaded } from "./query-timeline";
 import { EpochMs } from "./timestamp";
@@ -61,13 +61,12 @@ export const beforeAfter: Query<"days" | "from" | "skill"> = {
     }
     const span = days * DAY_MS;
     const { timeline } = viewRecord(db);
-    const skill = ctx.flags.skill ?? null;
-    const scope = skill === null ? null : tasksLoading(timeline, skill);
+    const scope = skillScope(timeline, ctx.flags.skill);
     const newest = timeline.newest === null ? at : Date.parse(timeline.newest);
     const start = from === null ? at : Date.parse(from);
     const end = Math.max(start, Math.min(start + span, newest + 1));
     const rows = SIGNALS.map((chosen) => {
-      const events = chosen.events(timeline).filter(inScope(scope));
+      const events = scoped(scope, chosen.events(timeline));
       const before = chosen.rate(within(events, at - span, at));
       const after = chosen.rate(within(events, start, end));
       return [
@@ -98,17 +97,15 @@ export const beforeAfter: Query<"days" | "from" | "skill"> = {
       "after_count",
       "after_of",
     ];
-    if (skill === null) return { columns, rows, denominator: windows, note: partial };
-    const loads = timeline.skillLoads.filter((load) => load.skill === skill);
-    const ranBefore = versionCounts(within(loads, at - span, at));
-    const ranAfter = versionCounts(within(loads, start, end));
-    const notes = [partial, installNote(skill, ranBefore, ranAfter)].filter((note) => note !== null);
+    if (scope === null) return { columns, rows, denominator: windows, note: partial };
+    const ranBefore = versionCounts(within(scope.loads, at - span, at));
+    const ranAfter = versionCounts(within(scope.loads, start, end));
+    const notes = [partial, installNote(scope.skill, ranBefore, ranAfter)].filter((note) => note !== null);
     return {
       columns,
       rows,
       denominator:
-        `${windows}; in the tasks that loaded ${skill}, ` +
-        `versions before ${listed(ranBefore)}, after ${listed(ranAfter)}`,
+        `${windows}; ${scope.shown}, ` + `versions before ${listed(ranBefore)}, after ${listed(ranAfter)}`,
       note: notes.length === 0 ? null : notes.join(" "),
     };
   },

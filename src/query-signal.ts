@@ -1,5 +1,5 @@
 import { type Cell, type Query, refuseQuery } from "./query-contract";
-import { described, inScope, repoShown, tasksLoading, viewRecord } from "./query-signal-view";
+import { described, repoShown, scoped, skillScope, viewRecord } from "./query-signal-view";
 import { type Signal, type SignalEvent, signalNamed } from "./query-signals";
 
 type Grouped = {
@@ -65,9 +65,8 @@ export const signal: Query<"by" | "skill"> = {
     const chosen = signalNamed(ctx.arg);
     const by = groupingOf(ctx.flags.by);
     const { timeline, labels } = viewRecord(db);
-    const skill = ctx.flags.skill ?? null;
-    const scope = skill === null ? null : tasksLoading(timeline, skill);
-    const events = chosen.events(timeline).filter(inScope(scope));
+    const scope = skillScope(timeline, ctx.flags.skill);
+    const events = scoped(scope, chosen.events(timeline));
     const groups = new Map<string, { readonly key: readonly Cell[]; readonly events: SignalEvent[] }>();
     for (const event of events) {
       const key = GROUPED_BY[by].key(event, labels, ctx.home);
@@ -90,7 +89,7 @@ export const signal: Query<"by" | "skill"> = {
       rows,
       denominator:
         `${described(chosen)}; ${events.length} events over ${weeks} weeks (Monday, UTC)` +
-        (skill === null ? "" : `, in the tasks that loaded ${skill}`),
+        (scope === null ? "" : `, ${scope.shown}`),
       note: chosen.note,
     };
   },
