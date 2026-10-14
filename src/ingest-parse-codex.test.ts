@@ -232,6 +232,7 @@ describe("parseCodexChunk", () => {
     const parsed = parseCodexChunk([read], 1, FRESH);
     expect(parsed.skillLoads).toEqual<object[]>([
       {
+        kind: "called",
         toolCallId: "item-7",
         ts: "2026-09-16T10:00:00.000Z",
         model: null,

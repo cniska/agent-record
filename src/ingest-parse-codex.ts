@@ -259,6 +259,7 @@ export function parseCodexChunk(
         const readSkill = cmd ? skillFromFileRead(cmd) : null;
         if (readSkill) {
           skillLoads.push({
+            kind: "called",
             toolCallId: item.id,
             ts: startedAt,
             model: current.model,

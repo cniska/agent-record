@@ -421,35 +421,39 @@ export function createIngester(db: Database, home: string) {
     }
 
     for (const l of parsed.skillLoads) {
-      if ("toolUseId" in l) {
-        insertCalledSkillBody.run({
-          $sessionId: spec.sessionId,
-          $toolUseId: l.toolUseId,
-          $bodyChars: l.bodyChars,
-          $bodySha256: l.bodySha256,
-          $skillPath: l.skillPath,
-        });
-        continue;
+      switch (l.kind) {
+        case "called":
+          insertSkillLoad.run({
+            $sessionId: spec.sessionId,
+            $toolCallId: l.toolCallId,
+            $ts: l.ts,
+            $model: l.model,
+            $skillName: l.skillName,
+            $how: l.how,
+          });
+          break;
+        case "called-body":
+          insertCalledSkillBody.run({
+            $sessionId: spec.sessionId,
+            $toolUseId: l.toolUseId,
+            $bodyChars: l.bodyChars,
+            $bodySha256: l.bodySha256,
+            $skillPath: l.skillPath,
+          });
+          break;
+        case "typed-body":
+          insertTypedSkillBody.run({
+            $sessionId: spec.sessionId,
+            $parentUuid: l.parentUuid,
+            $skillName: l.skillName,
+            $bodyChars: l.bodyChars,
+            $bodySha256: l.bodySha256,
+            $skillPath: l.skillPath,
+          });
+          break;
+        default:
+          unreachable(l);
       }
-      if ("parentUuid" in l) {
-        insertTypedSkillBody.run({
-          $sessionId: spec.sessionId,
-          $parentUuid: l.parentUuid,
-          $skillName: l.skillName,
-          $bodyChars: l.bodyChars,
-          $bodySha256: l.bodySha256,
-          $skillPath: l.skillPath,
-        });
-        continue;
-      }
-      insertSkillLoad.run({
-        $sessionId: spec.sessionId,
-        $toolCallId: l.toolCallId,
-        $ts: l.ts,
-        $model: l.model,
-        $skillName: l.skillName,
-        $how: l.how,
-      });
     }
 
     db.run(

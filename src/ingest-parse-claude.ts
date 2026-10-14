@@ -320,7 +320,14 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
             const { input } = block;
             const chosen = input.skill;
             if (block.name === "Skill" && typeof chosen === "string") {
-              skillLoads.push({ toolCallId: block.id, ts, model, skillName: chosen, how: "model" });
+              skillLoads.push({
+                kind: "called",
+                toolCallId: block.id,
+                ts,
+                model,
+                skillName: chosen,
+                how: "model",
+              });
             }
             toolCalls.push({
               kind: "call",
@@ -380,9 +387,10 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
         const body = line.isMeta === true && text ? parseSkillBody(text) : null;
         if (body) {
           const { name, ...fields } = body;
-          if (line.sourceToolUseID) skillLoads.push({ toolUseId: line.sourceToolUseID, ...fields });
+          if (line.sourceToolUseID)
+            skillLoads.push({ kind: "called-body", toolUseId: line.sourceToolUseID, ...fields });
           else if (line.parentUuid)
-            skillLoads.push({ parentUuid: line.parentUuid, skillName: name, ...fields });
+            skillLoads.push({ kind: "typed-body", parentUuid: line.parentUuid, skillName: name, ...fields });
         }
         messages.push({
           id: line.uuid,

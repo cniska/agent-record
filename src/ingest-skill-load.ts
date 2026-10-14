@@ -14,9 +14,10 @@ const SkillBodyFields = z.strictObject({
 });
 type SkillBodyFields = Readonly<z.infer<typeof SkillBodyFields>>;
 
-export const SkillLoadRow = z.union([
+export const SkillLoadRow = z.discriminatedUnion("kind", [
   z
     .strictObject({
+      kind: z.literal("called"),
       toolCallId: ToolCallId,
       ts: Timestamp,
       model: z.string().nullable(),
@@ -24,8 +25,12 @@ export const SkillLoadRow = z.union([
       how: z.enum(HOWS),
     })
     .readonly(),
-  SkillBodyFields.extend({ toolUseId: ToolCallId }).readonly(),
-  SkillBodyFields.extend({ parentUuid: MessageId, skillName: z.string() }).readonly(),
+  SkillBodyFields.extend({ kind: z.literal("called-body"), toolUseId: ToolCallId }).readonly(),
+  SkillBodyFields.extend({
+    kind: z.literal("typed-body"),
+    parentUuid: MessageId,
+    skillName: z.string(),
+  }).readonly(),
 ]);
 export type SkillLoadRow = z.infer<typeof SkillLoadRow>;
 
