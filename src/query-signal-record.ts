@@ -9,18 +9,18 @@ export type SessionRow = {
   readonly isReviewer: boolean;
 };
 
-export type OwnerMessageRow = {
+type OwnerMessageRow = {
   readonly sessionId: string;
   readonly at: string;
   readonly text: string;
   readonly agentBefore: string | null;
 };
 
-export type TimedRow = { readonly sessionId: string; readonly at: string };
+type TimedRow = { readonly sessionId: string; readonly at: string };
 
 export type GitRunRow = TimedRow & { readonly subcommand: "commit" | "push"; readonly dir: string };
 
-export type RouteReadRow = TimedRow & { readonly path: string };
+type RouteReadRow = TimedRow & { readonly path: string };
 
 export type CheckoutRow = { readonly path: string; readonly repo: string };
 
