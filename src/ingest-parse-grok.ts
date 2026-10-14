@@ -61,7 +61,14 @@ const GrokToolLine = z
       _meta: z.looseObject({ agentTimestampMs: AgentTimestampMs }).optional(),
     }),
   })
-  .transform((line, ctx) => ({ kind: "tool" as const, ts: timed(line, ctx), update: line.params.update }));
+  .transform((line, ctx) => {
+    const { rawOutput, ...update } = line.params.update;
+    return {
+      kind: "tool" as const,
+      ts: timed(line, ctx),
+      update: { ...update, shellExitCode: rawOutput ?? null },
+    };
+  });
 type GrokToolLine = z.infer<typeof GrokToolLine>;
 type GrokToolUpdate = GrokToolLine["update"];
 
@@ -151,7 +158,7 @@ function toolRowsOf({ update, ts }: GrokToolLine, srcLine: number): ToolCallRow[
       toolName: null,
       isError: failed ? true : null,
       isInterrupted: null,
-      exitCode: update.rawOutput ?? null,
+      exitCode: update.shellExitCode,
       durationMs: null,
       resultBytes: null,
       srcLine,
