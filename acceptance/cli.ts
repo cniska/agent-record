@@ -138,17 +138,17 @@ export function scratchRepo(repo: string, origin: string, commits: readonly Comm
   mkdirSync(repo, { recursive: true });
   git(repo, ["init", "--quiet", "--initial-branch=main"]);
   git(repo, ["remote", "add", "origin", origin]);
-  for (const commit of commits) commitIn(repo, commit);
+  for (const commit of commits) commitTo(repo, commit);
   return repo;
 }
 
 export function scratchWorktree(repo: string, worktree: string, commit: Commit): string {
   git(repo, ["worktree", "add", "--quiet", "-b", "side", worktree]);
-  commitIn(worktree, commit);
+  commitTo(worktree, commit);
   return worktree;
 }
 
-function commitIn(checkout: string, { subject, file, at }: Commit): void {
+export function commitTo(checkout: string, { subject, file, at }: Commit): void {
   mkdirSync(dirname(join(checkout, file)), { recursive: true });
   writeFileSync(join(checkout, file), `${subject}\n`);
   git(checkout, ["add", file]);

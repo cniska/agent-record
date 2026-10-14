@@ -1,5 +1,6 @@
 import { basename, extname } from "node:path";
 import { z } from "zod";
+import { type Escape, escapesOf, type Gated, gateCommits, isAccepted } from "./query-escaped-defects";
 import {
   type Blocked,
   blocksOf,
@@ -43,6 +44,16 @@ type Kinded<Kind extends string> = Placed & { readonly kind: Kind };
 
 type Compaction = Placed & { readonly rereads: readonly Reread[] };
 
+type AcceptedCommit = Placed & { readonly sha: string };
+
+type Escaped = Placed & {
+  readonly cause: Escape["cause"];
+  readonly sha: string;
+  readonly subject: string;
+  readonly earlier: string;
+  readonly earlierAt: string;
+};
+
 export type SkillLoaded = Placed & {
   readonly skill: string;
   readonly bodySha256: string | null;
@@ -59,6 +70,8 @@ export type Timeline = {
   readonly blocks: readonly Kinded<Blocked["kind"]>[];
   readonly skillLoads: readonly SkillLoaded[];
   readonly compactions: readonly Compaction[];
+  readonly acceptedCommits: readonly AcceptedCommit[];
+  readonly escapes: readonly Escaped[];
   readonly newest: string | null;
 };
 
@@ -257,6 +270,23 @@ export function timelineOf(record: SignalRecord): Timeline {
     };
   });
 
+  const placeGated = ({ commit, allow }: Gated): Placed => {
+    const root = rootOf(allow.sessionId);
+    return { at: commit.at, sessionId: root, repo: commit.repo, ...inTask(root, ms(allow.at)) };
+  };
+  const gated = gateCommits(record.commits, record.hookEvents, repoOf);
+  const acceptedCommits: AcceptedCommit[] = gated
+    .filter(isAccepted)
+    .map((g) => ({ ...placeGated(g), sha: g.commit.sha }));
+  const escapes: Escaped[] = escapesOf(gated, record.commits, record.commitFiles).map((escaped) => ({
+    ...placeGated(escaped.fix),
+    cause: escaped.cause,
+    sha: escaped.fix.commit.sha,
+    subject: escaped.fix.commit.subject,
+    earlier: escaped.earlier.sha,
+    earlierAt: escaped.earlier.at,
+  }));
+
   const placeHook = <Kind extends string>({ row, kind }: { row: HookRow; kind: Kind }): Kinded<Kind> => {
     const root = rootOf(row.sessionId);
     const named = repoNamed(row);
@@ -281,6 +311,8 @@ export function timelineOf(record: SignalRecord): Timeline {
       .map(placeHook),
     skillLoads,
     compactions,
+    acceptedCommits,
+    escapes,
     newest: record.newest,
   };
 }

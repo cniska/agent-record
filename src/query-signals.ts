@@ -1,4 +1,5 @@
 import { refuseQuery } from "./query-contract";
+import { ESCAPE_CAUSES, ESCAPE_REACH_DAYS, GATE_REACH_MINUTES } from "./query-escaped-defects";
 import {
   BLOCK_SOURCES,
   isFalseStop,
@@ -42,6 +43,8 @@ const RATE_DECIMALS = 100;
 const HASH_SHOWN = 8;
 
 const UNKNOWN_PART = "-";
+
+const SHA_SHOWN = 8;
 
 export const versionOf = (load: SkillLoaded): string =>
   `${load.bodySha256?.slice(0, HASH_SHOWN) ?? UNKNOWN_PART}/${load.install ?? UNKNOWN_PART}`;
@@ -255,6 +258,34 @@ const lostContext = signalOf({
   }),
 });
 
+const escapedDefects = signalOf({
+  name: "escaped-defects",
+  value: "fix commits that point back at an earlier commit per accepted commit",
+  note:
+    `A commit counts when a commit-gate allow in its repo came at most ${GATE_REACH_MINUTES} minutes before it; ` +
+    "an accepted commit is one whose allow was accepted. A fix escaped when its subject names an earlier commit, " +
+    `or when the latest accepted feat, fix, refactor or perf commit in the ${ESCAPE_REACH_DAYS} days before it that shares a file, ` +
+    "tests and root Markdown aside, came from another agent. Read the events: a fix that adds a rule counts too.",
+  kinds: ["accepted commit", ...ESCAPE_CAUSES],
+  events: (timeline) => [
+    ...timeline.acceptedCommits.map((commit) =>
+      event(commit, "accepted commit", null, commit.sha.slice(0, SHA_SHOWN)),
+    ),
+    ...timeline.escapes.map((escaped) =>
+      event(
+        escaped,
+        escaped.cause,
+        minutesBetween(escaped.earlierAt, escaped.at),
+        `${escaped.sha.slice(0, SHA_SHOWN)} ${escaped.subject} <- ${escaped.earlier.slice(0, SHA_SHOWN)}`,
+      ),
+    ),
+  ],
+  rate: (count) => {
+    const escaped = ESCAPE_CAUSES.reduce((sum, cause) => sum + count(cause), 0);
+    return { value: ratio(escaped, count("accepted commit")), count: escaped, of: count("accepted commit") };
+  },
+});
+
 export const SIGNALS: readonly Signal[] = [
   ownerInterrupts,
   timeToLand,
@@ -265,6 +296,7 @@ export const SIGNALS: readonly Signal[] = [
   blocks,
   skillUsage,
   lostContext,
+  escapedDefects,
 ];
 
 export function signalNamed(name: string): Signal {

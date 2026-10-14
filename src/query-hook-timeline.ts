@@ -43,7 +43,7 @@ const sameActor = (a: HookRow, b: HookRow): boolean => a.sessionId === b.session
 const isGateOrVerdict = (row: HookRow): row is GateOrVerdict =>
   row.event === "gate" || row.event === "verdict";
 
-const isCommitAllow = (row: HookRow): row is GateRow =>
+export const isCommitAllow = (row: HookRow): row is GateRow =>
   row.event === "gate" && row.gate === "commit" && row.decision === "allow";
 
 const isDenial = (row: HookRow): row is GateRow => row.event === "gate" && row.decision === "deny";

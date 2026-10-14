@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { join } from "node:path";
 import { type ClaudeSession, type Step, withClaudeSessions } from "./claude-sessions";
 import {
+  commitTo,
   type Home,
   QUERY_RESULT,
   rebuild,
@@ -15,6 +16,7 @@ import {
   succeeded,
   sync,
 } from "./cli";
+import { gate, withEventLog } from "./hook-events";
 
 afterEach(removeScratch);
 
@@ -259,7 +261,7 @@ test("AC-44 signal splits each week by repo or route, newest first, and refuses 
     code: "unknown_signal",
     resolve:
       "one of: owner-interrupts, time-to-land, stranded-work, review-loops, false-stops, review-returns, blocks, " +
-      "skill-usage, lost-context",
+      "skill-usage, lost-context, escaped-defects",
   });
   const grouping = refused(runCli(home, ["query", "signal", "stranded-work", "--by", "day"]), "query");
   expect({ code: grouping.code, resolve: grouping.resolve }).toEqual({
@@ -303,6 +305,7 @@ test("AC-45 before-after compares every signal on either side of a commit, from 
     "blocks",
     "skill-usage",
     "lost-context",
+    "escaped-defects",
   ]);
   expect(around.denominator).toBe(
     `commit ${sha} at 2026-09-18T00:00:00.000Z; before 2026-09-04T00:00:00.000Z to 2026-09-18T00:00:00.000Z, ` +
@@ -500,4 +503,73 @@ test("AC-54 lost-context counts the files a session read again after a compactio
 
   rebuild(home);
   expect(counted()).toEqual([["2026-09-14", 0.33, 1, 3, "compaction 3, re-read 1"]]);
+});
+
+test("AC-55 escaped-defects counts the fixes that share a file with, or name, an earlier accepted commit", () => {
+  const at = (minute: number, second = 0) =>
+    `2026-09-16T09:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}Z`;
+  const repo = scratchRepo(join(scratchDirOutsideTemp(), "app"), ORIGIN, [
+    { subject: "start", file: "f0.txt", at: "2026-09-01T00:00:00Z" },
+    { subject: "feat: add the parser", file: "src/parser.ts", at: at(1) },
+    { subject: "docs: describe the parser", file: "docs/parser.md", at: at(3) },
+    { subject: "fix: parse empty input", file: "src/parser.ts", at: at(5) },
+    { subject: "fix: correct the docs", file: "docs/parser.md", at: at(7) },
+  ]);
+  const session = "build";
+  const home = withClaudeSessions(scratchHome(), [
+    { id: session, cwd: repo, steps: [{ owner: "add the parser", at: at(0) }] },
+  ]);
+  const allowed = (
+    minute: number,
+    reason: string,
+    agent: string,
+    more: Record<string, string | null> = { repo },
+  ) => gate(at(minute, 30), { decision: "allow", reason, agent, ...more });
+  withEventLog(home, session, [
+    allowed(0, "accepted", "w1"),
+    allowed(2, "accepted", "w1"),
+    allowed(4, "no_code_change", "w2"),
+    allowed(6, "accepted", "w2"),
+  ]);
+  sync(home);
+  const shaOf = (subject: string): string => {
+    const sha = succeeded(
+      runCli(home, ["sql", `SELECT sha FROM repo_commit WHERE subject = '${subject}'`]),
+      "sql",
+      QUERY_RESULT,
+    ).rows[0]?.[0];
+    if (typeof sha !== "string") throw new Error(`the commit ${subject} is in the record`);
+    return sha;
+  };
+  const feat = shaOf("feat: add the parser").slice(0, 8);
+  commitTo(repo, { subject: `fix: undo ${feat}`, file: "src/other.ts", at: at(9) });
+  withEventLog(home, session, [
+    allowed(8, "accepted", "w2", { repo: null, head: shaOf("fix: correct the docs") }),
+  ]);
+  sync(home);
+
+  const counted = () => query(home, ["signal", "escaped-defects"]).rows;
+  expect(counted()).toEqual([["2026-09-14", 0.5, 2, 4, "accepted commit 4, names commit 1, shared file 1"]]);
+  const events = query(home, ["signal-events", "escaped-defects"]).rows;
+  expect(events.map(([when, kind, , , minutes, , text]) => [when, kind, minutes, text])).toEqual([
+    [`2026-09-16T09:09:00.000Z`, "accepted commit", null, shaOf(`fix: undo ${feat}`).slice(0, 8)],
+    [
+      `2026-09-16T09:09:00.000Z`,
+      "names commit",
+      8,
+      `${shaOf(`fix: undo ${feat}`).slice(0, 8)} fix: undo ${feat} <- ${feat}`,
+    ],
+    [`2026-09-16T09:07:00.000Z`, "accepted commit", null, shaOf("fix: correct the docs").slice(0, 8)],
+    [
+      `2026-09-16T09:05:00.000Z`,
+      "shared file",
+      4,
+      `${shaOf("fix: parse empty input").slice(0, 8)} fix: parse empty input <- ${feat}`,
+    ],
+    [`2026-09-16T09:03:00.000Z`, "accepted commit", null, shaOf("docs: describe the parser").slice(0, 8)],
+    [`2026-09-16T09:01:00.000Z`, "accepted commit", null, feat],
+  ]);
+
+  rebuild(home);
+  expect(counted()).toEqual([["2026-09-14", 0.5, 2, 4, "accepted commit 4, names commit 1, shared file 1"]]);
 });

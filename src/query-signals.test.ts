@@ -32,6 +32,8 @@ const recordOf = (more: Partial<SignalRecord>): SignalRecord => ({
   routeReads: [],
   compactions: [],
   compactedSessionReads: [],
+  commits: [],
+  commitFiles: [],
   hookEvents: [],
   skillLoads: [],
   checkouts: [{ path: REPO, repo: REPO }],
@@ -190,6 +192,7 @@ const allow = (at: string, more: Partial<GateRow> = {}): GateRow => ({
   decision: "allow",
   reason: "accepted",
   repo: REPO,
+  head: null,
   fingerprint: null,
   ...more,
 });
@@ -404,6 +407,66 @@ describe("counting files read again after a compaction", () => {
 
   test("divides the re-reads by the compactions", () => {
     expect(rateOf("lost-context", record)).toEqual({ value: 0.67, count: 2, of: 3 });
+  });
+});
+
+describe("counting fix commits that point back at an earlier accepted commit", () => {
+  const sha = (digit: string) => digit.repeat(40);
+  const commit = (digit: string, minute: number, subject: string, repo = REPO) => ({
+    sha: sha(digit),
+    repo,
+    at: timed(minute),
+    subject,
+    kind: subject.split(":")[0] ?? null,
+  });
+  const files = (digit: string, ...paths: string[]) =>
+    paths.map((path) => ({ sha: sha(digit), path: `${REPO}/${path}` }));
+  const record = recordOf({
+    sessions: [session("a", "2026-10-14T08:00:00.000Z")],
+    hookEvents: [
+      allow(timed(0), { agent: "w1" }),
+      allow(timed(2)),
+      allow(timed(4), { reason: "no_code_change", agent: "w2" }),
+      allow(timed(6), { repo: null, head: sha("1") }),
+      allow(timed(8)),
+      allow(timed(11), { agent: "w1" }),
+    ],
+    commits: [
+      { ...commit("0", 0, "fix: before the log"), at: "2026-10-14T08:30:00.000Z" },
+      commit("1", 1, "feat: add a"),
+      commit("2", 3, "docs: note b"),
+      commit("3", 5, "fix: a again"),
+      commit("4", 5, "fix: a again"),
+      commit("5", 7, "fix: b and the readme"),
+      commit("6", 9, "fix: undo 1111111"),
+      commit("7", 10, "feat: elsewhere", OTHER),
+      commit("8", 12, "fix: a by its author"),
+    ],
+    commitFiles: [
+      ...files("0", "src/a.ts"),
+      ...files("1", "src/a.ts", "src/a.test.ts", "README.md"),
+      ...files("2", "src/b.ts"),
+      ...files("3", "src/a.ts"),
+      ...files("4", "src/a.ts"),
+      ...files("5", "src/b.ts", "src/a.test.ts", "README.md"),
+      ...files("8", "src/a.ts"),
+    ],
+  });
+
+  test("names the earlier commit a fix by another agent shares a file with, or names in its subject", () => {
+    expect(eventsOf("escaped-defects", record).map((e) => [e.at, e.kind, e.minutes, e.text])).toEqual([
+      [timed(1), "accepted commit", null, "11111111"],
+      [timed(3), "accepted commit", null, "22222222"],
+      [timed(7), "accepted commit", null, "55555555"],
+      [timed(9), "accepted commit", null, "66666666"],
+      [timed(12), "accepted commit", null, "88888888"],
+      [timed(5), "shared file", 4, "33333333 fix: a again <- 11111111"],
+      [timed(9), "names commit", 8, "66666666 fix: undo 1111111 <- 11111111"],
+    ]);
+  });
+
+  test("divides the escapes by the accepted commits", () => {
+    expect(rateOf("escaped-defects", record)).toEqual({ value: 0.4, count: 2, of: 5 });
   });
 });
 

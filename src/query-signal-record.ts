@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 import { invariant, unreachable } from "./assert";
 import type { Decision, Gate, HookEvent, Verdict } from "./ingest-event-kinds";
 import type { Tool } from "./ingest-tools";
+import { ESCAPE_REACH_DAYS } from "./query-escaped-defects";
 import { AGENT_TAIL_CHARS, INTERRUPTED } from "./query-interrupt";
 
 export type SessionRow = {
@@ -28,6 +29,16 @@ export type ReadRow = TimedRow & { readonly path: string };
 
 export type CheckoutRow = { readonly path: string; readonly repo: string };
 
+export type CommitRow = {
+  readonly sha: string;
+  readonly repo: string;
+  readonly at: string;
+  readonly subject: string;
+  readonly kind: string | null;
+};
+
+export type CommitFileRow = { readonly sha: string; readonly path: string };
+
 type LoadRow = TimedRow & {
   readonly skill: string;
   readonly bodySha256: string | null;
@@ -43,6 +54,7 @@ type HookColumns = {
   readonly decision: Decision | null;
   readonly reason: string | null;
   readonly repo: string | null;
+  readonly head: string | null;
   readonly fingerprint: string | null;
   readonly verdict: Verdict | null;
 };
@@ -55,6 +67,7 @@ export type GateRow = HookActor & {
   readonly decision: Decision;
   readonly reason: string;
   readonly repo: string | null;
+  readonly head: string | null;
   readonly fingerprint: string | null;
 };
 
@@ -75,9 +88,9 @@ function hookRowOf(columns: HookColumns): HookRow {
   const { at, sessionId, agent } = columns;
   switch (columns.event) {
     case "gate": {
-      const { gate, decision, reason, repo, fingerprint } = columns;
+      const { gate, decision, reason, repo, head, fingerprint } = columns;
       invariant(gate !== null && decision !== null && reason !== null, "a gate event has its gate fields");
-      return { at, sessionId, agent, event: "gate", gate, decision, reason, repo, fingerprint };
+      return { at, sessionId, agent, event: "gate", gate, decision, reason, repo, head, fingerprint };
     }
     case "verdict": {
       const { verdict, repo, fingerprint } = columns;
@@ -105,6 +118,8 @@ export type SignalRecord = {
   readonly hookEvents: readonly HookRow[];
   readonly skillLoads: readonly LoadRow[];
   readonly checkouts: readonly CheckoutRow[];
+  readonly commits: readonly CommitRow[];
+  readonly commitFiles: readonly CommitFileRow[];
   readonly labels: ReadonlyMap<string, string>;
   readonly newest: string | null;
 };
@@ -181,7 +196,7 @@ export function readSignalRecord(db: Database): SignalRecord {
     .all(READ_TOOL);
   const hookEvents = db
     .query<HookColumns, []>(
-      `SELECT ts AS at, event, session AS sessionId, agent, gate, decision, reason, repo, fingerprint, verdict
+      `SELECT ts AS at, event, session AS sessionId, agent, gate, decision, reason, repo, head, fingerprint, verdict
        FROM hook_event ORDER BY ts, src_file, src_line`,
     )
     .all()
@@ -193,6 +208,19 @@ export function readSignalRecord(db: Database): SignalRecord {
     )
     .all();
   const checkouts = db.query<CheckoutRow, []>("SELECT path, repo FROM checkout").all();
+  const commits = db
+    .query<CommitRow, []>("SELECT sha, repo, ts AS at, subject, kind FROM repo_commit ORDER BY ts, sha")
+    .all();
+  const firstHook = hookEvents[0]?.at ?? null;
+  const commitFiles =
+    firstHook === null
+      ? []
+      : db
+          .query<CommitFileRow, [string]>(
+            `SELECT f.sha, f.path FROM commit_file f JOIN repo_commit c ON c.sha = f.sha
+             WHERE c.ts >= strftime('%Y-%m-%dT%H:%M:%fZ', ?, '-${ESCAPE_REACH_DAYS} days')`,
+          )
+          .all(firstHook);
   const labels = new Map(
     db
       .query<{ repo: string; label: string }, []>(
@@ -213,6 +241,8 @@ export function readSignalRecord(db: Database): SignalRecord {
     hookEvents,
     skillLoads,
     checkouts,
+    commits,
+    commitFiles,
     labels,
     newest,
   };
