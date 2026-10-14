@@ -171,6 +171,11 @@ export function createIngester(db: Database, home: string) {
        time_to_first_token_ms = coalesce(excluded.time_to_first_token_ms, turn.time_to_first_token_ms)`,
   );
 
+  const insertCompaction = db.prepare(
+    `INSERT INTO compaction (session_id, ts, src_file, src_line) VALUES ($sessionId, $ts, $srcFile, $srcLine)
+     ON CONFLICT(src_file, src_line) DO UPDATE SET session_id = excluded.session_id, ts = excluded.ts`,
+  );
+
   const upsertCall = db.prepare(
     `INSERT INTO tool_call (id, session_id, message_id, model, attribution_skill, ts_call,
        tool_name, skill_name, file_path, command, src_file, src_line_call)
@@ -260,6 +265,7 @@ export function createIngester(db: Database, home: string) {
   const deleteSkillLoads = db.prepare<void, [string]>("DELETE FROM skill_load WHERE session_id = ?");
   const deleteToolCalls = db.prepare<void, [string]>("DELETE FROM tool_call WHERE session_id = ?");
   const deleteTurns = db.prepare<void, [string]>("DELETE FROM turn WHERE session_id = ?");
+  const deleteCompactions = db.prepare<void, [string]>("DELETE FROM compaction WHERE session_id = ?");
   const deleteUsage = db.prepare<void, [string]>("DELETE FROM usage WHERE session_id = ?");
   const deleteMessages = db.prepare<void, [string]>("DELETE FROM message WHERE session_id = ?");
   const clearTranscriptFields = db.prepare<void, [string]>(
@@ -275,6 +281,7 @@ export function createIngester(db: Database, home: string) {
     deleteSkillLoads.run(sessionId);
     deleteToolCalls.run(sessionId);
     deleteTurns.run(sessionId);
+    deleteCompactions.run(sessionId);
     deleteUsage.run(sessionId);
     deleteMessages.run(sessionId);
     clearTranscriptFields.run(sessionId);
@@ -464,6 +471,15 @@ export function createIngester(db: Database, home: string) {
         $status: t.status,
         $model: t.model,
         $timeToFirstTokenMs: t.timeToFirstTokenMs,
+      });
+    }
+
+    for (const c of parsed.compactions) {
+      insertCompaction.run({
+        $sessionId: spec.sessionId,
+        $ts: c.ts,
+        $srcFile: spec.path,
+        $srcLine: c.srcLine,
       });
     }
 

@@ -243,6 +243,22 @@ describe("parseClaudeChunk", () => {
     );
   });
 
+  test("keeps each compact boundary as a compaction, and no other system line", () => {
+    const boundary = JSON.stringify({
+      type: "system",
+      subtype: "compact_boundary",
+      content: "Conversation compacted",
+      timestamp: "2026-09-16T10:30:00Z",
+      compactMetadata: { trigger: "auto", preTokens: 767258 },
+    });
+    const other = JSON.stringify({ type: "system", subtype: "api_error", timestamp: "2026-09-16T10:31:00Z" });
+    const chunk = parseClaudeChunk([other, boundary], 4);
+    expect(chunk.compactions.map((c) => [c.ts, c.srcLine])).toEqual<unknown[]>([
+      ["2026-09-16T10:30:00.000Z", 5],
+    ]);
+    expect(chunk.dropped).toEqual([]);
+  });
+
   test("stores a time with an offset as UTC", () => {
     const [, first] = claudeTranscriptLines("s-1");
     const offset = withFields(first, { timestamp: "2026-09-16T12:01:00+02:00" });

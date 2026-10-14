@@ -233,6 +233,28 @@ const skillUsage = signalOf<string>({
   },
 });
 
+const lostContext = signalOf({
+  name: "lost-context",
+  value: "files read again after a compaction per compaction",
+  note:
+    "A re-read is a file the session read before a compaction, since the one before it, and read again after " +
+    "it, before the next; each file counts once per compaction. Only Claude Code's compactions count: Codex " +
+    "reads files through the shell, which keeps no path, and the other tools mark none.",
+  kinds: ["compaction", "re-read"] as const,
+  events: (timeline) =>
+    timeline.compactions.flatMap((compaction): readonly SignalEvent<"compaction" | "re-read">[] => [
+      event(compaction, "compaction"),
+      ...compaction.rereads.map((reread) =>
+        event(compaction, "re-read", minutesBetween(compaction.at, reread.at), reread.path),
+      ),
+    ]),
+  rate: (count) => ({
+    value: ratio(count("re-read"), count("compaction")),
+    count: count("re-read"),
+    of: count("compaction"),
+  }),
+});
+
 export const SIGNALS: readonly Signal[] = [
   ownerInterrupts,
   timeToLand,
@@ -242,6 +264,7 @@ export const SIGNALS: readonly Signal[] = [
   reviewReturns,
   blocks,
   skillUsage,
+  lostContext,
 ];
 
 export function signalNamed(name: string): Signal {

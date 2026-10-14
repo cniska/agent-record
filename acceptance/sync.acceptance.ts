@@ -286,7 +286,7 @@ test("AC-7 a sync over a malformed line from each tool, an unreadable file and a
 
   const result = sync(home);
   expect(result.dropped).toEqual([
-    { path: archivedPath(home, CLAUDE), lines: [9] },
+    { path: archivedPath(home, CLAUDE), lines: [10] },
     { path: archivedPath(home, CODEX), lines: [9] },
     { path: archivedPath(home, GROK_UPDATES), lines: [5] },
     { path: archivedPath(home, PI), lines: [5] },
@@ -339,6 +339,7 @@ const RECORD_TABLE_ORDER = {
   session: "id",
   message: "id",
   turn: "session_id, turn_id",
+  compaction: "src_file, src_line",
   usage: "response_id",
   tool_call: "id",
   git_command: "tool_call_id, position",

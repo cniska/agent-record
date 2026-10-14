@@ -111,6 +111,9 @@ export const TurnRow = z
   .readonly();
 export type TurnRow = z.infer<typeof TurnRow>;
 
+export const CompactionRow = z.strictObject({ ts: Timestamp, srcLine: z.number() }).readonly();
+export type CompactionRow = z.infer<typeof CompactionRow>;
+
 const ToolCall = z
   .strictObject({
     kind: z.literal("call"),
@@ -161,6 +164,7 @@ export const ParsedChunk = z
     messages: z.array(MessageRow).readonly(),
     usage: z.array(UsageRow).readonly(),
     turns: z.array(TurnRow).readonly(),
+    compactions: z.array(CompactionRow).readonly(),
     toolCalls: z.array(ToolCallRow).readonly(),
     skillLoads: z.array(SkillLoadRow).readonly(),
     dropped: z.array(z.number()).readonly(),

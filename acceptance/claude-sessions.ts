@@ -8,6 +8,7 @@ export type Step =
   | { readonly handback: string; readonly at: string }
   | { readonly bash: string; readonly at: string; readonly done: string }
   | { readonly read: string; readonly at: string }
+  | { readonly compacted: string }
   | { readonly rejected: string; readonly at: string }
   | { readonly skill: string; readonly at: string; readonly dir: string; readonly body: string }
   | { readonly preload: string; readonly at: string; readonly dir: string; readonly body: string };
@@ -79,6 +80,18 @@ function linesOf(sessionId: string, cwd: string, steps: readonly Step[], prefix:
       return [
         assistant(step.at, [{ type: "tool_use", id: tool, name: "Read", input: { file_path: step.read } }]),
         result(step.at, tool),
+      ];
+    }
+    if ("compacted" in step) {
+      return [
+        {
+          ...base,
+          type: "system",
+          subtype: "compact_boundary",
+          uuid,
+          timestamp: step.compacted,
+          content: "Conversation compacted",
+        },
       ];
     }
     if ("skill" in step) {

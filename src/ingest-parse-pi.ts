@@ -233,5 +233,15 @@ export function parsePiChunk(lines: readonly string[], firstLineNumber: number):
     }
   }
 
-  return { session, messages, usage, turns: [], toolCalls, skillLoads: [], dropped, cursorState: null };
+  return {
+    session,
+    messages,
+    usage,
+    turns: [],
+    compactions: [],
+    toolCalls,
+    skillLoads: [],
+    dropped,
+    cursorState: null,
+  };
 }

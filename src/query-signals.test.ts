@@ -30,6 +30,8 @@ const recordOf = (more: Partial<SignalRecord>): SignalRecord => ({
   rejections: [],
   gitRuns: [],
   routeReads: [],
+  compactions: [],
+  compactedSessionReads: [],
   hookEvents: [],
   skillLoads: [],
   checkouts: [{ path: REPO, repo: REPO }],
@@ -360,6 +362,48 @@ describe("counting skill loads per task by version", () => {
 
   test("divides the loads by the tasks", () => {
     expect(rateOf("skill-usage", record)).toEqual({ value: 1.5, count: 3, of: 2 });
+  });
+});
+
+describe("counting files read again after a compaction", () => {
+  const read = (sessionId: string, minute: number, path: string) => ({ sessionId, at: timed(minute), path });
+  const record = recordOf({
+    sessions: [
+      session("a", "2026-10-14T08:00:00.000Z"),
+      session("sub", "2026-10-14T08:30:00.000Z", { parentId: "a" }),
+    ],
+    compactions: [
+      { sessionId: "a", at: timed(10) },
+      { sessionId: "a", at: timed(20) },
+      { sessionId: "sub", at: timed(30) },
+    ],
+    compactedSessionReads: [
+      read("a", 1, "/r/one.ts"),
+      read("a", 2, "/r/two.ts"),
+      read("a", 11, "/r/one.ts"),
+      read("a", 12, "/r/one.ts"),
+      read("a", 13, "/r/new.ts"),
+      read("a", 21, "/r/two.ts"),
+      read("a", 22, "/r/new.ts"),
+      read("sub", 25, "/r/sub.ts"),
+      read("a", 31, "/r/sub.ts"),
+    ],
+  });
+
+  test("counts each file read before a compaction, since the one before, and again before the next, once", () => {
+    expect(
+      eventsOf("lost-context", record).map((e) => [e.at, e.kind, e.minutes, e.text, e.sessionId]),
+    ).toEqual([
+      [timed(10), "compaction", null, null, "a"],
+      [timed(10), "re-read", 1, "/r/one.ts", "a"],
+      [timed(20), "compaction", null, null, "a"],
+      [timed(20), "re-read", 2, "/r/new.ts", "a"],
+      [timed(30), "compaction", null, null, "a"],
+    ]);
+  });
+
+  test("divides the re-reads by the compactions", () => {
+    expect(rateOf("lost-context", record)).toEqual({ value: 0.67, count: 2, of: 3 });
   });
 });
 

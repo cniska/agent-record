@@ -20,11 +20,11 @@ type OwnerMessageRow = {
   readonly agentBefore: string | null;
 };
 
-type TimedRow = { readonly sessionId: string; readonly at: string };
+export type TimedRow = { readonly sessionId: string; readonly at: string };
 
 export type GitRunRow = TimedRow & { readonly subcommand: "commit" | "push"; readonly dir: string };
 
-type RouteReadRow = TimedRow & { readonly path: string };
+export type ReadRow = TimedRow & { readonly path: string };
 
 export type CheckoutRow = { readonly path: string; readonly repo: string };
 
@@ -99,7 +99,9 @@ export type SignalRecord = {
   readonly ownerMessages: readonly OwnerMessageRow[];
   readonly rejections: readonly TimedRow[];
   readonly gitRuns: readonly GitRunRow[];
-  readonly routeReads: readonly RouteReadRow[];
+  readonly routeReads: readonly ReadRow[];
+  readonly compactions: readonly TimedRow[];
+  readonly compactedSessionReads: readonly ReadRow[];
   readonly hookEvents: readonly HookRow[];
   readonly skillLoads: readonly LoadRow[];
   readonly checkouts: readonly CheckoutRow[];
@@ -108,6 +110,8 @@ export type SignalRecord = {
 };
 
 const ROUTES_DIR = "/skills/task/references/";
+
+const READ_TOOL = "Read";
 
 const INTERRUPTED_MARKER = `${INTERRUPTED}%`;
 
@@ -159,11 +163,22 @@ export function readSignalRecord(db: Database): SignalRecord {
     )
     .all();
   const routeReads = db
-    .query<RouteReadRow, [string]>(
+    .query<ReadRow, [string, string]>(
       `SELECT session_id AS sessionId, ts_call AS at, file_path AS path FROM tool_call
-       WHERE tool_name = 'Read' AND instr(file_path, ?) > 0 AND ts_call IS NOT NULL ORDER BY ts_call`,
+       WHERE tool_name = ? AND instr(file_path, ?) > 0 AND ts_call IS NOT NULL ORDER BY ts_call`,
     )
-    .all(ROUTES_DIR);
+    .all(READ_TOOL, ROUTES_DIR);
+  const compactions = db
+    .query<TimedRow, []>("SELECT session_id AS sessionId, ts AS at FROM compaction ORDER BY ts")
+    .all();
+  const compactedSessionReads = db
+    .query<ReadRow, [string]>(
+      `SELECT session_id AS sessionId, ts_call AS at, file_path AS path FROM tool_call
+       WHERE tool_name = ? AND file_path IS NOT NULL AND ts_call IS NOT NULL
+         AND session_id IN (SELECT session_id FROM compaction)
+       ORDER BY ts_call`,
+    )
+    .all(READ_TOOL);
   const hookEvents = db
     .query<HookColumns, []>(
       `SELECT ts AS at, event, session AS sessionId, agent, gate, decision, reason, repo, fingerprint, verdict
@@ -193,6 +208,8 @@ export function readSignalRecord(db: Database): SignalRecord {
     rejections,
     gitRuns,
     routeReads,
+    compactions,
+    compactedSessionReads,
     hookEvents,
     skillLoads,
     checkouts,

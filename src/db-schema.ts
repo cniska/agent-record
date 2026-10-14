@@ -4,7 +4,7 @@ import { HOWS } from "./ingest-skill-load";
 import { KINDS, TOOLS } from "./ingest-tools";
 
 const sqlList = (values: readonly string[]): string => values.map((value) => `'${value}'`).join(",");
-export const SCHEMA_VERSION = 12;
+export const SCHEMA_VERSION = 13;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS source_file (
@@ -91,6 +91,15 @@ CREATE TABLE IF NOT EXISTS turn (
   PRIMARY KEY (session_id, turn_id)
 );
 CREATE INDEX IF NOT EXISTS turn_session ON turn(session_id, ts_end);
+
+CREATE TABLE IF NOT EXISTS compaction (
+  session_id      TEXT NOT NULL REFERENCES session(id),
+  ts              TEXT NOT NULL,
+  src_file        TEXT NOT NULL REFERENCES source_file(path) ON UPDATE CASCADE,
+  src_line        INTEGER NOT NULL,
+  PRIMARY KEY (src_file, src_line)
+);
+CREATE INDEX IF NOT EXISTS compaction_session ON compaction(session_id, ts);
 
 CREATE TABLE IF NOT EXISTS tool_call (
   id              TEXT PRIMARY KEY,

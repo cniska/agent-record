@@ -328,6 +328,7 @@ export function parseCodexChunk(
     messages,
     usage,
     turns,
+    compactions: [],
     toolCalls,
     skillLoads,
     dropped,

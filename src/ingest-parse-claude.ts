@@ -13,6 +13,7 @@ import {
   UnkeptPart,
 } from "./ingest-parse";
 import {
+  type CompactionRow,
   type MessageRow,
   NO_FACTS,
   type ParsedChunk,
@@ -189,6 +190,10 @@ const ClaudeTurnLine = z
     messageCount: line.messageCount,
   }));
 
+const ClaudeCompactLine = z
+  .looseObject({ timestamp: Timestamp })
+  .transform((line) => ({ kind: "compaction" as const, ts: line.timestamp }));
+
 function claudeKind(value: unknown): string {
   const type = typeOf(value);
   return type === "system" ? `system/${textAt(value, "subtype")}` : type;
@@ -200,6 +205,7 @@ const ClaudeLine = byKind(
     "ai-title": ClaudeAiTitleLine,
     "custom-title": ClaudeCustomTitleLine,
     "system/turn_duration": ClaudeTurnLine,
+    "system/compact_boundary": ClaudeCompactLine,
     assistant: ClaudeAssistantLine,
     user: ClaudeUserLine,
   },
@@ -273,6 +279,7 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
   const messages: MessageRow[] = [];
   const usage: UsageRow[] = [];
   const turns: TurnRow[] = [];
+  const compactions: CompactionRow[] = [];
   const toolCalls: ToolCallRow[] = [];
   const skillLoads: SkillLoadRow[] = [];
   const dropped: number[] = [];
@@ -303,6 +310,10 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
           model: null,
           timeToFirstTokenMs: null,
         });
+        break;
+
+      case "compaction":
+        compactions.push({ ts: line.ts, srcLine });
         break;
 
       case "assistant": {
@@ -453,5 +464,5 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
     }
   }
 
-  return { session, messages, usage, turns, toolCalls, skillLoads, dropped, cursorState: null };
+  return { session, messages, usage, turns, compactions, toolCalls, skillLoads, dropped, cursorState: null };
 }

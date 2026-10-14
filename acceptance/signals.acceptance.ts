@@ -4,6 +4,7 @@ import { type ClaudeSession, type Step, withClaudeSessions } from "./claude-sess
 import {
   type Home,
   QUERY_RESULT,
+  rebuild,
   refused,
   removeScratch,
   runCli,
@@ -258,7 +259,7 @@ test("AC-44 signal splits each week by repo or route, newest first, and refuses 
     code: "unknown_signal",
     resolve:
       "one of: owner-interrupts, time-to-land, stranded-work, review-loops, false-stops, review-returns, blocks, " +
-      "skill-usage",
+      "skill-usage, lost-context",
   });
   const grouping = refused(runCli(home, ["query", "signal", "stranded-work", "--by", "day"]), "query");
   expect({ code: grouping.code, resolve: grouping.resolve }).toEqual({
@@ -301,6 +302,7 @@ test("AC-45 before-after compares every signal on either side of a commit, from 
     "review-returns",
     "blocks",
     "skill-usage",
+    "lost-context",
   ]);
   expect(around.denominator).toBe(
     `commit ${sha} at 2026-09-18T00:00:00.000Z; before 2026-09-04T00:00:00.000Z to 2026-09-18T00:00:00.000Z, ` +
@@ -455,4 +457,47 @@ test("AC-51 --skill keeps the tasks that loaded a skill and before-after names t
     ["before-after", prefix, "--skill", "review"],
   ].map((args) => refused(runCli(home, ["query", ...args]), "query").code);
   expect(codes).toEqual(["unknown_skill", "unknown_skill"]);
+});
+
+test("AC-54 lost-context counts the files a session read again after a compaction, per compaction", () => {
+  const home = synced([
+    {
+      id: "long",
+      cwd: "/Users/x/code/demo",
+      steps: [
+        { owner: "add the parser", at: "2026-09-16T09:00:00Z" },
+        { read: "/Users/x/code/demo/src/one.ts", at: "2026-09-16T09:01:00Z" },
+        { read: "/Users/x/code/demo/src/two.ts", at: "2026-09-16T09:02:00Z" },
+        { compacted: "2026-09-16T09:10:00Z" },
+        { read: "/Users/x/code/demo/src/one.ts", at: "2026-09-16T09:13:00Z" },
+        { read: "/Users/x/code/demo/src/one.ts", at: "2026-09-16T09:14:00Z" },
+        { read: "/Users/x/code/demo/src/new.ts", at: "2026-09-16T09:15:00Z" },
+        { compacted: "2026-09-16T09:20:00Z" },
+        { read: "/Users/x/code/demo/src/two.ts", at: "2026-09-16T09:21:00Z" },
+      ],
+      subagents: [
+        {
+          id: "helper",
+          agentType: "Explore",
+          steps: [
+            { read: "/Users/x/code/demo/src/one.ts", at: "2026-09-16T09:03:00Z" },
+            { compacted: "2026-09-16T09:04:00Z" },
+          ],
+        },
+      ],
+    },
+  ]);
+
+  const counted = () => query(home, ["signal", "lost-context"]).rows;
+  expect(counted()).toEqual([["2026-09-14", 0.33, 1, 3, "compaction 3, re-read 1"]]);
+  const events = query(home, ["signal-events", "lost-context"]).rows;
+  expect(events.map(([at, kind, , , minutes, session, text]) => [at, kind, minutes, session, text])).toEqual([
+    ["2026-09-16T09:20:00.000Z", "compaction", null, "long", null],
+    ["2026-09-16T09:10:00.000Z", "compaction", null, "long", null],
+    ["2026-09-16T09:10:00.000Z", "re-read", 3, "long", "/Users/x/code/demo/src/one.ts"],
+    ["2026-09-16T09:04:00.000Z", "compaction", null, "long", null],
+  ]);
+
+  rebuild(home);
+  expect(counted()).toEqual([["2026-09-14", 0.33, 1, 3, "compaction 3, re-read 1"]]);
 });

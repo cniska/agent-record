@@ -10,6 +10,7 @@ import {
   reviewRounds,
 } from "./query-hook-timeline";
 import { type Cause, classify } from "./query-interrupt";
+import { type Reread, rereadsAfterCompactions } from "./query-lost-context";
 import type { CheckoutRow, GitRunRow, HookRow, SessionRow, SignalRecord } from "./query-signal-record";
 import { EpochMs } from "./timestamp";
 
@@ -40,6 +41,8 @@ type CommitRun = Placed & { readonly onOriginAt: string | null; readonly lastOfS
 
 type Kinded<Kind extends string> = Placed & { readonly kind: Kind };
 
+type Compaction = Placed & { readonly rereads: readonly Reread[] };
+
 export type SkillLoaded = Placed & {
   readonly skill: string;
   readonly bodySha256: string | null;
@@ -55,6 +58,7 @@ export type Timeline = {
   readonly reviews: readonly Kinded<Reviewed["kind"]>[];
   readonly blocks: readonly Kinded<Blocked["kind"]>[];
   readonly skillLoads: readonly SkillLoaded[];
+  readonly compactions: readonly Compaction[];
   readonly newest: string | null;
 };
 
@@ -239,6 +243,20 @@ export function timelineOf(record: SignalRecord): Timeline {
     };
   });
 
+  const compactions: Compaction[] = rereadsAfterCompactions(
+    record.compactions,
+    record.compactedSessionReads,
+  ).map((compaction) => {
+    const root = rootOf(compaction.sessionId);
+    return {
+      at: compaction.at,
+      sessionId: root,
+      repo: repoOfRoot(root),
+      ...inTask(root, ms(compaction.at)),
+      rereads: compaction.rereads,
+    };
+  });
+
   const placeHook = <Kind extends string>({ row, kind }: { row: HookRow; kind: Kind }): Kinded<Kind> => {
     const root = rootOf(row.sessionId);
     const named = repoNamed(row);
@@ -262,6 +280,7 @@ export function timelineOf(record: SignalRecord): Timeline {
       .filter(({ row }) => hookLoggedTasks.has(taskKey(rootOf(row.sessionId), ms(row.at))))
       .map(placeHook),
     skillLoads,
+    compactions,
     newest: record.newest,
   };
 }
