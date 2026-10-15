@@ -23,6 +23,9 @@ const run = (sessionId: string, at: string, subcommand: GitRunRow["subcommand"],
   at,
   subcommand,
   dir,
+  callAt: at,
+  commitsInCall: subcommand === "commit" ? 1 : 0,
+  command: "",
 });
 
 const recordOf = (more: Partial<SignalRecord>): SignalRecord => ({

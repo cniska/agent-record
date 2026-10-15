@@ -33,7 +33,13 @@ export type OwnerMessageRow = OpeningRow & {
 
 export type TimedRow = { readonly sessionId: string; readonly at: string };
 
-export type GitRunRow = TimedRow & { readonly subcommand: "commit" | "push"; readonly dir: string };
+export type GitRunRow = TimedRow & {
+  readonly subcommand: "commit" | "push";
+  readonly dir: string;
+  readonly callAt: string | null;
+  readonly commitsInCall: number;
+  readonly command: string;
+};
 
 export type ReadRow = TimedRow & { readonly path: string };
 
@@ -224,7 +230,10 @@ export function readSignalRecord(db: Database): SignalRecord {
     .all();
   const gitRuns = db
     .query<GitRunRow, []>(
-      `SELECT c.session_id AS sessionId, c.ts_result AS at, g.subcommand, g.dir
+      `SELECT c.session_id AS sessionId, c.ts_result AS at, g.subcommand, g.dir,
+              c.ts_call AS callAt, c.command,
+              (SELECT count(*) FROM git_command x WHERE x.tool_call_id = c.id AND x.subcommand = 'commit')
+                AS commitsInCall
        FROM git_command g JOIN tool_call c ON c.id = g.tool_call_id
        WHERE g.subcommand IN ('commit', 'push') AND g.dir IS NOT NULL AND ${SUCCEEDED}
        ORDER BY c.ts_result`,

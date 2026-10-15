@@ -152,10 +152,17 @@ export function scratchRepo(repo: string, origin: string, commits: readonly Comm
   return repo;
 }
 
+const SCRATCH_BRANCH = "side";
+
 export function scratchWorktree(repo: string, worktree: string, commit: Commit): string {
-  git(repo, ["worktree", "add", "--quiet", "-b", "side", worktree]);
+  git(repo, ["worktree", "add", "--quiet", "-b", SCRATCH_BRANCH, worktree]);
   commitTo(worktree, commit);
   return worktree;
+}
+
+export function landAndRemoveWorktree(repo: string, worktree: string): void {
+  git(repo, ["merge", "--quiet", "--ff-only", SCRATCH_BRANCH]);
+  git(repo, ["worktree", "remove", worktree]);
 }
 
 export function commitTo(checkout: string, { subject, file, at }: Commit): void {

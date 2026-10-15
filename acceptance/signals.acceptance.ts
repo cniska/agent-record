@@ -4,6 +4,7 @@ import { type ClaudeSession, type Step, withClaudeSessions } from "./claude-sess
 import {
   commitTo,
   type Home,
+  landAndRemoveWorktree,
   QUERY_RESULT,
   rebuild,
   refused,
@@ -13,6 +14,7 @@ import {
   scratchHome,
   scratchRepo,
   scratchTempDir,
+  scratchWorktree,
   succeeded,
   sync,
 } from "./cli";
@@ -166,6 +168,33 @@ test("AC-42 stranded-work counts two stranded commit runs of three, one of them 
 
   expect(query(home, ["signal", "stranded-work"]).rows).toEqual([
     ["2026-09-14", 0.67, 2, 3, "pushed 1, stranded 1, ended unpushed 1"],
+  ]);
+});
+
+test("AC-70 a commit run in a worktree removed before sync counts in the repo its commit landed in, and so does its push", () => {
+  const repo = appRepo();
+  const subject = "feat: add the parser";
+  const worktree = scratchWorktree(repo, join(scratchDirOutsideTemp(), "trees", "slice"), {
+    subject,
+    file: "src/parser.ts",
+    at: "2026-09-16T09:00:01Z",
+  });
+  landAndRemoveWorktree(repo, worktree);
+  const home = synced([
+    {
+      id: "work",
+      cwd: repo,
+      steps: [
+        { owner: "add the parser", at: "2026-09-16T08:50:00Z" },
+        ran(`git -C ${worktree} commit -m "${subject}"`, "2026-09-16T09:00:00Z", "2026-09-16T09:00:02Z"),
+        ran(`git -C ${worktree} push`, "2026-09-16T09:30:00Z", "2026-09-16T09:30:00Z"),
+      ],
+    },
+    { id: "after", cwd: repo, steps: [later("2026-09-16T14:00:00Z")] },
+  ]);
+
+  expect(query(home, ["signal", "stranded-work", "--by", "repo"]).rows).toEqual([
+    ["2026-09-14", repo, "acme/app", 0, 0, 1, "pushed 1"],
   ]);
 });
 

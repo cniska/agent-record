@@ -126,9 +126,9 @@ The signals count the friction the owner feels, so a change to the workflow can 
 
 - **Owner message**: what the owner typed into a top-level session. In Claude Code, a user message the transcript marks as human (or as typed or queued, before Claude Code marked who wrote it), a message the owner queued while a turn ran (FR-90), and the `[Request interrupted by user]` marker; in Codex, a typed user message in a session `codex exec` did not run; in Grok, pi and omp, every user message. A slash command, a shell escape and their output are not owner messages, and a subagent session holds none.
 - **Task**: a top-level session and its subagents, from a task prompt to the next one. A task prompt is the session's start, or an owner message that comes after the agent has said something, is not an interrupt (FR-70), and was not typed while a turn ran (FR-90). A task's id is the turn id of the user message that opens it, or that message's own id where it has no turn id: the first task opens at the session's first user message, a slash command included, and a later one at its task prompt; a session with no user message gives its first task the session's id. A task is its top-level session's: two sessions whose prompts share a turn id, as a forked transcript copies it, hold two tasks.
-- **Commit run** and **push run**: a git run (FR-13) of `commit` or `push` whose tool call did not fail, at the time its result came back. It counts in the repo the record holds for the checkout its directory lies in, the innermost when checkouts nest; one outside every checkout the record indexes (FR-19) is not counted. A **commit** stays what `repo_commit` holds.
+- **Commit run** and **push run**: a git run (FR-13) of `commit` or `push` whose tool call did not fail, at the time its result came back. It counts in the repo the record holds for the checkout its directory lies in, the innermost when checkouts nest; one outside every checkout the record indexes (FR-19) counts in the repo FR-104 finds for its directory, and is not counted when it finds none. A **commit** stays what `repo_commit` holds.
 - **On origin**: a commit run is on origin from the first push run in its repo at or after it, in any session. A push the owner ran outside every session is not seen.
-- **Repo**: the record's repo (FR-19), shown with its label. A commit run counts in its own repo, and a task that made one in the repo of its last; an owner message and a task that made none count in the repo of the top-level session's project.
+- **Repo**: the record's repo (FR-19), shown with its label. A commit run counts in its own repo, and a task that made one in the repo of its last; an owner message and a task that made none count in the repo of the top-level session's project, found as a commit run's directory is.
 - **Tag**: a `tag` line of the hook event log (§2.13) tags the task its time falls in, in the top-level session the line names, a subagent's line included. A task's tag for a key is the value of the first such line with that key; `none` when it has none. A workflow that wants a grouping, such as the route a task took, writes the tag; the record infers none.
 - **Week**: Monday to Sunday in UTC, named by its Monday.
 
@@ -163,7 +163,7 @@ The format, version 1:
 
 Terms for the signals of this section, beside those of §2.12. "Before", "after" and "between" follow the lines in time order, then by file and line, since the log's times are to the second.
 
-- **Hook event's place**: its top-level session is the session the line names, a subagent's line included. It counts in the record's repo of the checkout its `repo` lies in, and in no repo when that path lies in no checkout the record indexes; a line with no `repo` counts in the repo of its session's project. Its tags are its task's (§2.12). `sync` reads each `repo` a line names as a checkout, as it reads a session's working directory (FR-19), so a worktree a hook named counts in its repo while it is still on disk.
+- **Hook event's place**: its top-level session is the session the line names, a subagent's line included. It counts in the record's repo of the checkout its `repo` lies in, and, when that path lies in no checkout the record indexes, in the repo FR-104 finds for it or in none; a line with no `repo` counts in the repo of its session's project. Its tags are its task's (§2.12). `sync` reads each `repo` a line names as a checkout, as it reads a session's working directory (FR-19), so a worktree a hook named counts in its repo while it is still on disk, and where FR-104 places it once removed.
 - **Denial**: a `gate` line whose decision is `deny`.
 - **Stop**: a denial, unless the same session and agent's previous `gate` or `verdict` line was a denial of the same gate, reason and `repo`: an agent that runs the same refused command again meets one stop.
 - **Reviewed commit**: a commit-gate `allow`, of any reason, before which an `accept` verdict for its `repo` was recorded in its top-level session since that session's previous commit-gate `allow` in the same `repo`. A retried commit, or one no `accept` verdict preceded, is no reviewed commit. Repos here are the paths the lines name.
@@ -229,6 +229,10 @@ The steps of one task, for an agent to read instead of whole transcripts.
 - **FR-101** — *Retired: a release no longer updates itself; each channel updates the way it installed.*
 - **FR-102** — *Retired: a release no longer updates itself; each channel updates the way it installed.*
 - **FR-103** — `rebuild`, and a `sync` that rebuilds an older record (FR-28), report as `unreadCheckouts` each checkout the record held before and no longer holds: a checkout no longer on disk is not read (FR-23), so its history and tracked files are lost, and a rebuild loses nothing else.
+
+### 2.22 Work in a removed worktree
+
+- **FR-104** — A directory that lies in no checkout the record indexes, such as a worktree removed before `sync` read it, is in the repo whose history holds the commits made there. A commit run there whose tool call made no other commit names a repo when exactly one repo holds a commit whose author time falls within the call, from a second before it started to a second after its result came back, and whose subject the call's command holds between quotes or line breaks. The directory is in the repo its commit runs name, and in no repo when they name none or more than one. Every reading of a path's repo finds it there beside the indexed checkouts: a git run's directory, a session's project and a hook line's `repo`.
 
 ## 3. Non-functional requirements
 
@@ -322,6 +326,7 @@ The steps of one task, for an agent to read instead of whole transcripts.
 - **AC-67** — *Retired: it proved the self-update, which a release no longer has.*
 - **AC-68** — *Retired: it proved the self-update, which a release no longer has.*
 - **AC-69** — Sync a fixture repo, delete it, and `rebuild` twice; then, in another home, sync a fixture repo, delete it, lower the schema version and sync: the first rebuild names the deleted checkout and the second none, each names its own backup, the second removes the first one's, `doctor` then names only the second one's with its size, and with the record's `-wal` and `-shm` removed, a copy of the first one's backup moved over the record holds the commits again; the sync reports `rebuilt` naming the checkout and its backup, keeps every session, and holds no commits. (FR-24, FR-28, FR-103)
+- **AC-70** — Create a worktree of a fixture repo, commit in it, fast-forward the repo onto it and remove the worktree, then sync a session that committed and pushed in the worktree: `signal stranded-work --by repo` counts the commit run in the fixture repo, pushed. (FR-104)
 
 ## 6. Deliverables
 

@@ -12,8 +12,9 @@ import {
 } from "./query-hook-timeline";
 import type { Cause } from "./query-interrupt";
 import { type Reread, rereadsAfterCompactions } from "./query-lost-context";
+import { repoFinder } from "./query-run-repo";
 import { asksSecondRead } from "./query-second-read";
-import type { CheckoutRow, GitRunRow, HookRow, SessionRow, SignalRecord } from "./query-signal-record";
+import type { GitRunRow, HookRow, SessionRow, SignalRecord } from "./query-signal-record";
 import { type Stretch, stepStretches } from "./query-step-cost";
 import {
   type SaidRow,
@@ -105,14 +106,6 @@ const ms = (at: string): number => Date.parse(at);
 
 const iso = (time: number | null): string | null => (time === null ? null : EpochMs.parse(time));
 
-function repoFinder(checkouts: readonly CheckoutRow[]): (path: string | null) => string | null {
-  const longestFirst = [...checkouts].sort((a, b) => b.path.length - a.path.length);
-  return (path) => {
-    if (path === null) return null;
-    return longestFirst.find((c) => path === c.path || path.startsWith(`${c.path}/`))?.repo ?? null;
-  };
-}
-
 function rootFinder(sessions: ReadonlyMap<string, SessionRow>): (id: string) => string {
   return (id) => {
     const seen = new Set<string>();
@@ -187,7 +180,7 @@ function pushesByRepo(runs: readonly Run[]): (run: Run) => number | null {
 export function timelineOf(record: SignalRecord): Timeline {
   const sessions = new Map(record.sessions.map((session) => [session.id, session]));
   const rootOf = rootFinder(sessions);
-  const repoOf = repoFinder(record.checkouts);
+  const repoOf = repoFinder(record);
   const repoOfRoot = (root: string) => repoOf(sessions.get(root)?.project ?? null);
   const said = saidRows(record.ownerMessages);
   const { tasks: startsByRoot, ownerTyped, pending } = tasksByRoot(record, said);
