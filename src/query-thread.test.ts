@@ -214,6 +214,24 @@ describe("thread", () => {
     }
   });
 
+  test("reads a subagent named as its transcript file names it, agent- and its id", () => {
+    const db = new Database(":memory:");
+    try {
+      db.run(SCHEMA_SQL);
+      db.run(
+        "INSERT INTO session (id, tool) VALUES ('root', 'claude'), ('ab12@root', 'claude'), ('agent-top', 'claude')",
+      );
+      const run = (arg: string) => thread.run(db, { ...ctx, arg });
+
+      expect(run("agent-ab").denominator).toBe(run("ab").denominator);
+      expect(run("agent-ab").denominator).toStartWith("session ab12@root:");
+      expect(run("agent-to").denominator).toStartWith("session agent-top:");
+      expect(run("agent-ro").note).toBe("no session starts with agent-ro");
+    } finally {
+      db.close();
+    }
+  });
+
   test("reads what was said, and centers on a timestamp when given one", () => {
     const root = mkdtempSync(join(tmpdir(), "agent-record-q-"));
     try {

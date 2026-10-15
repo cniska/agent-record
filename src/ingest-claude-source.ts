@@ -2,7 +2,7 @@ import { basename, dirname, join } from "node:path";
 import { z } from "zod";
 import type { SourceFile } from "./ingest";
 import type { Failure } from "./ingest-contract";
-import { sessionIdOf, subagentSessionId, ToolCallId } from "./ingest-ids";
+import { agentIdOfFileName, sessionIdOf, subagentSessionId, ToolCallId } from "./ingest-ids";
 import { nonEmpty } from "./ingest-parse";
 import { parseClaudeChunk } from "./ingest-parse-claude";
 import { readSidecar } from "./ingest-source-read";
@@ -47,7 +47,8 @@ const SubagentMeta = z.looseObject({ agentType: z.string().optional(), toolUseId
 
 function subagent(path: string, fail: Failure): SourceFile[] {
   const parentId = sessionIdOf(basename(dirname(dirname(path))));
-  const agentId = nonEmpty(basename(path, ".jsonl").replace(/^agent-/, ""));
+  const name = basename(path, ".jsonl");
+  const agentId = nonEmpty(agentIdOfFileName(name) ?? name);
   if (parentId === null || agentId === null) return [];
   const meta = readSidecar(metaPathOf(path), SubagentMeta, fail);
   return [

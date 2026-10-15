@@ -613,6 +613,7 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
     `session worker@coordinator and the 1 subagents under it, in task ${first} of coordinator: 15 steps, 0 still running`,
   );
   expect(new Set(subagent.rows.map(([line]) => JSON.parse(String(line)).task))).toEqual(new Set([first]));
+  expect(query(home, ["trace", "agent-worker", "--rows", "100"])).toEqual(subagent);
   const refusal = (args: readonly string[]) => {
     const error = refused(runCli(home, ["query", "trace", ...args]), "query");
     return { code: error.code, meta: error.meta };

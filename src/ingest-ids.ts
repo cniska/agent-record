@@ -19,6 +19,12 @@ export function subagentSessionId(agentId: string, topLevel: SessionId): Session
   return SessionId.parse(`${agentId}${SUBAGENT_OF}${topLevel}`);
 }
 
+const SUBAGENT_FILE = "agent-";
+
+export function agentIdOfFileName(name: string): string | null {
+  return name.startsWith(SUBAGENT_FILE) ? name.slice(SUBAGENT_FILE.length) : null;
+}
+
 export function subagentSessionIdSql(agentColumn: string, topLevelColumn: string): string {
   return `${agentColumn} || '${SUBAGENT_OF}' || ${topLevelColumn}`;
 }

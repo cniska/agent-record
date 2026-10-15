@@ -1,5 +1,6 @@
 import type { Database, SQLQueryBindings } from "bun:sqlite";
 import { invariant } from "./assert";
+import { agentIdOfFileName, subagentSessionSql } from "./ingest-ids";
 import { type Cell, type Rows, refuseQuery } from "./query-contract";
 import { ArgumentTimestamp, type Timestamp } from "./timestamp";
 
@@ -47,10 +48,13 @@ export function timeFlag(flag: string, value: string): Timestamp {
 
 export function sessionByPrefix(db: Database, query: string, prefix: string): string | null {
   const found = db
-    .query<{ id: string }, [string]>(
-      "SELECT id FROM session WHERE instr(lower(id), lower(?)) = 1 ORDER BY id LIMIT 2",
+    .query<{ id: string }, [string, string | null]>(
+      `SELECT id FROM session
+       WHERE instr(lower(id), lower(?1)) = 1
+          OR (${subagentSessionSql("id")} AND instr(lower(id), lower(?2)) = 1)
+       ORDER BY id LIMIT 2`,
     )
-    .all(prefix);
+    .all(prefix, agentIdOfFileName(prefix));
   if (found.length > 1) {
     throw refuseQuery("ambiguous_session", { query, prefix, matches: found.map((session) => session.id) });
   }
