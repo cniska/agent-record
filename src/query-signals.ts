@@ -347,8 +347,8 @@ const stepCost = signalOf<string, StepSpend>({
   name: "step-cost",
   value: "input tokens with cache reads and writes per accepted commit, over every step of every loop",
   note:
-    "A step is an agent kind: a reviewer, coach or researcher by its agent type; a coordinator, a session that " +
-    "loaded coordinate; a worker, one that loaded task, split by the skill it loaded last; other, the rest. " +
+    "A step is a subagent's namespaced agent type after its colon, or else the skill the session loaded last, " +
+    "preloads aside, and before its first a subagent's agent type or none. " +
     "Each response costs its output and its input with cache reads and writes, and its minutes since the later " +
     "of the session's previous response, its start, the owner's last message and a subagent's last return " +
     "there, so a wait on the owner or a subagent counts in neither. An event is a stretch of one session's " +

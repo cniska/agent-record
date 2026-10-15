@@ -599,7 +599,7 @@ describe("costing each step of every loop by its tokens and minutes", () => {
     sessions: [
       session("a", timed(0)),
       session("w", timed(10), { parentId: "a", agentType: "general-purpose" }),
-      session("r", timed(20), { parentId: "a", agentType: "acme:reviewer" }),
+      session("r", timed(20), { parentId: "a", agentType: "acme:checker" }),
       session("e", timed(25), { parentId: "a", agentType: "Explore" }),
     ],
     ownerMessages: [
@@ -608,15 +608,16 @@ describe("costing each step of every loop by its tokens and minutes", () => {
     ],
     subagentReturns: [{ sessionId: "a", at: timed(30) }],
     skillLoads: [
-      load("a", 0, "coordinate", "a"),
-      load("w", 10, "task", "b"),
-      load("w", 12, "build", "c"),
-      load("r", 20, "design-review", "d", true),
+      load("a", 0, "plan", "a"),
+      load("w", 11, "deploy", "b"),
+      load("w", 12, "lint", "c"),
+      load("r", 20, "style", "d", true),
     ],
     responses: [
       spent("a", 1, 10, 1000),
       spent("a", 31, 10, 2000),
       spent("a", 45, 10, 3000),
+      spent("w", 10, 2, 200),
       spent("w", 11, 5, 500),
       spent("w", 13, 5, 600),
       spent("w", 14, 5, 700),
@@ -629,22 +630,23 @@ describe("costing each step of every loop by its tokens and minutes", () => {
     ],
   });
 
-  test("names each stretch by its kind, a worker's by its last skill, timed from the owner or a subagent's return", () => {
+  test("names each stretch by a namespaced agent type after its colon, or else by the last skill loaded, timed from the owner or a subagent's return", () => {
     expect(eventsOf("step-cost", record).map((e) => [e.at, e.kind, e.minutes, e.version, e.text])).toEqual([
-      [timed(1), "coordinator", 2, "coordinate aaaaaaaa", "output 20, input 3000, coordinate aaaaaaaa"],
-      [timed(45), "coordinator", 5, "coordinate aaaaaaaa", "output 10, input 3000, coordinate aaaaaaaa"],
-      [timed(11), "worker task", 1, "task bbbbbbbb", "output 5, input 500, task bbbbbbbb"],
-      [timed(13), "worker build", 3, "build cccccccc", "output 10, input 1300, build cccccccc"],
-      [timed(22), "reviewer", 2, "design-review dddddddd", "output 20, input 800, design-review dddddddd"],
-      [timed(26), "other", 1, "Explore", "output 1, input 100, Explore"],
+      [timed(1), "plan", 2, "plan aaaaaaaa", "output 20, input 3000, plan aaaaaaaa"],
+      [timed(45), "plan", 5, "plan aaaaaaaa", "output 10, input 3000, plan aaaaaaaa"],
+      [timed(10), "general-purpose", 0, null, "output 2, input 200, -"],
+      [timed(11), "deploy", 1, "deploy bbbbbbbb", "output 5, input 500, deploy bbbbbbbb"],
+      [timed(13), "lint", 3, "lint cccccccc", "output 10, input 1300, lint cccccccc"],
+      [timed(22), "checker", 2, "style dddddddd", "output 20, input 800, style dddddddd"],
+      [timed(26), "Explore", 1, null, "output 1, input 100, -"],
     ]);
   });
 
   test("divides the input by the accepted commits of the tasks the steps ran in", () => {
-    expect(rateOf("step-cost", record)).toEqual({ value: 8700, count: 8700, of: 1 });
+    expect(rateOf("step-cost", record)).toEqual({ value: 8900, count: 8900, of: 1 });
     expect(detailOf("step-cost", record)).toBe(
-      "per accepted commit output 66, minutes 14; per task over 2 tasks input 4350, output 33, minutes 7; " +
-        "most input per accepted commit: coordinator 6000, worker build 1300, reviewer 800, worker task 500, other 100",
+      "per accepted commit output 68, minutes 14; per task over 2 tasks input 4450, output 34, minutes 7; " +
+        "most input per accepted commit: plan 6000, lint 1300, checker 800, deploy 500, general-purpose 200",
     );
   });
 });

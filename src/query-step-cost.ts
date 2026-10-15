@@ -2,14 +2,6 @@ import type { LoadRow, ResponseRow, SessionRow, TimedRow } from "./query-signal-
 import { bodyVersion } from "./query-skill-version";
 import { MINUTE_MS } from "./timestamp";
 
-const NAMED_KINDS = ["reviewer", "coach", "researcher"] as const;
-
-type NamedKind = (typeof NAMED_KINDS)[number];
-
-const COORDINATOR_SKILL = "coordinate";
-
-const WORKER_SKILL = "task";
-
 const NO_SKILL = "none";
 
 type Spent = { readonly output: number; readonly input: number };
@@ -37,10 +29,12 @@ type Priced = Spent & {
 
 const ms = (at: string): number => Date.parse(at);
 
-function namedKind(session: SessionRow): NamedKind | null {
+const AGENT_NAMESPACE = ":";
+
+function namespacedAgent(session: SessionRow): string | null {
   if (session.parentId === null || session.agentType === null) return null;
-  const agentType = session.agentType;
-  return NAMED_KINDS.find((kind) => agentType.includes(kind)) ?? null;
+  const at = session.agentType.lastIndexOf(AGENT_NAMESPACE);
+  return at === -1 ? null : session.agentType.slice(at + AGENT_NAMESPACE.length);
 }
 
 const preloadVersion = (preloads: readonly LoadRow[]): string | null =>
@@ -56,31 +50,19 @@ function stepper(
   readonly step: string;
   readonly version: string | null;
 } {
-  const named = namedKind(session);
-  const preloads = loads.filter((load) => load.preloaded);
-  if (named !== null) {
-    const version = preloadVersion(preloads);
-    return () => ({ step: named, version });
+  const agent = namespacedAgent(session);
+  if (agent !== null) {
+    const version = preloadVersion(loads.filter((load) => load.preloaded));
+    return () => ({ step: agent, version });
   }
   const loaded = loads.filter((load) => !load.preloaded);
-  const coordinates = loaded.filter((load) => load.skill === COORDINATOR_SKILL);
-  const [first] = coordinates;
-  if (first !== undefined) {
-    return (at) => {
-      const load = latestAtOrBefore(coordinates, at) ?? first;
-      return { step: "coordinator", version: bodyVersion(load) };
-    };
-  }
-  if (loaded.some((load) => load.skill === WORKER_SKILL)) {
-    return (at) => {
-      const load = latestAtOrBefore(loaded, at);
-      return load === null
-        ? { step: `worker ${NO_SKILL}`, version: null }
-        : { step: `worker ${load.skill}`, version: bodyVersion(load) };
-    };
-  }
-  const version = session.parentId === null ? null : session.agentType;
-  return () => ({ step: "other", version });
+  const unloaded = session.parentId === null ? NO_SKILL : (session.agentType ?? NO_SKILL);
+  return (at) => {
+    const load = latestAtOrBefore(loaded, at);
+    return load === null
+      ? { step: unloaded, version: null }
+      : { step: load.skill, version: bodyVersion(load) };
+  };
 }
 
 function priced(

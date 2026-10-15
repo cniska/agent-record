@@ -659,29 +659,29 @@ test("AC-56 step-cost gives each step's tokens and minutes per accepted commit, 
     {
       id: "lead",
       cwd: repo,
-      steps: [{ owner: "add the parser", at: at(0) }, loaded("coordinate", 1), answered(2, 4000)],
+      steps: [{ owner: "add the parser", at: at(0) }, loaded("plan", 1), answered(2, 4000)],
       subagents: [
         {
           id: "w1",
           agentType: "general-purpose",
           steps: [
-            { owner: "build the parser", at: at(10) },
-            loaded("task", 11),
+            { owner: "write the parser", at: at(10) },
+            loaded("deploy", 11),
             answered(12, 1000),
-            loaded("build", 13),
+            loaded("lint", 13),
             answered(15, 2000),
           ],
         },
         {
           id: "r1",
-          agentType: "acme:reviewer",
+          agentType: "acme:checker",
           steps: [
-            { owner: "review the change", at: at(20) },
+            { owner: "check the change", at: at(20) },
             {
-              preload: "acme:review",
+              preload: "acme:style",
               at: at(20),
-              dir: cache("review"),
-              body: "# Review\n\nJudge the change.",
+              dir: cache("style"),
+              body: "# Style\n\nKeep the style.",
             },
             answered(23, 800),
           ],
@@ -704,9 +704,9 @@ test("AC-56 step-cost gives each step's tokens and minutes per accepted commit, 
       8200,
       8200,
       1,
-      "coordinator 1, other 1, reviewer 1, worker task 1, worker build 1; " +
+      "plan 1, Explore 1, checker 1, deploy 1, lint 1; " +
         "per accepted commit output 82, minutes 11; per task over 1 tasks input 8200, output 82, minutes 11; " +
-        "most input per accepted commit: coordinator 4000, worker build 2000, worker task 1000, reviewer 800, other 400",
+        "most input per accepted commit: plan 4000, lint 2000, deploy 1000, checker 800, Explore 400",
     ],
   ];
   expect(counted()).toEqual(weekly);
@@ -715,19 +715,19 @@ test("AC-56 step-cost gives each step's tokens and minutes per accepted commit, 
   expect(
     byVersion.rows.map(([week, version, value, count, of]) => [week, version, value, count, of]),
   ).toEqual([
-    ["2026-09-14", "coordinate c659bb76", 4000, 4000, 1],
-    ["2026-09-14", "build 115254a5", 2000, 2000, 1],
-    ["2026-09-14", "task 464b6516", 1000, 1000, 1],
-    ["2026-09-14", "review 43e4e411", 800, 800, 1],
-    ["2026-09-14", "Explore", 400, 400, 1],
+    ["2026-09-14", "plan b5a44357", 4000, 4000, 1],
+    ["2026-09-14", "lint cf41f9a0", 2000, 2000, 1],
+    ["2026-09-14", "deploy acb9ecb7", 1000, 1000, 1],
+    ["2026-09-14", "style 0dd3d547", 800, 800, 1],
+    ["2026-09-14", null, 400, 400, 1],
   ]);
   const events = query(home, ["signal-events", "step-cost"]).rows;
   expect(events.map(([when, kind, , , minutes, , text]) => [when, kind, minutes, text])).toEqual([
-    ["2026-09-16T09:26:00.000Z", "other", 1, "output 4, input 400, Explore"],
-    ["2026-09-16T09:23:00.000Z", "reviewer", 3, "output 8, input 800, review 43e4e411"],
-    ["2026-09-16T09:15:00.000Z", "worker build", 3, "output 20, input 2000, build 115254a5"],
-    ["2026-09-16T09:12:00.000Z", "worker task", 2, "output 10, input 1000, task 464b6516"],
-    ["2026-09-16T09:02:00.000Z", "coordinator", 2, "output 40, input 4000, coordinate c659bb76"],
+    ["2026-09-16T09:26:00.000Z", "Explore", 1, "output 4, input 400, -"],
+    ["2026-09-16T09:23:00.000Z", "checker", 3, "output 8, input 800, style 0dd3d547"],
+    ["2026-09-16T09:15:00.000Z", "lint", 3, "output 20, input 2000, lint cf41f9a0"],
+    ["2026-09-16T09:12:00.000Z", "deploy", 2, "output 10, input 1000, deploy acb9ecb7"],
+    ["2026-09-16T09:02:00.000Z", "plan", 2, "output 40, input 4000, plan b5a44357"],
   ]);
 
   rebuild(home);
