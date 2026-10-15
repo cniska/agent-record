@@ -40,7 +40,11 @@ export const refuseQuery = refuser<{
   readonly ambiguous_commit: { readonly prefix: string; readonly matches: readonly string[] };
   readonly from_before_commit: { readonly from: string; readonly sha: string; readonly at: string };
   readonly unknown_skill: { readonly skill: string; readonly skills: readonly string[] };
-  readonly unknown_task: { readonly session: string; readonly prefix: string };
+  readonly unknown_task: {
+    readonly session: string;
+    readonly prefix: string;
+    readonly tasks: readonly string[];
+  };
   readonly ambiguous_task: {
     readonly session: string;
     readonly prefix: string;
@@ -94,7 +98,7 @@ export const refuseQuery = refuser<{
   },
   unknown_task: {
     message: ({ session, prefix }) => `no task of session ${session} starts with ${prefix}`,
-    resolve: ({ session }) => `agent-record query tasks ${session}`,
+    resolve: ({ tasks }) => `--task <a prefix of one of: ${tasks.join(", ")}>`,
   },
   ambiguous_task: {
     message: ({ prefix, matches }) =>

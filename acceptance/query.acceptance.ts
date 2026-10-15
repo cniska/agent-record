@@ -619,7 +619,7 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
   };
   expect(refusal(["coord", "--task", "nosuch"])).toEqual({
     code: "unknown_task",
-    meta: { session: "coordinator", prefix: "nosuch" },
+    meta: { session: "coordinator", prefix: "nosuch", tasks: [first, later] },
   });
   expect(refusal(["coord", "--task", "coordinator-"])).toEqual({
     code: "ambiguous_task",

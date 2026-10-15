@@ -64,7 +64,8 @@ export function readTasks(db: Database, root: string, start: string): readonly T
 export function taskByPrefix(starts: readonly TaskStart[], session: string, prefix: string): TaskStart {
   const found = starts.filter((start) => start.id.toLowerCase().startsWith(prefix.toLowerCase()));
   const [only, ...more] = found;
-  if (only === undefined) throw refuseQuery("unknown_task", { session, prefix });
+  if (only === undefined)
+    throw refuseQuery("unknown_task", { session, prefix, tasks: starts.map((s) => s.id) });
   if (more.length > 0)
     throw refuseQuery("ambiguous_task", { session, prefix, matches: found.map((s) => s.id) });
   return only;
