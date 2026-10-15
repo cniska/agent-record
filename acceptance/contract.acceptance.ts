@@ -176,6 +176,7 @@ test("AC-12 each malformed argument form is refused with the command's usage as 
   const home = scratchHome();
   const cases = [
     { args: ["sync", "--x"], code: "unknown_flag", usage: USAGE.sync },
+    { args: ["query", "--rows", "5"], code: "unknown_flag", usage: USAGE.query },
     { args: ["query", "search", "--rows"], code: "flag_without_value", usage: USAGE.search },
     {
       args: ["query", "search", "a", "--rows", "2", "--rows", "3"],

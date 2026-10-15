@@ -1,4 +1,4 @@
-import type { Command } from "./cli-contract";
+import type { Command, CommandResult } from "./cli-contract";
 import { parseArg, parseFlags } from "./cli-flags";
 import { refuseQuery } from "./query-contract";
 import { listQueries, runQuery } from "./query-ops";
@@ -12,10 +12,8 @@ export const queryCommand: Command = {
   summary: `ask the database a named question; ${DEFAULT_MAX_ROWS} rows print unless --rows widens them`,
   run(args, runtime) {
     const [name, ...rest] = args;
-    if (name === undefined || name === "list") {
-      parseFlags(rest, [], queryCommand.usage);
-      return { value: listQueries(), exitCode: 0 };
-    }
+    if (name === undefined || name.startsWith("--")) return listing(args);
+    if (name === "list") return listing(rest);
     const query = findQuery(name);
     if (query === undefined) throw refuseQuery("unknown_query", { name });
     const { arg, flags } = parseArg(rest, ["rows", ...query.flags], query.usage);
@@ -26,3 +24,8 @@ export const queryCommand: Command = {
     };
   },
 };
+
+function listing(flagArgs: readonly string[]): CommandResult {
+  parseFlags(flagArgs, [], queryCommand.usage);
+  return { value: listQueries(), exitCode: 0 };
+}

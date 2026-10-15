@@ -367,5 +367,4 @@ Each requirement still needs the owner's confirmation before it is contract.
 Known gaps, where the code does not yet meet a requirement:
 
 - **Not every criterion is proven yet.** A criterion with a passing test in the acceptance suite, which drives only the CLI, is proven; the rest are todos there. `src/spec.test.ts` ties the suite to this spec. The unit tests stay unit tests and cite no ID.
-- **FR-33.** `query` given a flag where the query name goes refuses it as an unknown query, not an unknown flag.
 - **FR-4.** A rewrite that keeps a file's size and modification time is not detected.
