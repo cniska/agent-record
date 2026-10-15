@@ -212,6 +212,36 @@ describe("timing a task from its prompt to its last commit run on origin", () =>
       ["b", {}],
     ]);
   });
+
+  test("keeps apart the tasks of two sessions whose prompts share an id, as a fork copies it", () => {
+    const opening = (sessionId: string) => ({
+      id: `${sessionId}-m1`,
+      turnId: "p1",
+      sessionId,
+      text: "fix it",
+    });
+    const record = recordOf({
+      sessions: [session("a", "2026-10-14T09:00:00.000Z"), session("b", "2026-10-14T09:00:00.000Z")],
+      openings: [opening("a"), opening("b")],
+      gitRuns: [
+        run("a", "2026-10-14T09:10:00.000Z", "commit"),
+        run("a", "2026-10-14T09:15:00.000Z", "push"),
+        run("b", "2026-10-14T09:20:00.000Z", "commit"),
+      ],
+      tags: [{ sessionId: "a", at: "2026-10-14T09:02:00.000Z", key: "route", value: "feature" }],
+    });
+    expect(
+      eventsOf("time-to-land", record).map((e) => [
+        e.sessionId,
+        e.kind,
+        e.minutes,
+        Object.fromEntries(e.tags),
+      ]),
+    ).toEqual([
+      ["a", "landed", 15, { route: "feature" }],
+      ["b", "not landed", null, {}],
+    ]);
+  });
 });
 
 describe("finding commit runs stranded off origin", () => {

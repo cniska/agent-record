@@ -9,6 +9,12 @@ export const TaskId = z.string().min(1).brand<"TaskId">();
 
 export type TaskId = z.infer<typeof TaskId>;
 
+const TaskKey = z.string().min(1).brand<"TaskKey">();
+
+export type TaskKey = z.infer<typeof TaskKey>;
+
+export const taskKeyOf = (root: string, task: TaskId): TaskKey => TaskKey.parse(JSON.stringify([root, task]));
+
 export type TaskStart = {
   readonly id: TaskId;
   readonly at: string;

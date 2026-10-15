@@ -15,12 +15,21 @@ import { type Reread, rereadsAfterCompactions } from "./query-lost-context";
 import { asksSecondRead } from "./query-second-read";
 import type { CheckoutRow, GitRunRow, HookRow, SessionRow, SignalRecord } from "./query-signal-record";
 import { type Stretch, stepStretches } from "./query-step-cost";
-import { type SaidRow, saidRows, TaskId, type TaskStart, taskAt, taskStartsOf } from "./query-task";
+import {
+  type SaidRow,
+  saidRows,
+  TaskId,
+  type TaskKey,
+  type TaskStart,
+  taskAt,
+  taskKeyOf,
+  taskStartsOf,
+} from "./query-task";
 import { EpochMs } from "./timestamp";
 
 export type Placed = {
   readonly at: string;
-  readonly task: TaskId;
+  readonly task: TaskKey;
   readonly sessionId: string;
   readonly repo: string | null;
   readonly tags: Tags;
@@ -182,12 +191,12 @@ export function timelineOf(record: SignalRecord): Timeline {
   const repoOfRoot = (root: string) => repoOf(sessions.get(root)?.project ?? null);
   const said = saidRows(record.ownerMessages);
   const { tasks: startsByRoot, ownerTyped, pending } = tasksByRoot(record, said);
-  const taskKey = (root: string, at: number): TaskId => {
+  const taskKey = (root: string, at: number): TaskKey => {
     const starts = startsByRoot.get(root);
-    return starts === undefined ? TaskId.parse(root) : taskAt(starts, at).id;
+    return taskKeyOf(root, starts === undefined ? TaskId.parse(root) : taskAt(starts, at).id);
   };
 
-  const tagged = new Map<TaskId, Map<string, string>>();
+  const tagged = new Map<TaskKey, Map<string, string>>();
   for (const tag of record.tags) {
     const key = taskKey(rootOf(tag.sessionId), ms(tag.at));
     const tags = tagged.get(key) ?? new Map<string, string>();
@@ -195,8 +204,8 @@ export function timelineOf(record: SignalRecord): Timeline {
     tagged.set(key, tags);
   }
   const untagged: Tags = new Map();
-  const tagsOf = (key: TaskId): Tags => tagged.get(key) ?? untagged;
-  const inTask = (root: string, at: number): { readonly task: TaskId; readonly tags: Tags } => {
+  const tagsOf = (key: TaskKey): Tags => tagged.get(key) ?? untagged;
+  const inTask = (root: string, at: number): { readonly task: TaskKey; readonly tags: Tags } => {
     const task = taskKey(root, at);
     return { task, tags: tagsOf(task) };
   };
@@ -237,7 +246,7 @@ export function timelineOf(record: SignalRecord): Timeline {
 
   const keyedTasks = [...startsByRoot.entries()].flatMap(([root, list]) =>
     list.map((prompt) => {
-      const key = prompt.id;
+      const key = taskKeyOf(root, prompt.id);
       const last = lastOfTask.get(key) ?? null;
       const task: TaskOutcome = {
         at: prompt.at,
