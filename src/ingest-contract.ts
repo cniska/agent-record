@@ -9,6 +9,12 @@ export const refuseIngest = refuser<{
   readonly titles_unreadable: { readonly path: string; readonly detail: string };
   readonly sidecar_unreadable: { readonly path: string; readonly detail: string };
   readonly launchctl_unavailable: { readonly command: string; readonly detail: string };
+  readonly rebuild_failed: {
+    readonly record: string;
+    readonly backup: string;
+    readonly detail: string;
+    readonly fix: string;
+  };
 }>({
   source_unreadable: {
     message: ({ path, detail }) => `cannot read ${path}: ${detail}`,
@@ -34,14 +40,27 @@ export const refuseIngest = refuser<{
     message: ({ command, detail }) => `${command} could not start launchctl: ${detail}`,
     resolve: () => "put /bin, where macOS keeps launchctl, on PATH, then check with: launchctl version",
   },
+  rebuild_failed: {
+    message: ({ backup, detail }) => `the rebuild failed after copying the record to ${backup}: ${detail}`,
+    resolve: ({ record, backup, fix }) => `${fix}, or ${undoRebuild(record, backup)}`,
+  },
 });
+
+function undoRebuild(record: string, backup: string): string {
+  return `undo the rebuild: with no agent-record running, remove ${record}-wal and ${record}-shm and move ${backup} over ${record}`;
+}
 
 export const faultIngest = faulter<{
   readonly cursor_state_corrupt: { readonly thread: string; readonly state: string; readonly detail: string };
+  readonly rebuild_faulted: { readonly record: string; readonly backup: string; readonly detail: string };
 }>({
   cursor_state_corrupt: {
     message: ({ thread, detail }) =>
       `the cursor state agent-record kept for Codex thread ${thread} is corrupt: ${detail}`,
     resolve: () => BUG,
+  },
+  rebuild_faulted: {
+    message: ({ backup, detail }) => `the rebuild failed after copying the record to ${backup}: ${detail}`,
+    resolve: ({ record, backup }) => `${undoRebuild(record, backup)}; then ${BUG}`,
   },
 });

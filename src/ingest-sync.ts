@@ -1,11 +1,12 @@
 import type { Database } from "bun:sqlite";
 import { join } from "node:path";
-import { errorRecord, isRefusal, type PathFailure } from "./coded-error";
-import { backUpRecord, writeTransaction } from "./db";
+import { type CodedError, codedOf, errorRecord, isRefusal, type PathFailure } from "./coded-error";
+import { backUpRecord, refusingBusy, writeTransaction } from "./db";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
 import type { Env } from "./env";
 import { createIngester, type FileSpec, ingestFile, type SourceFile } from "./ingest";
 import { type ArchiveReport, archiveRootOf, archiveSources } from "./ingest-archive";
+import { faultIngest, refuseIngest } from "./ingest-contract";
 import { ARCHIVED_EVENT_LOGS, eventArchiveRoot } from "./ingest-event-source";
 import { createEventIngester, ingestEventLog } from "./ingest-events";
 import { type GitReport, ingestCommits, probeCheckouts, repoRoots } from "./ingest-git";
@@ -154,6 +155,25 @@ export type RebuildReport = SyncReport & { backup: string; unreadCheckouts: stri
 export function rebuild(db: Database, env: Env): RebuildReport {
   const before = recordedCheckouts(db);
   const backup = backUpRecord(db);
+  try {
+    return { ...refusingBusy(db.filename, () => readAgain(db, env, before)), backup };
+  } catch (error) {
+    throw rebuildFailure(codedOf(error), db.filename, backup);
+  }
+}
+
+function rebuildFailure(cause: CodedError, record: string, backup: string): CodedError {
+  const meta = { record, backup, detail: cause.message };
+  return cause.kind === "refusal"
+    ? refuseIngest("rebuild_failed", { ...meta, fix: cause.resolve }, cause)
+    : faultIngest("rebuild_faulted", meta, cause);
+}
+
+function readAgain(
+  db: Database,
+  env: Env,
+  before: readonly string[],
+): SyncReport & { unreadCheckouts: string[] } {
   db.run("PRAGMA foreign_keys = OFF");
   try {
     writeTransaction(db, () => {
@@ -166,5 +186,5 @@ export function rebuild(db: Database, env: Env): RebuildReport {
   const report = sync(db, env);
   writeTransaction(db, () => db.run(`PRAGMA user_version = ${SCHEMA_VERSION}`));
   const read = new Set(recordedCheckouts(db));
-  return { ...report, backup, unreadCheckouts: before.filter((path) => !read.has(path)) };
+  return { ...report, unreadCheckouts: before.filter((path) => !read.has(path)) };
 }

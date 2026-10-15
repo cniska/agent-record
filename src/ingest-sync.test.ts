@@ -60,6 +60,15 @@ function columnsOf(db: Database, table: string): string[] {
     .map((row) => row.name);
 }
 
+function commitsIn(record: string): unknown[] {
+  const copy = new Database(record, { readonly: true });
+  try {
+    return copy.query("SELECT sha FROM repo_commit").all();
+  } finally {
+    copy.close();
+  }
+}
+
 describe("absorbing a schema change", () => {
   test("a rebuild first copies the record it drops beside it, commits of removed checkouts included", () => {
     const { db, env } = scratch();
@@ -138,18 +147,52 @@ describe("absorbing a schema change", () => {
     db.close();
   }, 120_000);
 
-  test("a rebuild that throws leaves the old version stamped", () => {
+  test("a rebuild that faults leaves the old version stamped and names the backup that undoes it", () => {
     const { db, env } = scratch();
+    fill(db);
     db.run(`PRAGMA user_version = ${SCHEMA_VERSION - 1}`);
     const broken = { ...env, dataHome: join(env.home, "broken-data") };
     mkdirSync(archiveDir(broken), { recursive: true });
     writeFileSync(join(archiveDir(broken), "claude"), "");
+    const backup = `${dbPath(env)}.agent-record-backup`;
 
-    expect(() => rebuild(db, broken)).toThrow(expect.objectContaining({ code: "ENOTDIR" }));
+    expect(() => rebuild(db, broken)).toThrow(
+      expect.objectContaining({
+        kind: "fault",
+        code: "rebuild_faulted",
+        meta: expect.objectContaining({ backup }),
+      }),
+    );
     expect(recordVersion(db)).toBe(SCHEMA_VERSION - 1);
+    expect(commitsIn(backup)).toEqual([{ sha: "abc" }]);
 
     rebuild(db, env);
     expect(recordVersion(db)).toBe(SCHEMA_VERSION);
+    db.close();
+  });
+  test("a rebuild refused by a record another process holds names the backup that undoes it", () => {
+    const { db, env } = scratch();
+    fill(db);
+    const holder = new Database(dbPath(env));
+    holder.run("BEGIN IMMEDIATE");
+    const backup = `${dbPath(env)}.agent-record-backup`;
+
+    try {
+      expect(() => rebuild(db, env)).toThrow(
+        expect.objectContaining({
+          kind: "refusal",
+          code: "rebuild_failed",
+          meta: expect.objectContaining({
+            backup,
+            fix: "run this again; if it keeps failing, close whatever holds the file",
+          }),
+        }),
+      );
+    } finally {
+      holder.run("ROLLBACK");
+      holder.close();
+    }
+    expect(commitsIn(backup)).toEqual([{ sha: "abc" }]);
     db.close();
   });
 });

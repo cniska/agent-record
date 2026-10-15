@@ -50,7 +50,7 @@ The record is what agent workflows improve from. Its first use is search: an age
 
 ### 2.4 Rebuild
 
-- **FR-24** — `rebuild` drops the record and reads it again from the archive, whatever schema version the record had. It first copies the record beside itself, as `<record>.agent-record-backup` or, when that is taken, the first free `-<n>` after it, and reports the copy as `backup`, so with no agent-record running, removing the record's `-wal` and `-shm` files and moving the copy over the record undoes the rebuild.
+- **FR-24** — `rebuild` drops the record and reads it again from the archive, whatever schema version the record had. It first copies the record beside itself, as `<record>.agent-record-backup` or, when that is taken, the first free `-<n>` after it, and reports the copy as `backup`, so with no agent-record running, removing the record's `-wal` and `-shm` files and moving the copy over the record undoes the rebuild. A rebuild that fails after the copy names the copy as `backup` and those steps, as the refusal `rebuild_failed` carrying its cause's fix when the cause is a refusal, or as the fault `rebuild_faulted` when it is a fault.
 - **FR-25** — After `rebuild`, every session `sync` archived is in the record as the archive last held it, including sessions whose tool files are gone. Git history is not covered (FR-23).
 - **FR-26** — Given the same archive, `rebuild` writes the same session, message, turn, usage, tool-call, git-run, skill-load and hook-event rows that the syncs that built the archive wrote.
 
