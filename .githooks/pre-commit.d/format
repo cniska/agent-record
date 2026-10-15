@@ -1,11 +1,15 @@
 #!/bin/sh
-# agent-gate:format:1
+# agent-gate:format:2
 set -eu
 
 command='bun run format --linter-enabled=false'
 
 paths() {
-  git -c core.quotePath=false "$@"
+  git "$@" -z | od -An -v -to1 | tr -s ' \n' '\n\n' | awk 'NF { if ($0 == "000") { print path; path = "" } else path = path "\\" $0 }'
+}
+
+unescaped() {
+  printf "$(printf "$1" $2)"
 }
 
 listed() {
@@ -13,12 +17,14 @@ listed() {
 }
 
 shown() {
-  printf '%s\n' "$1" | sed 's/^/  /' >&2
+  unescaped '  %s\\n' "$1" >&2
 }
 
 entry() {
-  if [ -f "$1" ]; then
-    printf '%s %s\n' "$(git hash-object -- "$1")" "$1"
+  file=$(unescaped '%s/' "$1")
+  file=${file%/}
+  if [ -f "$file" ]; then
+    printf '%s %s\n' "$(git hash-object -- "$file")" "$1"
   else
     printf '%s %s\n' - "$1"
   fi
@@ -84,7 +90,7 @@ if [ -n "$partly" ]; then
 fi
 
 whole=$(picked "$staged" whole)
-[ -z "$whole" ] || printf '%s\n' "$whole" | git --literal-pathspecs add --pathspec-from-file=-
+[ -z "$whole" ] || unescaped '%s\\000' "$whole" | git --literal-pathspecs add --pathspec-from-file=- --pathspec-file-nul
 
 unstaged=$(picked "$after" unstaged)
 if [ -n "$unstaged" ]; then

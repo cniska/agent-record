@@ -1,0 +1,67 @@
+#!/bin/sh
+# agent-gate:githooks:1
+set -eu
+
+hooks=$(dirname "$0")
+message=$(mktemp)
+trap 'rm -f "$message"' EXIT
+
+judge_subjects() {
+  if git cat-file -e "$1^{commit}" 2>/dev/null; then range="$1..$2"; else range=$2; fi
+  shas=$(git rev-list --no-merges "$range")
+  for sha in $shas; do
+    git log -1 --format=%B "$sha" > "$message"
+    case "$(head -n 1 "$message")" in
+      "fixup! "* | "squash! "* | "amend! "*) echo "$sha is an autosquash commit left in the range; squash it into the commit it names." >&2; exit 1 ;;
+    esac
+    sh "$hooks/commit-msg" "$message"
+  done
+}
+
+judge_comments() {
+  if ! command -v node >/dev/null 2>&1; then
+    echo "no-comments: node is not on PATH, so the push's comments cannot be judged; install Node.js" >&2
+    exit 3
+  fi
+  if [ "$report" = github ]; then
+    node "$hooks/no-comments/scan.cjs" --format github "$1" "$2"
+  else
+    node "$hooks/no-comments/scan.cjs" "$1" "$2"
+  fi
+}
+
+judge() {
+  base=$2
+  if ! git cat-file -e "$base^{commit}" 2>/dev/null && [ -n "$5" ] && [ "$4" != "refs/heads/${5#*/}" ]; then
+    base=$5
+  fi
+  case "$1" in
+    commit-subject) judge_subjects "$base" "$3" ;;
+    no-comments) judge_comments "$base" "$3" ;;
+    *) echo "judge-push: $1 is no gate that judges a push; name commit-subject or no-comments" >&2; exit 2 ;;
+  esac
+}
+
+judge_pushed_refs() {
+  default=$(git symbolic-ref -q --short "refs/remotes/$2/HEAD" || true)
+  while read -r _ local_sha remote_ref remote_sha; do
+    case "$local_sha" in
+      *[!0]*) judge "$1" "$remote_sha" "$local_sha" "$remote_ref" "$default" < /dev/null ;;
+    esac
+  done
+}
+
+case $# in
+  2)
+    report=text
+    judge_pushed_refs "$1" "$2"
+    ;;
+  5)
+    report=github
+    judge "$@"
+    ;;
+  *)
+    echo "judge-push takes a gate and git's remote, with the pushed refs on stdin, or a gate, a base, a head, the pushed ref and the remote's default branch" >&2
+    exit 2
+    ;;
+esac

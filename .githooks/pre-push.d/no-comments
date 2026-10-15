@@ -1,0 +1,3 @@
+#!/bin/sh
+# agent-gate:no-comments:1
+exec sh "$(dirname "$0")/../judge-push" no-comments "$1"

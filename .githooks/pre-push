@@ -1,0 +1,13 @@
+#!/bin/sh
+# agent-gate:githooks:1
+set -eu
+
+steps="$(dirname "$0")/pre-push.d"
+pushed=$(mktemp)
+trap 'rm -f "$pushed"' EXIT
+cat > "$pushed"
+
+for step in "$steps"/*; do
+  [ -f "$step" ] && [ -x "$step" ] || continue
+  "$step" "$@" < "$pushed" || exit $?
+done
