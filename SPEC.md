@@ -83,7 +83,7 @@ The record is what agent workflows improve from. Its first use is search: an age
 
 ### 2.8 Health
 
-- **FR-45** — `doctor` reports these checks, each `ok`, `warn` or `fail` with a detail and a fix: the record, its backup, the last sync, the launchd agent, the archive's mirror. The backup check is always `ok` and names each copy of the record a rebuild left (FR-24) with its size, or says there is none.
+- **FR-45** — `doctor` reports these checks, each `ok`, `warn` or `fail` with a detail and a fix: the record, its backup, the last sync, the launchd agent and the archive's mirror. The backup check is always `ok` and names each copy of the record a rebuild left (FR-24) with its size, or says there is none.
 - **FR-46** — The record check fails when the record is missing, of another schema version, or busy, with the refusal's fix.
 - **FR-47** — The sync check fails when no sync has finished, when the last sync failed, or when its outcome cannot be read; it warns when the last sync reported failed files, or finished longer ago than a threshold well past the agent's interval, which the detail states.
 - **FR-48** — The agent check warns when the launchd agent is missing, runs another command than the `sync` this agent-record schedules (FR-51), or is written but not loaded.
