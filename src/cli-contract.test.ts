@@ -43,7 +43,7 @@ function writesStdout(text: string): boolean {
 
 const ENVIRONMENT_FUNCTIONS: ReadonlySet<string> = new Set(["tmpdir", "homedir", "userInfo"]);
 const GLOBAL_ENVIRONMENT: ReadonlyMap<string, ReadonlySet<string>> = new Map([
-  ["process", new Set(["env", "execPath"])],
+  ["process", new Set(["env", "execPath", "argv0", "cwd"])],
   ["Bun", new Set(["env"])],
 ]);
 
@@ -95,12 +95,11 @@ describe("the command contract", () => {
     ]);
   });
 
-  test("cli-release.ts only runs the CLI with a release's runtime, then the daily update check", () => {
+  test("cli-release.ts only runs the CLI with a release's runtime", () => {
     expect([...importsOf(readFileSync(join(SRC, "cli-release.ts"), "utf8"))].sort()).toEqual([
       "./cli-contract",
       "./cli-main",
       "./env",
-      "./update-daily",
     ]);
   });
 

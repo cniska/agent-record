@@ -1,13 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  realpathSync,
-  symlinkSync,
-  writeFileSync,
-} from "node:fs";
+import { cpSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import { version } from "../package.json";
@@ -15,7 +7,6 @@ import {
   compiledRelease,
   curlServing,
   type Home,
-  installedLauncher,
   QUERY_RESULT,
   releaseAssets,
   removeScratch,
@@ -53,7 +44,7 @@ const versionOf = (home: Home, bins: readonly string[]) =>
   runOnCleanMachine(home, bins, ["agent-record", "--version"]);
 
 test(
-  "AC-60 the release binary, alone on PATH in a fresh home, syncs, answers a query and schedules its own sync",
+  "AC-60 the release binary, alone on PATH in a fresh home, syncs, answers a query and schedules the sync of the command it was run as",
   () => {
     const binary = compiledRelease(scratchTempDir());
     const bins = [dirname(binary)];
@@ -73,29 +64,17 @@ test(
     );
     expect(found.rows.length).toBeGreaterThan(0);
 
-    expect(scheduledSync(home, bins)).toContain(runsSync(realpathSync(binary)));
-  },
-  BUILD_TIMEOUT_MS,
-);
+    expect(scheduledSync(home, bins)).toContain(runsSync(binary));
 
-test(
-  "AC-62 the launcher runs the newest of its binary and the staged builds, and the agent runs the launcher",
-  () => {
-    const dir = scratchTempDir();
-    const baseline = compiledRelease(join(dir, "lib"), "0.1.0");
-    const bin = join(dir, "bin");
-    const launcher = installedLauncher(bin, baseline, "0.1.0");
-    const home = scratchHome();
-
-    expect(versionOf(home, [bin])).toEqual({ exitCode: 0, stdout: "0.1.0\n", stderr: "" });
-
-    const staged = join(home.root, ".local", "share", "agent-record", "bin");
-    compiledRelease(join(staged, "0.2.0"), "0.2.0");
-    mkdirSync(join(staged, "0.0.9"), { recursive: true });
-    cpSync(baseline, join(staged, "0.0.9", "agent-record"));
-    expect(versionOf(home, [bin]).stdout).toBe("0.2.0\n");
-
-    expect(scheduledSync(home, [bin])).toContain(runsSync(launcher));
+    const linked = join(scratchTempDir(), "bin", "agent-record");
+    mkdirSync(dirname(linked));
+    symlinkSync(binary, linked);
+    const { path } = succeeded(
+      runOnCleanMachine(home, bins, [linked, "agent", "install"]),
+      "agent",
+      AGENT_INSTALL,
+    );
+    expect(readFileSync(path, "utf8")).toContain(runsSync(linked));
   },
   BUILD_TIMEOUT_MS,
 );
@@ -129,7 +108,7 @@ test(
 );
 
 test(
-  "AC-64 the npm package runs its platform's binary through the launcher, and the agent runs the npm command",
+  "AC-64 the npm package runs its platform's binary, and the agent runs the npm command",
   () => {
     const dir = scratchTempDir();
     const assets = releaseAssets(join(dir, "assets"), compiledRelease(join(dir, "build")), "darwin-arm64");

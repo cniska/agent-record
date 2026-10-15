@@ -9,6 +9,7 @@ const ACCEPTANCE = join(ROOT, "acceptance");
 
 const UNCITED_FAMILIES = new Set(["AC", "C", "D"]);
 const DEFINITION = /^- \*\*([A-Z]+-[^*]+)\*\* —/gm;
+const RETIRED_DEFINITION = /^- \*\*([A-Z]+-[^*]+)\*\* — \*Retired\b.*$/gm;
 const CRITERION_LINE = /^- \*\*(AC-[^*]+)\*\* —.*?(?:\(([A-Z]+-\w+(?:, [A-Z]+-\w+)*)\))?$/gm;
 const CITED_CRITERIA = /^((?:AC-\d+ )+)/;
 const WHOLE = /^[A-Z]+-[1-9]\d*$/;
@@ -33,19 +34,30 @@ function numberingProblems(ids: readonly string[]): readonly string[] {
 
 type Criterion = { readonly id: string; readonly cites: readonly string[] | null };
 
-const criteriaOf = (spec: string): readonly Criterion[] =>
+const criteriaOf = (spec: string, retired: ReadonlySet<string>): readonly Criterion[] =>
   [...spec.matchAll(CRITERION_LINE)].flatMap(([, id, cites]) =>
-    id === undefined ? [] : [{ id, cites: cites?.split(", ") ?? null }],
+    id === undefined || retired.has(id) ? [] : [{ id, cites: cites?.split(", ") ?? null }],
   );
 
-function criterionProblems(criteria: readonly Criterion[], ids: readonly string[]): readonly string[] {
+function criterionProblems(
+  criteria: readonly Criterion[],
+  ids: readonly string[],
+  retired: ReadonlySet<string>,
+): readonly string[] {
   const cited = new Set(criteria.flatMap((criterion) => criterion.cites ?? []));
   return [
     ...criteria.filter((criterion) => criterion.cites === null).map(({ id }) => `${id} cites no requirement`),
     ...ids
-      .filter((id) => !UNCITED_FAMILIES.has(familyOf(id)) && !cited.has(id))
+      .filter((id) => !UNCITED_FAMILIES.has(familyOf(id)) && !retired.has(id) && !cited.has(id))
       .map((id) => `${id} is cited by no criterion`),
   ];
+}
+
+function retiredMentionProblems(spec: string, retired: ReadonlySet<string>): readonly string[] {
+  const outsideDefinitions = spec.replace(RETIRED_DEFINITION, "");
+  return [...retired]
+    .filter((id) => new RegExp(`\\b${id}\\b`).test(outsideDefinitions))
+    .map((id) => `${id} is retired but mentioned`);
 }
 
 function mentionProblems(
@@ -63,7 +75,11 @@ function mentionProblems(
 
 type AcceptanceTest = { readonly name: string | null; readonly modifier: string | null };
 
-function testProblems(criteria: readonly string[], tests: readonly AcceptanceTest[]): readonly string[] {
+function testProblems(
+  criteria: readonly string[],
+  retired: ReadonlySet<string>,
+  tests: readonly AcceptanceTest[],
+): readonly string[] {
   const problems: string[] = [];
   const tested = new Set<string>();
   for (const { name, modifier } of tests) {
@@ -79,7 +95,9 @@ function testProblems(criteria: readonly string[], tests: readonly AcceptanceTes
     if (proves.length === 0) problems.push(`acceptance test "${name}" cites no criterion`);
     for (const criterion of proves) {
       tested.add(criterion);
-      if (!criteria.includes(criterion))
+      if (retired.has(criterion))
+        problems.push(`acceptance test "${name}" cites ${criterion}, which the spec retired`);
+      else if (!criteria.includes(criterion))
         problems.push(`acceptance test "${name}" cites ${criterion}, which the spec does not define`);
     }
   }
@@ -111,7 +129,8 @@ function testsOf(source: string): readonly AcceptanceTest[] {
 
 function citationProblems(spec: string, acceptanceSources: readonly string[]): readonly string[] {
   const ids = captures(spec, DEFINITION);
-  const criteria = criteriaOf(spec);
+  const retired = new Set(captures(spec, RETIRED_DEFINITION));
+  const criteria = criteriaOf(spec, retired);
   const tests = acceptanceSources.flatMap(testsOf);
   const missing = [
     ...(criteria.length === 0 ? ["no acceptance criteria found in the spec"] : []),
@@ -120,10 +139,12 @@ function citationProblems(spec: string, acceptanceSources: readonly string[]): r
   if (missing.length > 0) return missing;
   return [
     ...numberingProblems(ids),
-    ...criterionProblems(criteria, ids),
+    ...criterionProblems(criteria, ids, retired),
     ...mentionProblems(spec, criteria, ids),
+    ...retiredMentionProblems(spec, retired),
     ...testProblems(
       criteria.map(({ id }) => id),
+      retired,
       tests,
     ),
   ];
@@ -237,6 +258,21 @@ describe("the citation check", () => {
   test("flags an id mentioned in prose that the spec does not define", () => {
     const spec = `${VALID_SPEC}\nSee FR-9 for details.\n`;
     expect(citationProblems(spec, VALID_TESTS)).toEqual(["FR-9 is mentioned but not defined"]);
+  });
+
+  test("keeps a retired id in the numbering, needing no citation and no test", () => {
+    const spec = `${VALID_SPEC}- **FR-3** — *Retired: it did a third thing.*\n- **AC-3** — *Retired: it proved FR-3.*\n`;
+    expect(citationProblems(spec, VALID_TESTS)).toEqual([]);
+  });
+
+  test("flags a retired id that a criterion, a test or the prose still names", () => {
+    const retired = `${VALID_SPEC}- **FR-3** — *Retired: it did a third thing.*\n- **AC-3** — *Retired: it proved FR-3.*\n`;
+    const spec = retired.replace("(FR-2)", "(FR-2, FR-3)");
+    const tests = [...VALID_TESTS, `test("AC-3 it does a third thing", () => {});`];
+    expect(citationProblems(spec, tests)).toEqual([
+      "FR-3 is retired but mentioned",
+      'acceptance test "AC-3 it does a third thing" cites AC-3, which the spec retired',
+    ]);
   });
 
   test("flags an acceptance test whose name is not a string literal", () => {

@@ -4,7 +4,7 @@ Query your past agent work: every coding-agent session on this machine, kept ver
 
 - `agent-record sync` reads the session files of Claude Code, Codex, Grok, pi and omp into that database, with the commits of the repos those sessions worked in and the hook event log any Claude Code plugin writes in the format [`SPEC.md`](SPEC.md) §2.13 defines.
 - `agent-record query` and `agent-record sql` read it. Search comes first: `query search` finds where earlier work was said, decided or ran into friction, and `query thread` shows what happened around it.
-- It needs no credential and has no per-token cost. Its only network use is a release checking GitHub for, and downloading, a newer release of itself, which `AGENT_RECORD_SKIP_UPDATE=1` turns off.
+- It needs no credential, has no per-token cost and never reaches the network.
 
 ## Install
 
@@ -53,7 +53,6 @@ Each command prints one JSON line.
 | `agent-record rebuild` | Drop the record and read it again from the archive, naming each checkout no longer on disk whose history it lost, after copying the record to the `backup` it names; once it succeeds, that copy is the only backup of the record kept, and `doctor` names it with its size |
 | `agent-record agent install` | Write a launchd agent that runs `sync` every 15 minutes |
 | `agent-record doctor` | Judge whether the record is current and readable, naming the fix for each problem; exits 1 when a check fails |
-| `agent-record update [--staged \| --rollback]` | In a release, stage the latest release beside the installed build, which then runs it; `--rollback` removes the staged build and rejects its version. Other commands start a check once a day; `AGENT_RECORD_SKIP_UPDATE=1` turns every check off |
 | `agent-record query list` | Name the queries |
 | `agent-record query search "<words>"` | Find messages by keyword |
 | `agent-record query thread <id-prefix> [--at <ts>]` | Read the exchange around a hit |
@@ -117,7 +116,7 @@ mise trust && mise install
 
 - `bun run check` runs the lint, the typecheck, knip (an export, file or dependency nothing uses) and the tests.
 - `bun run acceptance` proves the criteria in [`SPEC.md`](SPEC.md) through the CLI alone; each test in `acceptance/` is named for the criteria it proves, and `src/spec.test.ts`, in the check, fails when the tests and the criteria do not cite each other.
-- `scripts/build-compiled.sh <outfile> [<version>]` compiles the release: one executable, from `src/cli-release.ts`, that runs with no Bun or checkout and prints its stamped version on `--version`.
+- `scripts/build-compiled.sh <outfile>` compiles the release: one executable, from `src/cli-release.ts`, that runs with no Bun or checkout and prints its stamped version on `--version`.
 - `scripts/release.sh patch|minor|major` bumps the version and tags it; `.github/workflows/release.yml` builds the tag into a GitHub release, the npm packages and a Homebrew bump, as [`docs/releasing.md`](docs/releasing.md) says.
 - `bun run format` formats `src/`, `acceptance/`, `scripts/` and `npm/` with Biome, and the format gate runs it with the linter off before each commit and stages what it changes in the staged files.
 - `bun run search-recall` rebuilds the search recall fixture from the live record, as [`src/query-recall.md`](src/query-recall.md) describes.

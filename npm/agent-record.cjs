@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 const { spawn } = require("node:child_process");
-const { join } = require("node:path");
 
 const manifest = require("../package.json");
 const supported = Object.keys(manifest.optionalDependencies);
@@ -20,9 +19,9 @@ if (!supported.includes(platformPackage)) {
   );
 }
 
-let baseline;
+let binary;
 try {
-  baseline = require.resolve(`${platformPackage}/agent-record`);
+  binary = require.resolve(`${platformPackage}/agent-record`);
 } catch {
   refuse(
     "platform_package_missing",
@@ -31,14 +30,9 @@ try {
   );
 }
 
-const child = spawn(join(__dirname, "..", "launcher.sh"), process.argv.slice(2), {
+const child = spawn(binary, process.argv.slice(2), {
   stdio: "inherit",
-  env: {
-    ...process.env,
-    AGENT_RECORD_BASELINE_BIN: baseline,
-    AGENT_RECORD_BASELINE_VERSION: manifest.version,
-    AGENT_RECORD_LAUNCHER: process.argv[1],
-  },
+  env: { ...process.env, AGENT_RECORD_COMMAND: process.argv[1] },
 });
 
 for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
@@ -46,11 +40,7 @@ for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
 }
 
 child.on("error", (error) => {
-  refuse(
-    "launcher_failed",
-    `the launcher could not start: ${error.message}`,
-    "reinstall @cniska/agent-record",
-  );
+  refuse("binary_failed", `${binary} could not start: ${error.message}`, "reinstall @cniska/agent-record");
 });
 
 child.on("exit", (code, signal) => {

@@ -1,6 +1,8 @@
 # Releasing
 
-A `v*` tag on `main` runs `.github/workflows/release.yml`. It compiles darwin-arm64 and linux-x64 with `scripts/build-compiled.sh`, attaches each build's tarball and sha256, `launcher.sh`, `install.sh` and `SHA256SUMS.txt` to a GitHub release, publishes the three npm packages with provenance, and dispatches `cniska/homebrew-tap` to bump `Formula/agent-record.rb`. Run by `workflow_dispatch` instead, it builds, smoke-tests and packs everything and publishes nothing: the release files and `npm pack --dry-run` are its output.
+A `v*` tag on `main` runs `.github/workflows/release.yml`. It compiles darwin-arm64 and linux-x64 with `scripts/build-compiled.sh`, attaches each build's tarball and sha256, `install.sh` and `SHA256SUMS.txt` to a GitHub release, publishes the three npm packages with provenance, and dispatches `cniska/homebrew-tap` to bump `Formula/agent-record.rb`. Run by `workflow_dispatch` instead, it builds, smoke-tests and packs everything and publishes nothing: the release files and `npm pack --dry-run` are its output.
+
+A release never updates itself. Each channel updates the way it installed: `brew upgrade agent-record`, `npm update -g @cniska/agent-record`, or the curl line run again.
 
 ## The owner's setup, once
 
@@ -16,7 +18,7 @@ Step 3 comes before the first tag. Steps 1 and 2 need the first release's files,
 
 1. `git tag -m v0.1.0 v0.1.0 && git push origin v0.1.0`, and watch the workflow. The npm job fails on a package not yet set up for trusted publishing: do setup steps 1 and 2 from the release's files, then re-run the job.
 2. In `cniska/homebrew-tap`, on the `agent-record-formula` branch, which adds `Formula/agent-record.rb` and its README section, repin the formula to the release before merging, so `main` never pins checksums of a build no release holds: download the release's `SHA256SUMS.txt`, run `python3 scripts/bump-formula.py Formula/agent-record.rb cniska/agent-record SHA256SUMS.txt v0.1.0`, commit, then merge. `brew install cniska/tap/agent-record` installs it. From the next release on, the `homebrew` job's dispatch repins it.
-3. Land the channel lines in `README.md`'s Install section, above the clone steps:
+3. Land the channel lines in `README.md`'s Install section, above the clone steps, and say there that each channel updates the way it installed, as above:
 
    ```bash
    curl -fsSL https://github.com/cniska/agent-record/releases/latest/download/install.sh | sh
@@ -34,4 +36,4 @@ The release check, `scripts/release-check.ts`, runs on every tag in the workflow
 
 ## A bad release
 
-A release installed by curl, Homebrew or npm stages each newer release itself (`agent-record update`, and a daily check from any other command), and the launcher runs the newest staged build. To take a bad release back off a machine, run `agent-record update --rollback`: it removes the staged build and records its version as rejected, so no later check stages it again. Then run `agent-record rebuild`, since an older build never rebuilds a newer record by itself; it copies the record to the `backup` it reports first, so with no agent-record running, removing the record's `-wal` and `-shm` files and moving that copy over the record undoes it. Publish the fix as a new, higher version; a tag is never moved.
+Publish the fix as a new, higher version; a tag is never moved. A machine that installed the bad release takes the fix through its channel's update.

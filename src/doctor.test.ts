@@ -14,7 +14,6 @@ import { sync } from "./ingest-sync";
 import { mirrorArchive } from "./mirror";
 import { claudeProjectsDir, dbPath, mirrorStampPath, syncStampPath } from "./paths";
 import { stampingOutcome } from "./sync-stamp";
-import { writeUpdateStamp } from "./update-state";
 
 const roots: string[] = [];
 
@@ -292,22 +291,5 @@ describe("agent-record doctor through the CLI", () => {
     } finally {
       db.close();
     }
-  });
-
-  test("warns of an update check that began and never finished, rather than calling the build current", () => {
-    const env = newEnv();
-    writeUpdateStamp({ kind: "checking", at: new Date("2026-10-11T11:00:00Z") }, env);
-    const runtime = {
-      ...testRuntime(env),
-      updates: { releasesUrl: "http://localhost:1/releases/latest", executable: "/opt/agent-record" },
-    };
-    expect(
-      recordDoctor({ ...runtime, agentLoaded: () => false }).checks.find((c) => c.name === "update"),
-    ).toEqual({
-      name: "update",
-      state: "warn",
-      detail: "the last update check began 1 hours ago and has not finished",
-      fix: "agent-record update",
-    });
   });
 });

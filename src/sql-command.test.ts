@@ -28,12 +28,12 @@ const WRITES = [
 ];
 
 describe("agent-record sql", () => {
-  test("refuses every write as one, and leaves the database as it was", async () => {
+  test("refuses every write as one, and leaves the database as it was", () => {
     const { home, env, path } = recordWithCommit();
     try {
       const before = fingerprint(path);
       for (const statement of WRITES) {
-        const refused = await refusal(() => sqlCommand.run([statement], testRuntime(env)));
+        const refused = refusal(() => sqlCommand.run([statement], testRuntime(env)));
         expect({ statement, refused }).toEqual({
           statement,
           refused: expect.objectContaining({
@@ -50,10 +50,10 @@ describe("agent-record sql", () => {
     }
   });
 
-  test("refuses a statement SQLite cannot run, naming SQLite's complaint", async () => {
+  test("refuses a statement SQLite cannot run, naming SQLite's complaint", () => {
     const { home, env } = recordWithCommit();
     try {
-      expect(await refusal(() => sqlCommand.run(["SELEC 1"], testRuntime(env)))).toEqual(
+      expect(refusal(() => sqlCommand.run(["SELEC 1"], testRuntime(env)))).toEqual(
         expect.objectContaining({
           kind: "refusal",
           code: "sql_invalid",
@@ -66,10 +66,10 @@ describe("agent-record sql", () => {
     }
   });
 
-  test("prints columns and rows like a query", async () => {
+  test("prints columns and rows like a query", () => {
     const { home, env } = recordWithCommit();
     try {
-      const { value } = await sqlCommand.run(["SELECT sha FROM repo_commit"], testRuntime(env));
+      const { value } = sqlCommand.run(["SELECT sha FROM repo_commit"], testRuntime(env));
       expect(value).toEqual({
         denominator: "the rows the statement returned, in the order SQLite returned them",
         columns: ["sha"],
@@ -82,10 +82,10 @@ describe("agent-record sql", () => {
     }
   });
 
-  test("keeps the columns of a statement that matched nothing", async () => {
+  test("keeps the columns of a statement that matched nothing", () => {
     const { home, env } = recordWithCommit();
     try {
-      const { value } = await sqlCommand.run(
+      const { value } = sqlCommand.run(
         ["SELECT sha, subject FROM repo_commit WHERE sha = 'none'"],
         testRuntime(env),
       );
@@ -101,11 +101,11 @@ describe("agent-record sql", () => {
     }
   });
 
-  test("refuses a result that names a column twice, naming it", async () => {
+  test("refuses a result that names a column twice, naming it", () => {
     const { home, env } = recordWithCommit();
     const statement = "SELECT sha, subject AS sha FROM repo_commit";
     try {
-      expect(await refusal(() => sqlCommand.run([statement], testRuntime(env)))).toEqual(
+      expect(refusal(() => sqlCommand.run([statement], testRuntime(env)))).toEqual(
         expect.objectContaining({
           kind: "refusal",
           code: "sql_columns_repeated",
@@ -118,11 +118,11 @@ describe("agent-record sql", () => {
     }
   });
 
-  test("refuses a blob, naming hex() as the way to read it", async () => {
+  test("refuses a blob, naming hex() as the way to read it", () => {
     const { home, env } = recordWithCommit();
     const statement = "SELECT sha, randomblob(4) AS salt FROM repo_commit";
     try {
-      expect(await refusal(() => sqlCommand.run([statement], testRuntime(env)))).toEqual(
+      expect(refusal(() => sqlCommand.run([statement], testRuntime(env)))).toEqual(
         expect.objectContaining({
           kind: "refusal",
           code: "sql_blob",
@@ -135,13 +135,13 @@ describe("agent-record sql", () => {
     }
   });
 
-  test("refuses a read while a writer holds the record, naming it busy", async () => {
+  test("refuses a read while a writer holds the record, naming it busy", () => {
     const { home, env, path } = recordWithCommit();
     const writer = new Database(path);
     try {
       writer.run("PRAGMA locking_mode = EXCLUSIVE");
       writer.run("DELETE FROM repo_commit");
-      expect(await refusal(() => sqlCommand.run(["SELECT 1"], testRuntime(env)))).toEqual(
+      expect(refusal(() => sqlCommand.run(["SELECT 1"], testRuntime(env)))).toEqual(
         expect.objectContaining({
           kind: "refusal",
           code: "record_busy",
@@ -156,12 +156,12 @@ describe("agent-record sql", () => {
     }
   });
 
-  test("reads one row past the cap and no further", async () => {
+  test("reads one row past the cap and no further", () => {
     const { home, env } = recordWithCommit();
     try {
       const failsAtRow50 = `WITH RECURSIVE n(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM n WHERE i < 100)
         SELECT CASE WHEN i = 50 THEN abs(-9223372036854775808) ELSE i END AS i FROM n`;
-      const { value: result } = await sqlCommand.run([failsAtRow50], testRuntime(env));
+      const { value: result } = sqlCommand.run([failsAtRow50], testRuntime(env));
       expect(result).toMatchObject({ more: "more rows than 40; --rows <n> to widen" });
       expect(result).toHaveProperty("rows.length", 40);
     } finally {
@@ -170,12 +170,12 @@ describe("agent-record sql", () => {
   });
 
   for (const version of [SCHEMA_VERSION - 1, SCHEMA_VERSION + 1]) {
-    test(`refuses a record of version ${version > SCHEMA_VERSION ? "newer" : "older"} than this one before any statement, leaving it as it was`, async () => {
+    test(`refuses a record of version ${version > SCHEMA_VERSION ? "newer" : "older"} than this one before any statement, leaving it as it was`, () => {
       const { home, env, path } = recordWithCommit();
       try {
         stampSchemaVersion(path, version);
         const before = fingerprint(path);
-        expect(await refusal(() => sqlCommand.run(["SELECT 1"], testRuntime(env)))).toEqual(
+        expect(refusal(() => sqlCommand.run(["SELECT 1"], testRuntime(env)))).toEqual(
           expect.objectContaining({ code: "record_version" }),
         );
         expect(fingerprint(path)).toBe(before);
@@ -185,14 +185,12 @@ describe("agent-record sql", () => {
     });
   }
 
-  test("creates no database where there is none", async () => {
+  test("creates no database where there is none", () => {
     const empty = mkdtempSync(join(tmpdir(), "agent-record-db-read-"));
     try {
-      expect(await refusal(() => sqlCommand.run(["SELECT 1"], testRuntime(scratchEnv(empty))))).toMatchObject(
-        {
-          code: "no_database",
-        },
-      );
+      expect(refusal(() => sqlCommand.run(["SELECT 1"], testRuntime(scratchEnv(empty))))).toMatchObject({
+        code: "no_database",
+      });
       expect(existsSync(dbPath(scratchEnv(empty)))).toBe(false);
     } finally {
       rmSync(empty, { recursive: true, force: true });

@@ -19,8 +19,7 @@ The rest are named by the step they take (`ingest-parse-claude.ts`, `ingest-arch
 | `sync`, `rebuild` | The commands that run ingest, and the stamp a sync leaves |
 | `agent` | Install the launchd agent that syncs on a schedule, and read whether it is loaded |
 | `db` | Open, lock and read the SQLite record, and its schema |
-| `doctor` | Judge the record's readability and freshness, name the backup a rebuild left, and judge the launchd agent, the mirror, and the update check |
-| `update` | Check GitHub for a newer release, stage it beside the installed build, prune and roll back staged builds, and start the daily check from a release |
+| `doctor` | Judge the record's readability and freshness, name the backup a rebuild left, and judge the launchd agent and the mirror |
 | `mirror` | Copy the archive into the mirror folder, and read when it last held the whole archive |
 | `query`, `sql` | The named queries over the record, and raw read-only SQL |
 | `git`, `repo`, `worktree` | Run git, index a repo's files, and fold worktree paths onto their checkout |

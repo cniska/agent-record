@@ -67,23 +67,20 @@ describe("install.sh", () => {
     expect(readFileSync(join(home, ".zshrc"), "utf8")).toBe(`\nexport PATH="${home}/.local/bin:$PATH"\n`);
   });
 
-  for (const cut of [join(".local", "lib"), join(".local", "bin")])
-    test(`leaves the previous install whole when a write into ${cut} is cut off`, () => {
-      const dir = scratchDir();
-      const home = join(dir, "home");
-      const first = join(dir, "first");
-      const second = join(dir, "second");
-      for (const path of [home, first, second]) mkdirSync(path);
-      curlServing(first, release(dir, "0.1.0"));
-      expect(install(home, [first]).exitCode).toBe(0);
-      curlServing(second, release(dir, "0.2.0"));
-      cuttingWritesInto(second, join(home, cut));
-      expect(install(home, [second]).exitCode).not.toBe(0);
-      expect(versionOf(join(home, ".local", "bin", "agent-record"))).toBe("0.1.0\n");
-      expect(versionOf(join(home, ".local", "lib", "agent-record", "0.1.0", "agent-record"))).toBe("0.1.0\n");
-      for (const written of [join(".local", "bin"), join(".local", "lib", "agent-record", "0.1.0")])
-        expect(readdirSync(join(home, written))).toEqual(["agent-record"]);
-    });
+  test("leaves the previous install whole when its write is cut off", () => {
+    const dir = scratchDir();
+    const home = join(dir, "home");
+    const first = join(dir, "first");
+    const second = join(dir, "second");
+    for (const path of [home, first, second]) mkdirSync(path);
+    curlServing(first, release(dir, "0.1.0"));
+    expect(install(home, [first]).exitCode).toBe(0);
+    curlServing(second, release(dir, "0.2.0"));
+    cuttingWritesInto(second, join(home, ".local", "bin"));
+    expect(install(home, [second]).exitCode).not.toBe(0);
+    expect(versionOf(join(home, ".local", "bin", "agent-record"))).toBe("0.1.0\n");
+    expect(readdirSync(join(home, ".local", "bin"))).toEqual(["agent-record"]);
+  });
 
   for (const printed of ["", "1.2.3.4", "../x", "0.1.0\n../x"])
     test(`refuses a build that reports ${JSON.stringify(printed)} as its version, writing nothing`, () => {
@@ -101,7 +98,7 @@ describe("install.sh", () => {
       expect(readdirSync(home)).toEqual([]);
     });
 
-  test("keeps only the build it installed once it replaces another", () => {
+  test("installs the one build onto PATH, replacing the one before it", () => {
     const dir = scratchDir();
     const home = join(dir, "home");
     const first = join(dir, "first");
@@ -112,6 +109,7 @@ describe("install.sh", () => {
     curlServing(second, release(dir, "0.2.0"));
     expect(install(home, [second]).exitCode).toBe(0);
     expect(versionOf(join(home, ".local", "bin", "agent-record"))).toBe("0.2.0\n");
-    expect(readdirSync(join(home, ".local", "lib", "agent-record"))).toEqual(["0.2.0"]);
+    expect(readdirSync(join(home, ".local"))).toEqual(["bin"]);
+    expect(readdirSync(join(home, ".local", "bin"))).toEqual(["agent-record"]);
   });
 });

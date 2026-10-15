@@ -1,18 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { parseArg, parseFlags } from "./cli-flags";
+import { refusal } from "./db-read.test-support";
 
 const usage = "agent-record review <id> [--reason <r>] [--decided <who>]";
 
 const FLAGS = ["reason", "decided"] as const;
-
-function refusal(parse: () => unknown): unknown {
-  try {
-    parse();
-  } catch (error) {
-    return error;
-  }
-  return null;
-}
 
 describe("a command's arguments", () => {
   test("reads each flag's value and the argument around them", () => {

@@ -19,7 +19,6 @@ export function testRuntime(env: Env): Runtime {
     env,
     command: ["/opt/homebrew/bin/agent-record"],
     version: "0.1.0",
-    updates: null,
   };
 }
 
@@ -49,9 +48,9 @@ export function stampSchemaVersion(path: string, version: number): void {
   db.close();
 }
 
-export async function refusal(run: () => unknown): Promise<unknown> {
+export function refusal(run: () => unknown): unknown {
   try {
-    await run();
+    run();
     return null;
   } catch (error) {
     return error;

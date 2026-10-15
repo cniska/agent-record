@@ -2,7 +2,6 @@ import { Database } from "bun:sqlite";
 import { expect } from "bun:test";
 import {
   chmodSync,
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -24,7 +23,6 @@ const BUN_CACHE_OUTSIDE_HOMES = join(tmpdir(), "agent-record-acceptance-bun-cach
 const CWD_PLACEHOLDER = "{{cwd}}";
 const BUILD_RELEASE = join(import.meta.dir, "..", "scripts", "build-compiled.sh");
 export const SYSTEM_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
-const LAUNCHER = join(import.meta.dir, "..", "scripts", "launcher.sh");
 const PLUGIN_HOOKS = join(import.meta.dir, "..", "plugin", "hooks");
 const RELEASE_DOWNLOADS = "https://github.com/cniska/agent-record/releases/latest/download";
 
@@ -245,28 +243,13 @@ export function runPluginHook(home: Home): Ran {
   return ranOf(ran);
 }
 
-export function compiledRelease(dir: string, version?: string, releasesUrl?: string): string {
+export function compiledRelease(dir: string): string {
   const binary = join(dir, "agent-record");
-  const versionArgs =
-    version === undefined ? [] : [version, ...(releasesUrl === undefined ? [] : [releasesUrl])];
-  const ran = Bun.spawnSync(["/bin/bash", BUILD_RELEASE, binary, ...versionArgs], {
+  const ran = Bun.spawnSync(["/bin/bash", BUILD_RELEASE, binary], {
     env: { PATH: `${dirname(process.execPath)}:${SYSTEM_PATH}` },
   });
   expect({ exitCode: ran.exitCode, stderr: ran.stderr.toString() }).toMatchObject({ exitCode: 0 });
   return binary;
-}
-
-export function installedLauncher(bin: string, baseline: string, version: string): string {
-  const launcher = join(bin, "agent-record");
-  mkdirSync(bin, { recursive: true });
-  writeFileSync(
-    launcher,
-    readFileSync(LAUNCHER, "utf8")
-      .replace("__BASELINE_BIN__", baseline)
-      .replace("__BASELINE_VERSION__", version),
-  );
-  chmodSync(launcher, 0o755);
-  return launcher;
 }
 
 export function releaseAssets(dir: string, binary: string, target: string): string {
@@ -274,9 +257,7 @@ export function releaseAssets(dir: string, binary: string, target: string): stri
   const tarball = join(dir, `agent-record-${target}.tar.gz`);
   const packed = Bun.spawnSync(["tar", "-czf", tarball, "-C", dirname(binary), "agent-record"]);
   expect(packed.exitCode).toBe(0);
-  writeFileSync(join(dir, "launcher.sh"), readFileSync(LAUNCHER));
   writeChecksum(tarball, join(dir, `agent-record-${target}.sha256`));
-  writeChecksum(join(dir, "launcher.sh"), join(dir, "launcher.sha256"));
   return dir;
 }
 
@@ -312,107 +293,9 @@ export function runOnCleanMachine(
   env: RunEnv = {},
 ): Ran {
   const ran = Bun.spawnSync([...args], {
-    env: { PATH: [...bins, SYSTEM_PATH].join(":"), HOME: home.root, AGENT_RECORD_SKIP_UPDATE: "1", ...env },
+    env: { PATH: [...bins, SYSTEM_PATH].join(":"), HOME: home.root, ...env },
   });
   return ranOf(ran);
-}
-
-function releaseEnv(home: Home): RunEnv {
-  return { XDG_DATA_HOME: join(home.root, "data"), XDG_STATE_HOME: join(home.root, "state") };
-}
-
-export async function runReleased(
-  home: Home,
-  bins: readonly string[],
-  args: readonly string[],
-  env: RunEnv = {},
-): Promise<Ran> {
-  const child = Bun.spawn([...args], {
-    env: { PATH: [...bins, SYSTEM_PATH].join(":"), HOME: home.root, ...releaseEnv(home), ...env },
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  const [stdout, stderr, exitCode] = await Promise.all([
-    new Response(child.stdout).text(),
-    new Response(child.stderr).text(),
-    child.exited,
-  ]);
-  return { exitCode, stdout, stderr };
-}
-
-export type ReleaseServer = { readonly url: string; readonly requests: readonly string[]; stop(): void };
-
-export function releaseServer(assets: string, tag: string): ReleaseServer {
-  const requests: string[] = [];
-  const server = Bun.serve({
-    port: 0,
-    hostname: "127.0.0.1",
-    fetch(request) {
-      const { pathname, origin } = new URL(request.url);
-      requests.push(pathname);
-      if (pathname === "/releases/latest") {
-        return Response.json({
-          tag_name: tag,
-          assets: readdirSync(assets).map((name) => ({
-            name,
-            browser_download_url: `${origin}/download/${name}`,
-          })),
-        });
-      }
-      const file = Bun.file(join(assets, pathname.replace(/^\/download\//, "")));
-      return pathname.startsWith("/download/") ? new Response(file) : new Response(null, { status: 404 });
-    },
-  });
-  return {
-    url: `http://127.0.0.1:${server.port}/releases/latest`,
-    requests,
-    stop: () => server.stop(true),
-  };
-}
-
-const UPDATE_SETTLED_WITHIN_MS = 30_000;
-const UPDATE_POLL_MS = 50;
-
-function updateStampPath(home: Home): string {
-  return join(home.state, "last-update-check");
-}
-
-export function withUpdateCheckedAt(home: Home, at: string): Home {
-  mkdirSync(home.state, { recursive: true });
-  writeFileSync(updateStampPath(home), `${JSON.stringify({ kind: "current", at, latest: "0.1.0" })}\n`);
-  return home;
-}
-
-export function withUpdateCheckBegunAt(home: Home, at: string): Home {
-  mkdirSync(home.state, { recursive: true });
-  writeFileSync(updateStampPath(home), `${JSON.stringify({ kind: "checking", at })}\n`);
-  return home;
-}
-
-const UPDATE_STAMP = z.looseObject({ kind: z.string(), at: z.string() });
-
-type UpdateStamp = z.infer<typeof UPDATE_STAMP>;
-
-function updateStamp(home: Home): UpdateStamp | null {
-  const path = updateStampPath(home);
-  if (!existsSync(path)) return null;
-  return UPDATE_STAMP.parse(JSON.parse(readFileSync(path, "utf8")));
-}
-
-export async function settledUpdateCheck(home: Home, plantedAt: string | null = null): Promise<string> {
-  const deadline = Date.now() + UPDATE_SETTLED_WITHIN_MS;
-  while (Date.now() < deadline) {
-    const stamp = updateStamp(home);
-    const locked = existsSync(join(home.state, "locks", "update"));
-    if (stamp !== null && stamp.kind !== "checking" && stamp.at !== plantedAt && !locked) return stamp.kind;
-    await Bun.sleep(UPDATE_POLL_MS);
-  }
-  throw new Error(`no update check settled in ${home.state} within ${UPDATE_SETTLED_WITHIN_MS} ms`);
-}
-
-export async function updateStampAfter(home: Home, ms: number): Promise<UpdateStamp | null> {
-  await Bun.sleep(ms);
-  return updateStamp(home);
 }
 
 const ERROR = z.strictObject({

@@ -46,47 +46,6 @@ describe("the write lock", () => {
     expect(existsSync(lock)).toBe(false);
   });
 
-  test("stays held until asynchronous work finishes", async () => {
-    const { env, lock } = newRoot();
-    const work = Promise.withResolvers<void>();
-    let heldMidway = false;
-    const running = withLock(env, async () => {
-      await work.promise;
-      heldMidway = existsSync(lock);
-    });
-
-    expect(existsSync(lock)).toBe(true);
-    work.resolve();
-    await running;
-    expect(heldMidway).toBe(true);
-    expect(existsSync(lock)).toBe(false);
-  });
-
-  test("a second run is refused while asynchronous work is still in flight", async () => {
-    const { env, lock } = newRoot();
-    const work = Promise.withResolvers<void>();
-    const running = withLock(env, () => work.promise);
-
-    expect(() => withLock(env, () => null)).toThrow(LOCK_HELD);
-    work.resolve();
-    await running;
-    expect(existsSync(lock)).toBe(false);
-  });
-
-  test("releases when asynchronous work rejects", async () => {
-    const { env, lock } = newRoot();
-    const work = Promise.withResolvers<void>();
-    const running = withLock(env, async () => {
-      await work.promise;
-      throw new Error("mid-write");
-    });
-
-    expect(existsSync(lock)).toBe(true);
-    work.resolve();
-    await expect(running).rejects.toThrow("mid-write");
-    expect(existsSync(lock)).toBe(false);
-  });
-
   test("a lock left behind by a killed run is taken over", () => {
     const { env, lock } = newRoot();
     mkdirSync(lock, { recursive: true });

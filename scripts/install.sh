@@ -17,10 +17,6 @@ sha256_of() {
   fi
 }
 
-escape_replacement() {
-  printf '%s' "$1" | sed -e 's/[\\|&]/\\&/g'
-}
-
 fetch_verified() {
   url="$1"
   sha_url="$2"
@@ -46,30 +42,20 @@ platform_target() {
 }
 
 remove_leftovers() {
-  if [ -f "${tmpdir}/partials" ]; then
-    while IFS= read -r partial; do
-      rm -f "$partial"
-    done <"${tmpdir}/partials"
+  if [ -n "${partial:-}" ]; then
+    rm -f "$partial"
   fi
   rm -rf "$tmpdir"
 }
 
-install_file() {
+install_binary() {
   from="$1"
   dest="$2"
   partial="$(mktemp "$(dirname "$dest")/.agent-record.XXXXXX")" || die "could not write beside ${dest}"
-  printf '%s\n' "$partial" >>"${tmpdir}/partials"
   cp "$from" "$partial" || die "could not write ${partial}"
   chmod 755 "$partial"
   mv -f "$partial" "$dest" || die "could not move ${partial} to ${dest}"
-}
-
-prune_other_builds() {
-  for entry in "$lib_dir"/*; do
-    if [ -e "$entry" ] && [ "$entry" != "$1" ]; then
-      rm -rf "$entry"
-    fi
-  done
+  partial=""
 }
 
 shell_config() {
@@ -108,35 +94,27 @@ main() {
 
   target="$(platform_target)"
   install_dir="${HOME}/.local/bin"
-  lib_dir="${HOME}/.local/lib/agent-record"
   asset="agent-record-${target}.tar.gz"
   base_url="https://github.com/${REPO}/releases/latest/download"
 
+  partial=""
   tmpdir="$(mktemp -d)"
   trap remove_leftovers EXIT
 
   echo "Downloading the latest agent-record for ${target}..."
   fetch_verified "${base_url}/${asset}" "${base_url}/agent-record-${target}.sha256" "${tmpdir}/${asset}"
-  fetch_verified "${base_url}/launcher.sh" "${base_url}/launcher.sha256" "${tmpdir}/launcher.sh"
 
   tar -xzf "${tmpdir}/${asset}" -C "$tmpdir" agent-record || die "${asset} holds no agent-record binary"
   chmod +x "${tmpdir}/agent-record"
   version="$("${tmpdir}/agent-record" --version)" || die "the downloaded agent-record does not run on this machine"
   [ -n "$version" ] && [ "$(printf '%s\n' "$version" | grep -Ex '[0-9]+\.[0-9]+\.[0-9]+')" = "$version" ] ||
     die "the downloaded agent-record reports version '$(printf '%s' "$version" | tr '\n' ' ')', not x.y.z; this release is broken, so install a later one"
-  build_dir="${lib_dir}/${version}"
-  build="${build_dir}/agent-record"
 
-  mkdir -p "$build_dir" "$install_dir"
-  install_file "${tmpdir}/agent-record" "$build"
-  sed -e "s|__BASELINE_BIN__|$(escape_replacement "$build")|" \
-    -e "s|__BASELINE_VERSION__|$(escape_replacement "$version")|" \
-    "${tmpdir}/launcher.sh" >"${tmpdir}/launcher"
-  install_file "${tmpdir}/launcher" "${install_dir}/agent-record"
-  prune_other_builds "$build_dir"
+  mkdir -p "$install_dir"
+  install_binary "${tmpdir}/agent-record" "${install_dir}/agent-record"
 
   put_on_path "$install_dir"
-  echo "agent-record ${version} installed: ${install_dir}/agent-record runs ${build}."
+  echo "agent-record ${version} installed as ${install_dir}/agent-record."
   echo "Run 'agent-record sync' to build the record, then 'agent-record doctor'."
 }
 

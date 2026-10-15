@@ -23,6 +23,13 @@ describe("a release tag", () => {
     ]);
   });
 
+  test("orders each field of a version as a number, not as text", () => {
+    expect(releaseProblems(candidate("0.10.0", 15), at("v0.9.9", 15))).toEqual([]);
+    expect(releaseProblems(candidate("0.1.9", 15), at("v0.1.10", 15))).toEqual([
+      "0.1.9 is not newer than the previous release v0.1.10",
+    ]);
+  });
+
   test("fails a tag that does not name package.json's version, or is not newer", () => {
     expect(releaseProblems({ tag: "v0.2.0", version: "0.1.0", schema: 15 }, null)).toEqual([
       "the tag v0.2.0 does not name package.json's version 0.1.0",

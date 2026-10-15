@@ -8,7 +8,6 @@ import { stampingOutcome } from "./sync-stamp";
 
 export const rebuildCommand: Command = {
   name: "rebuild",
-  startsUpdateCheck: false,
   usage: "agent-record rebuild",
   summary: "forget every cursor and read the archive from the start",
   run(args, runtime) {

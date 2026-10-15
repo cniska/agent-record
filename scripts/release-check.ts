@@ -2,7 +2,6 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { version } from "../package.json";
-import { compareVersions, parseVersion } from "../src/update-version";
 
 export type Release = { readonly tag: string; readonly schema: number };
 
@@ -11,6 +10,20 @@ export type Candidate = Release & { readonly version: string };
 const SCHEMA_LINE = /^export const SCHEMA_VERSION = (\d+);$/m;
 const SCHEMA_FILE = "src/db-schema.ts";
 const TAG_PREFIX = "v";
+
+type Version = { readonly major: number; readonly minor: number; readonly patch: number };
+
+const VERSION = /^(\d+)\.(\d+)\.(\d+)$/;
+
+function parseVersion(text: string): Version | null {
+  const [, major, minor, patch] = VERSION.exec(text) ?? [];
+  if (major === undefined || minor === undefined || patch === undefined) return null;
+  return { major: Number(major), minor: Number(minor), patch: Number(patch) };
+}
+
+function compareVersions(a: Version, b: Version): number {
+  return a.major - b.major || a.minor - b.minor || a.patch - b.patch;
+}
 
 export function schemaOf(source: string): number {
   const [, schema] = SCHEMA_LINE.exec(source) ?? [];

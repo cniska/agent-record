@@ -33,7 +33,7 @@ describe("launchd agent", () => {
     expect(plist).not.toContain("WorkingDirectory");
   });
 
-  test("runs an installed release through its launcher alone, so no checkout or Bun is needed", () => {
+  test("runs an installed release by its command alone, so no checkout or Bun is needed", () => {
     const plist = agentPlist(["/opt/homebrew/bin/agent-record"], scratchEnv(newRoot()));
     expect(plist).toContain(
       "<array>\n    <string>/opt/homebrew/bin/agent-record</string>\n    <string>sync</string>\n  </array>",

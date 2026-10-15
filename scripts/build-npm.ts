@@ -48,7 +48,7 @@ export function shimManifest(version: string, platforms: readonly Platform[]): R
     bugs: { url: `${HOMEPAGE}/issues` },
     keywords: ["agent", "claude-code", "codex", "cli", "sessions", "sqlite"],
     bin: { [NAME]: `bin/${NAME}.cjs` },
-    files: [`bin/${NAME}.cjs`, "launcher.sh"],
+    files: [`bin/${NAME}.cjs`],
     engines: { node: ">=20" },
     optionalDependencies: Object.fromEntries(
       platforms.map((platform) => [platformPackage(platform), version]),
@@ -78,11 +78,9 @@ function buildTree(artifactsDir: string, outDir: string): void {
   mkdirSync(join(shim, "bin"), { recursive: true });
   writeJson(join(shim, "package.json"), shimManifest(version, PLATFORMS));
   copyFileSync(join(root, "npm", `${NAME}.cjs`), join(shim, "bin", `${NAME}.cjs`));
-  copyFileSync(join(root, "scripts", "launcher.sh"), join(shim, "launcher.sh"));
   copyFileSync(join(root, "README.md"), join(shim, "README.md"));
   copyFileSync(join(root, "LICENSE"), join(shim, "LICENSE"));
   chmodSync(join(shim, "bin", `${NAME}.cjs`), 0o755);
-  chmodSync(join(shim, "launcher.sh"), 0o755);
 }
 
 if (import.meta.main) {

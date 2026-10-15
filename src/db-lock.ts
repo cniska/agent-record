@@ -96,25 +96,12 @@ function release(path: string): void {
   if (renamedAway(path, dropped)) rmSync(dropped, { recursive: true, force: true });
 }
 
-function withPathLock<T>(path: string, fn: () => T): T {
-  claim(path);
-  const done = () => release(path);
-  let result: T;
-  try {
-    result = fn();
-  } catch (error) {
-    done();
-    throw error;
-  }
-  if (result instanceof Promise) result.then(done, done);
-  else done();
-  return result;
-}
-
 export function withLock<T>(env: Env, fn: () => T): T {
-  return withPathLock(join(locksDir(env), "record"), fn);
-}
-
-export function withUpdateLock<T>(env: Env, fn: () => T): T {
-  return withPathLock(join(locksDir(env), "update"), fn);
+  const path = join(locksDir(env), "record");
+  claim(path);
+  try {
+    return fn();
+  } finally {
+    release(path);
+  }
 }

@@ -11,7 +11,7 @@ describe("the npm packages", () => {
       name: "@cniska/agent-record",
       version: "1.2.3",
       bin: { "agent-record": "bin/agent-record.cjs" },
-      files: ["bin/agent-record.cjs", "launcher.sh"],
+      files: ["bin/agent-record.cjs"],
       optionalDependencies: {
         "@cniska/agent-record-darwin-arm64": "1.2.3",
         "@cniska/agent-record-linux-x64": "1.2.3",

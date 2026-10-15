@@ -7,7 +7,6 @@ const LOADERS: Record<string, () => Promise<Command>> = {
   sql: () => import("./sql-command").then((m) => m.sqlCommand),
   agent: () => import("./agent-command").then((m) => m.agentCommand),
   doctor: () => import("./doctor-command").then((m) => m.doctorCommand),
-  update: () => import("./update-command").then((m) => m.updateCommand),
 };
 
 export function findCommand(name: string | undefined): Promise<Command> | undefined {

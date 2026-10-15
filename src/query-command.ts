@@ -7,7 +7,6 @@ import { DEFAULT_MAX_ROWS, rowsOf } from "./query-row-cap";
 
 export const queryCommand: Command = {
   name: "query",
-  startsUpdateCheck: true,
   usage: "agent-record query <name> <arg> [--rows <n>] | agent-record query list",
   summary: `ask the database a named question; ${DEFAULT_MAX_ROWS} rows print unless --rows widens them`,
   run(args, runtime) {
