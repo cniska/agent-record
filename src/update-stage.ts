@@ -8,8 +8,15 @@ import { refuseUpdate } from "./update-contract";
 import { stagedBuilds } from "./update-state";
 import { isNewer } from "./update-version";
 
+const VERSION_CHECK_TIMEOUT_MS = 30_000;
+
 function reportedVersion(binary: string): string | null {
-  const ran = Bun.spawnSync([binary, VERSION_FLAG], { stdin: "ignore", stdout: "pipe", stderr: "ignore" });
+  const ran = Bun.spawnSync([binary, VERSION_FLAG], {
+    stdin: "ignore",
+    stdout: "pipe",
+    stderr: "ignore",
+    timeout: VERSION_CHECK_TIMEOUT_MS,
+  });
   return ran.exitCode === 0 ? ran.stdout.toString() : null;
 }
 

@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { errorDetail } from "./error-read";
@@ -23,7 +23,7 @@ export function platformTarget(): string {
   return target;
 }
 
-async function fetched(url: string): Promise<Response> {
+async function fetched<T>(url: string, read: (response: Response) => Promise<T>): Promise<T> {
   let response: Response;
   try {
     response = await fetch(url, {
@@ -38,11 +38,19 @@ async function fetched(url: string): Promise<Response> {
     );
   }
   if (!response.ok) throw refuseUpdate("update_failed", { detail: `${url} answered ${response.status}` });
-  return response;
+  try {
+    return await read(response);
+  } catch (error) {
+    throw refuseUpdate(
+      "update_failed",
+      { detail: `${url} answered unreadably: ${errorDetail(error)}` },
+      error,
+    );
+  }
 }
 
 export async function latestRelease(releasesUrl: string, target: string): Promise<LatestRelease> {
-  const parsed = ReleaseJson.safeParse(await (await fetched(releasesUrl)).json());
+  const parsed = ReleaseJson.safeParse(await fetched(releasesUrl, (response) => response.json()));
   if (!parsed.success) throw refuseUpdate("update_failed", { detail: `${releasesUrl} answered no release` });
   const { tag_name: tag, assets } = parsed.data;
   const url = (name: string) => {
@@ -57,10 +65,14 @@ export async function latestRelease(releasesUrl: string, target: string): Promis
   };
 }
 
-export async function downloadedBinary(release: LatestRelease, tmpDir: string): Promise<string> {
+export async function withDownloadedBinary<T>(
+  release: LatestRelease,
+  tmpDir: string,
+  use: (binary: string) => T,
+): Promise<T> {
   const [tarball, checksum] = await Promise.all([
-    fetched(release.tarball).then((response) => response.arrayBuffer()),
-    fetched(release.checksum).then((response) => response.text()),
+    fetched(release.tarball, (response) => response.arrayBuffer()),
+    fetched(release.checksum, (response) => response.text()),
   ]);
   const [, expected] = SHA256.exec(checksum) ?? [];
   if (expected === undefined)
@@ -72,16 +84,20 @@ export async function downloadedBinary(release: LatestRelease, tmpDir: string): 
     });
   }
   const dir = mkdtempSync(join(tmpDir, `${NAME}-update-`));
-  const archive = join(dir, `${NAME}.tar.gz`);
-  writeFileSync(archive, new Uint8Array(tarball));
-  const untar = Bun.spawnSync(["tar", "-xzf", archive, "-C", dir, NAME], {
-    stdout: "ignore",
-    stderr: "pipe",
-  });
-  if (untar.exitCode !== 0) {
-    throw refuseUpdate("update_failed", {
-      detail: `the ${release.version} download holds no ${NAME}: ${untar.stderr.toString().trim()}`,
+  try {
+    const archive = join(dir, `${NAME}.tar.gz`);
+    writeFileSync(archive, new Uint8Array(tarball));
+    const untar = Bun.spawnSync(["tar", "-xzf", archive, "-C", dir, NAME], {
+      stdout: "ignore",
+      stderr: "pipe",
     });
+    if (untar.exitCode !== 0) {
+      throw refuseUpdate("update_failed", {
+        detail: `the ${release.version} download holds no ${NAME}: ${untar.stderr.toString().trim()}`,
+      });
+    }
+    return use(join(dir, NAME));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
-  return join(dir, NAME);
 }

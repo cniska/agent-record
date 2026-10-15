@@ -8,5 +8,7 @@ export function startDailyCheckIfDue(command: Command, runtime: Runtime): void {
   const { updates, env } = runtime;
   if (updates === null || env.skipUpdate || !command.startsUpdateCheck) return;
   if (!checkIsDue(readUpdateStamp(env), runtime.now())) return;
-  spawn(updates.executable, STAGED_UPDATE, { detached: true, stdio: "ignore" }).unref();
+  const child = spawn(updates.executable, STAGED_UPDATE, { detached: true, stdio: "ignore" });
+  child.on("error", () => {});
+  child.unref();
 }

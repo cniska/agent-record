@@ -1,11 +1,10 @@
 import { rmSync } from "node:fs";
-import { dirname } from "node:path";
 import type { Runtime } from "./cli-contract";
 import { isRefusal } from "./coded-error";
 import { withUpdateLock } from "./db-lock";
 import { stagedBuildsDir } from "./paths";
 import { refuseUpdate, type UpdateSource } from "./update-contract";
-import { downloadedBinary, latestRelease, platformTarget } from "./update-fetch";
+import { latestRelease, platformTarget, withDownloadedBinary } from "./update-fetch";
 import { pruneStaged, stageBuild } from "./update-stage";
 import {
   checkIsDue,
@@ -49,12 +48,7 @@ async function checked(
   const { version: latest } = release;
   const wanted = isWanted(latest, running, readRejected(env));
   if (wanted && !stagedBuilds(env).some(({ version }) => version === latest)) {
-    const binary = await downloadedBinary(release, env.tmpDir);
-    try {
-      stageBuild(binary, latest, env);
-    } finally {
-      rmSync(dirname(binary), { recursive: true, force: true });
-    }
+    await withDownloadedBinary(release, env.tmpDir, (binary) => stageBuild(binary, latest, env));
   }
   const pruned = pruneStaged(running, source.executable, env);
   const stamp: UpdateCheck = wanted ? { kind: "staged", at, latest } : { kind: "current", at, latest };
