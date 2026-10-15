@@ -2,7 +2,7 @@
 
 Query your past agent work: every coding-agent session on this machine, kept verbatim even after the tools delete theirs and joined to the commits it made, in one SQLite database. It is not memory, since it puts nothing into an agent's context, and it gates nothing; agent-gates does.
 
-- `agent-record sync` reads the session files of Claude Code, Codex, Grok, pi and omp into that database, with the commits of the repos those sessions worked in and the cniska-skills plugin's hook event log.
+- `agent-record sync` reads the session files of Claude Code, Codex, Grok, pi and omp into that database, with the commits of the repos those sessions worked in and the hook event log any Claude Code plugin writes in the format [`SPEC.md`](SPEC.md) §2.13 defines.
 - `agent-record query` and `agent-record sql` read it. Search comes first: `query search` finds where earlier work was said, decided or ran into friction, and `query thread` shows what happened around it.
 - It needs no credential and has no per-token cost. Its only network use is a release checking GitHub for, and downloading, a newer release of itself, which `AGENT_RECORD_SKIP_UPDATE=1` turns off.
 
@@ -51,7 +51,7 @@ Each command prints one JSON line.
 
 | Command | Does |
 | --- | --- |
-| `agent-record sync` | Copy every new byte of every tool's session files and of the cniska-skills hook event log into the archive and read them from there, then the commits and files of the checkouts they name that changed since the last sync, then mirror the archive; a record of an older schema version is rebuilt first |
+| `agent-record sync` | Copy every new byte of every tool's session files and of every plugin's hook event log into the archive and read them from there, then the commits and files of the checkouts they name that changed since the last sync, then mirror the archive; a record of an older schema version is rebuilt first |
 | `agent-record rebuild` | Drop the record and read it again from the archive, naming each checkout no longer on disk whose history it lost |
 | `agent-record agent install` | Write a launchd agent that runs `sync` every 15 minutes |
 | `agent-record doctor` | Judge whether the record is current and readable, naming the fix for each problem; exits 1 when a check fails |
@@ -68,7 +68,7 @@ Each command prints one JSON line.
 
 The record lives at `$XDG_DATA_HOME/agent-record/sessions.db` (`~/.local/share/agent-record/sessions.db` by default); `src/db-schema.ts` holds its tables.
 
-The archive beside it, `$XDG_DATA_HOME/agent-record/archive/<tool>/`, keeps a copy of every session file `sync` has seen, laid out as the tool lays it out, and the record reads only those copies. A tool deleting its old transcripts loses nothing the archive holds: `rebuild` gives back every session whose file `sync` archived, as it last saw it. A file the tool shrank or rewrote is kept as rewritten. The cniska-skills hook event log is archived at `archive/plugin-data/cniska-skills-<marketplace>/events.jsonl`; a log that shrank or was rewritten, as a reinstalled plugin starts it again, keeps its earlier copy beside it as `events-<n>.jsonl`, and the record keeps its events.
+The archive beside it, `$XDG_DATA_HOME/agent-record/archive/<tool>/`, keeps a copy of every session file `sync` has seen, laid out as the tool lays it out, and the record reads only those copies. A tool deleting its old transcripts loses nothing the archive holds: `rebuild` gives back every session whose file `sync` archived, as it last saw it. A file the tool shrank or rewrote is kept as rewritten. Each plugin's hook event log is archived at `archive/plugin-data/<plugin>-<marketplace>/events.jsonl`; a log that shrank or was rewritten, as a reinstalled plugin starts it again, keeps its earlier copy beside it as `events-<n>.jsonl`, and the record keeps its events.
 
 On APFS the first copy of a file is a clone and takes no space of its own. Bytes a session gains after that are appended to the copy, so they are stored twice.
 

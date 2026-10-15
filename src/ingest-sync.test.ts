@@ -166,7 +166,7 @@ describe("a sync", () => {
   test("reads every archived hook event log, reports its dropped lines, and keeps its events through a rebuild", () => {
     const root = mkdtempSync(join(tmpdir(), "agent-record-events-"));
     const env = scratchEnv(root);
-    const live = join(pluginDataDir(env), "cniska-skills-cniska", "events.jsonl");
+    const live = join(pluginDataDir(env), "acme-kit", "events.jsonl");
     mkdirSync(join(live, ".."), { recursive: true });
     const prompt = {
       v: 1,
@@ -178,7 +178,7 @@ describe("a sync", () => {
     writeFileSync(live, `${JSON.stringify({ ...prompt, cwd: "/w", tool: "Bash" })}\n{broken\n`);
     const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     const events = () => db.query("SELECT src_file, src_line, event, tool FROM hook_event").all();
-    const copy = join(archiveDir(env), "plugin-data", "cniska-skills-cniska", "events.jsonl");
+    const copy = join(archiveDir(env), "plugin-data", "acme-kit", "events.jsonl");
     try {
       const report = sync(db, env);
       expect({ eventLogs: report.eventLogs, filesRead: report.filesRead, dropped: report.dropped }).toEqual({

@@ -1,6 +1,6 @@
 import { afterEach, expect, test } from "bun:test";
-import { existsSync, readFileSync, rmSync } from "node:fs";
-import { join, relative } from "node:path";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join, relative } from "node:path";
 import { withClaudeSessions } from "./claude-sessions";
 import {
   type Home,
@@ -19,7 +19,6 @@ import { archivedEventLog, eventLogPath, gate, type HookLine, verdict, withEvent
 afterEach(removeScratch);
 
 const SESSION = "0b8f2c1e-7d4a-4e2b-9c3f-5a6d7e8f9a0b";
-const OTHER_INSTALL = "cniska-skills-inline";
 const OTHER_PLUGIN = "other-plugin-market";
 const REPO = "/Users/x/code/demo";
 const OTHER_REPO = "/Users/x/code/other";
@@ -27,7 +26,7 @@ const OTHER_REPO = "/Users/x/code/other";
 const HOOK_EVENTS = `select src_line, ts, event, session, agent, gate, decision, reason, repo, head, fingerprint,
   verdict, tool, tool_use, rule from hook_event order by src_file, src_line`;
 
-test("AC-46 a sync archives and reads every cniska-skills event log, reports its bad lines, and a rebuild or a reset log keeps them", () => {
+test("AC-46 a sync archives and reads the event log of every plugin, reports its bad lines, and a rebuild or a reset log keeps them", () => {
   const home = withICloudDrive(scratchHome());
   withEventLog(home, SESSION, [
     gate("2026-10-14T08:00:00Z", {
@@ -55,29 +54,24 @@ test("AC-46 a sync archives and reads every cniska-skills event log, reports its
     home,
     SESSION,
     [{ ts: "2026-10-14T09:00:00Z", event: "permission_prompt", tool: "Edit" }],
-    OTHER_INSTALL,
-  );
-  withEventLog(
-    home,
-    SESSION,
-    [{ ts: "2026-10-14T09:00:00Z", event: "permission_prompt", tool: "Edit" }],
     OTHER_PLUGIN,
   );
+  const unlogged = join(dirname(eventLogPath(home, OTHER_PLUGIN)), "state.jsonl");
+  writeFileSync(unlogged, '{"v":1}\n');
 
   const synced = sync(home);
   expect(synced.eventLogs).toBe(2);
   expect(synced.dropped).toEqual([{ path: archivedEventLog(home), lines: [5, 6] }]);
-  for (const install of [undefined, OTHER_INSTALL]) {
+  for (const install of [undefined, OTHER_PLUGIN]) {
     const copy = archivedEventLog(home, install);
     expect(readFileSync(copy, "utf8")).toBe(readFileSync(eventLogPath(home, install), "utf8"));
     expect(readFileSync(join(home.mirror, "archive", relative(home.archive, copy)), "utf8")).toBe(
       readFileSync(copy, "utf8"),
     );
   }
-  expect(existsSync(archivedEventLog(home, OTHER_PLUGIN))).toBe(false);
-  expect(
-    existsSync(join(home.mirror, "archive", relative(home.archive, archivedEventLog(home, OTHER_PLUGIN)))),
-  ).toBe(false);
+  const unloggedCopy = join(dirname(archivedEventLog(home, OTHER_PLUGIN)), "state.jsonl");
+  expect(existsSync(unloggedCopy)).toBe(false);
+  expect(existsSync(join(home.mirror, "archive", relative(home.archive, unloggedCopy)))).toBe(false);
 
   const events = rowsOf(home, HOOK_EVENTS);
   expect(events).toEqual([
@@ -174,7 +168,7 @@ test("AC-46 a sync archives and reads every cniska-skills event log, reports its
   expect(grown).toHaveLength(6);
 
   rmSync(eventLogPath(home));
-  rmSync(eventLogPath(home, OTHER_INSTALL));
+  rmSync(eventLogPath(home, OTHER_PLUGIN));
   expect(rebuild(home).eventLogs).toBe(2);
   expect(rowsOf(home, HOOK_EVENTS)).toEqual(grown);
 

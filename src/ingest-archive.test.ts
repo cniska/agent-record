@@ -70,19 +70,21 @@ describe("archiving hook event logs", () => {
   const log = (env: Env, install: string) => join(pluginDataDir(env), install, "events.jsonl");
   const copyOf = (env: Env, install: string) => join(archiveDir(env), "plugin-data", install, "events.jsonl");
 
-  test("copies the log of every cniska-skills install, and no other plugin's", () => {
+  test("copies the log of every plugin install, and no other file in its data folder", () => {
     const env = newEnv();
-    write(log(env, "cniska-skills-cniska"), '{"v":1}\n');
-    write(log(env, "cniska-skills-inline"), '{"v":1}\n{"v":1}\n');
-    write(log(env, "other-plugin-market"), '{"v":1}\n');
+    write(log(env, "acme-kit"), '{"v":1}\n');
+    write(log(env, "other-plugin-market"), '{"v":1}\n{"v":1}\n');
+    write(join(pluginDataDir(env), "other-plugin-market", "state.jsonl"), '{"v":1}\n');
     expect(archive(env).report).toEqual({ files: 2, bytes: 24 });
-    expect(readFileSync(copyOf(env, "cniska-skills-inline"), "utf8")).toBe('{"v":1}\n{"v":1}\n');
-    expect(existsSync(copyOf(env, "other-plugin-market"))).toBe(false);
+    expect(readFileSync(copyOf(env, "other-plugin-market"), "utf8")).toBe('{"v":1}\n{"v":1}\n');
+    expect(existsSync(join(archiveDir(env), "plugin-data", "other-plugin-market", "state.jsonl"))).toBe(
+      false,
+    );
   });
 
   test("appends what a log gained, and keeps the copy of one rewritten shorter beside the new copy", () => {
     const env = newEnv();
-    const live = write(log(env, "cniska-skills-cniska"), '{"a":1}\n');
+    const live = write(log(env, "acme-kit"), '{"a":1}\n');
     age(live, 60);
     archive(env);
     appendFileSync(live, '{"b":2}\n');
@@ -90,11 +92,11 @@ describe("archiving hook event logs", () => {
     age(live, 30);
     write(live, '{"c":3}\n');
     const result = archive(env);
-    expect(readFileSync(copyOf(env, "cniska-skills-cniska"), "utf8")).toBe('{"c":3}\n');
-    const segment = join(archiveDir(env), "plugin-data", "cniska-skills-cniska", "events-1.jsonl");
+    expect(readFileSync(copyOf(env, "acme-kit"), "utf8")).toBe('{"c":3}\n');
+    const segment = join(archiveDir(env), "plugin-data", "acme-kit", "events-1.jsonl");
     expect(readFileSync(segment, "utf8")).toBe('{"a":1}\n{"b":2}\n');
     expect(result.replaced).toEqual([]);
-    expect(result.logsReset).toEqual([[copyOf(env, "cniska-skills-cniska"), '{"a":1}\n{"b":2}\n']]);
+    expect(result.logsReset).toEqual([[copyOf(env, "acme-kit"), '{"a":1}\n{"b":2}\n']]);
 
     write(live, '{"d":4}\n');
     age(live, 10);
