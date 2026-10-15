@@ -1,15 +1,19 @@
 import { afterEach, expect, test } from "bun:test";
-import { chmodSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import {
+  cliOnPathExit,
   doctor,
   type Home,
   holdingRecord,
   livePath,
+  pluginNote,
   refused,
   removeScratch,
+  rowsOf,
   runCli,
+  runPluginHook,
   schemaVersion,
   scratchHome,
   setSchemaVersion,
@@ -259,4 +263,15 @@ test("AC-18 doctor fails a busy record with the refusal's fix", () => {
     },
   });
 });
-test.todo("AC-21 the plugin hook starts sync when agent-record is on PATH and does nothing otherwise", () => {});
+
+test("AC-21 the plugin hook starts sync and prints the note when agent-record is on PATH, and does nothing otherwise", async () => {
+  const home = withFixtures(scratchHome(), [CLAUDE]);
+  const cliExit = cliOnPathExit(home);
+  expect(runPluginHook(home)).toEqual({ exitCode: 0, stdout: pluginNote(), stderr: "" });
+  expect(await cliExit).toBe(0);
+  expect(rowsOf(home, "select id from session")).toEqual([["claude-session"]]);
+
+  const without = withFixtures(scratchHome(), [CLAUDE]);
+  expect(runPluginHook(without)).toEqual({ exitCode: 0, stdout: "", stderr: "" });
+  expect(existsSync(without.record)).toBe(false);
+});

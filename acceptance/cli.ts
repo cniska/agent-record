@@ -13,6 +13,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
+import type { SyncSubprocess } from "bun";
 import { z } from "zod";
 
 const CLI = join(import.meta.dir, "cli-no-wait.ts");
@@ -23,6 +24,7 @@ const CWD_PLACEHOLDER = "{{cwd}}";
 const BUILD_RELEASE = join(import.meta.dir, "..", "scripts", "build-compiled.sh");
 export const SYSTEM_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
 const LAUNCHER = join(import.meta.dir, "..", "scripts", "launcher.sh");
+const PLUGIN_HOOKS = join(import.meta.dir, "..", "plugin", "hooks");
 const RELEASE_DOWNLOADS = "https://github.com/cniska/agent-record/releases/latest/download";
 
 const TOOL = z.enum(["claude", "codex", "grok", "pi", "omp"]);
@@ -49,6 +51,10 @@ export type Home = {
 };
 
 type Ran = { readonly exitCode: number; readonly stdout: string; readonly stderr: string };
+
+function ranOf(ran: SyncSubprocess<"pipe", "pipe">): Ran {
+  return { exitCode: ran.exitCode, stdout: ran.stdout.toString(), stderr: ran.stderr.toString() };
+}
 
 const scratchDirs: string[] = [];
 
@@ -188,18 +194,44 @@ export function withICloudDrive(home: Home): Home {
   return home;
 }
 
+function homeEnv(home: Home): RunEnv {
+  return {
+    BUN_RUNTIME_TRANSPILER_CACHE_PATH: BUN_CACHE_OUTSIDE_HOMES,
+    HOME: home.root,
+    XDG_DATA_HOME: join(home.root, "data"),
+    XDG_STATE_HOME: join(home.root, "state"),
+  };
+}
+
 export function runCli(home: Home, args: readonly string[], env: RunEnv = {}): Ran {
   const ran = Bun.spawnSync([process.execPath, CLI, ...args], {
-    env: {
-      PATH: `${home.bin}:${process.env.PATH}`,
-      BUN_RUNTIME_TRANSPILER_CACHE_PATH: BUN_CACHE_OUTSIDE_HOMES,
-      HOME: home.root,
-      XDG_DATA_HOME: join(home.root, "data"),
-      XDG_STATE_HOME: join(home.root, "state"),
-      ...env,
-    },
+    env: { PATH: `${home.bin}:${process.env.PATH}`, ...homeEnv(home), ...env },
   });
-  return { exitCode: ran.exitCode, stdout: ran.stdout.toString(), stderr: ran.stderr.toString() };
+  return ranOf(ran);
+}
+
+const EXIT_STATUS = z.coerce.number().int().nonnegative();
+
+export function cliOnPathExit(home: Home): Promise<number> {
+  const exited = join(home.root, "cli-exited");
+  expect(Bun.spawnSync(["mkfifo", exited]).exitCode).toBe(0);
+  mkdirSync(home.bin, { recursive: true });
+  const cli = join(home.bin, "agent-record");
+  writeFileSync(cli, `#!/bin/sh\n"${process.execPath}" "${CLI}" "$@"\necho "$?" > "${exited}"\n`);
+  chmodSync(cli, 0o755);
+  const reader = Bun.spawn(["cat", exited], { stdout: "pipe" });
+  return new Response(reader.stdout).text().then((status) => EXIT_STATUS.parse(status.trim()));
+}
+
+export function pluginNote(): string {
+  return readFileSync(join(PLUGIN_HOOKS, "note.md"), "utf8");
+}
+
+export function runPluginHook(home: Home): Ran {
+  const ran = Bun.spawnSync(["/bin/sh", join(PLUGIN_HOOKS, "session-start.sh")], {
+    env: { PATH: `${home.bin}:${SYSTEM_PATH}`, ...homeEnv(home) },
+  });
+  return ranOf(ran);
 }
 
 export function compiledRelease(dir: string, version?: string, releasesUrl?: string): string {
@@ -271,7 +303,7 @@ export function runOnCleanMachine(
   const ran = Bun.spawnSync([...args], {
     env: { PATH: [...bins, SYSTEM_PATH].join(":"), HOME: home.root, AGENT_RECORD_SKIP_UPDATE: "1", ...env },
   });
-  return { exitCode: ran.exitCode, stdout: ran.stdout.toString(), stderr: ran.stderr.toString() };
+  return ranOf(ran);
 }
 
 function releaseEnv(home: Home): RunEnv {
