@@ -1,11 +1,18 @@
-import { describe, expect, test } from "bun:test";
-import { mkdtempSync, statSync, utimesSync, writeFileSync } from "node:fs";
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sameStamp, stampLike } from "./file-copy";
 
+const dirs: string[] = [];
+
+afterEach(() => {
+  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
+
 function pair(): { source: string; copy: string } {
   const dir = mkdtempSync(join(tmpdir(), "agent-record-file-copy-"));
+  dirs.push(dir);
   const source = join(dir, "source.jsonl");
   const copy = join(dir, "copy.jsonl");
   writeFileSync(source, '{"a":1}\n');
