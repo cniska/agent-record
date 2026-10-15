@@ -340,6 +340,12 @@ export function withUpdateCheckedAt(home: Home, at: string): Home {
   return home;
 }
 
+export function withUpdateCheckBegunAt(home: Home, at: string): Home {
+  mkdirSync(home.state, { recursive: true });
+  writeFileSync(updateStampPath(home), `${JSON.stringify({ kind: "checking", at })}\n`);
+  return home;
+}
+
 const UPDATE_STAMP = z.looseObject({ kind: z.string(), at: z.string() });
 
 type UpdateStamp = z.infer<typeof UPDATE_STAMP>;

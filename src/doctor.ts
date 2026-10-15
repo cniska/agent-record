@@ -23,10 +23,15 @@ import {
 
 const SYNC_STOPPED_AFTER_MS = 24 * HOUR_MS;
 const MIRROR_STALE_AFTER_MS = 24 * HOUR_MS;
+
 const SYNC = "agent-record sync";
 const UPDATE = "agent-record update";
 const LIKELY_OFFLINE = "this machine was likely offline";
 const SYNC_AND_FIX_MIRROR = `${SYNC}, and fix any mirror failure it reports`;
+
+function wholeHours(ms: number): number {
+  return Math.round(ms / HOUR_MS);
+}
 
 type Health = {
   readonly name: string;
@@ -80,7 +85,7 @@ function syncHealth(stamp: SyncStamp, now: Date): Health {
         };
       }
       const age = now.getTime() - stamp.at.getTime();
-      const detail = `last sync finished ${Math.round(age / HOUR_MS)} hours ago`;
+      const detail = `last sync finished ${wholeHours(age)} hours ago`;
       if (age > SYNC_STOPPED_AFTER_MS)
         return { name, state: "warn", detail, fix: `${SYNC}, and fix any error it reports` };
       return { name, state: "ok", detail, fix: null };
@@ -146,7 +151,7 @@ function mirrorHealth(mirror: MirrorState, now: Date): Health {
       return { name, state: "warn", detail: `${mirror.stamp} holds no mirror time`, fix: SYNC };
     case "mirrored": {
       const age = now.getTime() - mirror.at.getTime();
-      const detail = `the whole archive was last mirrored to ${mirror.path} ${Math.round(age / HOUR_MS)} hours ago`;
+      const detail = `the whole archive was last mirrored to ${mirror.path} ${wholeHours(age)} hours ago`;
       if (age > MIRROR_STALE_AFTER_MS) return { name, state: "warn", detail, fix: SYNC_AND_FIX_MIRROR };
       return { name, state: "ok", detail, fix: null };
     }
@@ -223,10 +228,18 @@ function releaseUpdateHealth(
         detail: `the last update check failed: ${stamp.error.message}`,
         fix: stamp.error.resolve,
       };
-    case "checking":
+    case "checking": {
+      const hours = wholeHours(now.getTime() - stamp.at.getTime());
+      return {
+        name,
+        state: "warn",
+        detail: `the last update check began ${hours} hours ago and has not finished`,
+        fix: UPDATE,
+      };
+    }
     case "current":
     case "staged": {
-      const hours = Math.round((now.getTime() - stamp.at.getTime()) / HOUR_MS);
+      const hours = wholeHours(now.getTime() - stamp.at.getTime());
       if (checkIsDue(stamp, now))
         return {
           name,

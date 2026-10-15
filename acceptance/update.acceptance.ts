@@ -19,6 +19,7 @@ import {
   settledUpdateCheck,
   succeeded,
   updateStampAfter,
+  withUpdateCheckBegunAt,
   withUpdateCheckedAt,
 } from "./cli";
 
@@ -32,6 +33,7 @@ afterEach(() => {
 const BUILD_TIMEOUT_MS = 120_000;
 const NO_CHECK_WITHIN_MS = 1500;
 const TWO_DAYS_AGO = new Date(Date.now() - 48 * 3_600_000).toISOString();
+const AN_HOUR_AGO = new Date(Date.now() - 3_600_000).toISOString();
 
 const UPDATE_RESULT = z.union([
   z.strictObject({
@@ -229,7 +231,7 @@ test(
 );
 
 test(
-  "AC-18 doctor warns of a missing or stale update check and of a staged build that is not running, and passes a current one",
+  "AC-18 doctor warns of a missing, unfinished or stale update check and of a staged build that is not running, and passes a current one",
   async () => {
     const { home, run, baseline } = released();
 
@@ -254,6 +256,14 @@ test(
       state: "warn",
       detail:
         "agent-record 0.2.0 is staged but this run is 0.1.0; the next run through the installed agent-record starts it",
+      fix: "agent-record update",
+    });
+
+    withUpdateCheckBegunAt(home, AN_HOUR_AGO);
+    expect(await updateCheck(run)).toEqual({
+      name: "update",
+      state: "warn",
+      detail: "the last update check began 1 hours ago and has not finished",
       fix: "agent-record update",
     });
 
