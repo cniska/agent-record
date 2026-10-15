@@ -56,6 +56,13 @@ describe("finding the repo of a dir no checkout covers", () => {
     expect(finds([committed(AT, SUBJECT, span)], [amended])(GONE)).toBeNull();
   });
 
+  test("an author time cut to the whole second matches a call that started within that second, one over a second after its result does not", () => {
+    const span = { callAt: "2026-10-14T09:00:00.400Z", at: "2026-10-14T09:00:00.900Z" };
+    expect(finds([committed(AT, SUBJECT, span)], [commit(REPO, AT, SUBJECT)])(GONE)).toBe(REPO);
+    const late = commit(REPO, "2026-10-14T09:00:02.000Z", SUBJECT);
+    expect(finds([committed(AT, SUBJECT, span)], [late])(GONE)).toBeNull();
+  });
+
   test("a dir a checkout covers keeps the checkout's repo", () => {
     const repoOf = finds([committed(AT, SUBJECT, { dir: REPO })], [commit(OTHER, AT, SUBJECT)]);
     expect(repoOf(REPO)).toBe(REPO);
