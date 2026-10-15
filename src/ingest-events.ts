@@ -3,7 +3,13 @@ import { unreachable } from "./assert";
 import { writeTransaction } from "./db";
 import { type HookEventRow, parseEventChunk } from "./ingest-parse-events";
 import { type ReadResult, readNewLines } from "./ingest-read-new";
-import { advance, type Position } from "./ingest-read-plan";
+import {
+  advance,
+  type Position,
+  type ReadCursor,
+  type ReadCursorRow,
+  readCursorOf,
+} from "./ingest-read-plan";
 
 type Columns = {
   readonly $gate: string | null;
@@ -69,12 +75,16 @@ function columnsOf(row: HookEventRow): Columns {
 }
 
 export function createEventIngester(db: Database) {
-  const selectCursor = db.prepare<Position, [string]>(
-    "SELECT bytes_ingested AS bytes, lines_ingested AS lines, NULL AS state FROM event_file WHERE path = ?",
+  const selectCursor = db.prepare<ReadCursorRow, [string]>(
+    `SELECT bytes_ingested AS bytes, lines_ingested AS lines, NULL AS state, copy_replaced AS copyReplaced
+     FROM event_file WHERE path = ?`,
   );
   const upsertCursor = db.prepare<void, [string, number, number]>(
     `INSERT INTO event_file (path, bytes_ingested, lines_ingested) VALUES (?1, ?2, ?3)
-     ON CONFLICT(path) DO UPDATE SET bytes_ingested = ?2, lines_ingested = ?3`,
+     ON CONFLICT(path) DO UPDATE SET bytes_ingested = ?2, lines_ingested = ?3, copy_replaced = 0`,
+  );
+  const setCopyReplaced = db.prepare<void, [string]>(
+    "UPDATE event_file SET copy_replaced = 1 WHERE path = ?",
   );
   const deleteEvents = db.prepare<void, [string]>("DELETE FROM hook_event WHERE src_file = ?");
   const insertEvent = db.prepare(
@@ -85,7 +95,7 @@ export function createEventIngester(db: Database) {
   );
 
   const rewindCursor = db.prepare<void, [string]>(
-    "UPDATE event_file SET bytes_ingested = 0, lines_ingested = 0 WHERE path = ?",
+    "UPDATE event_file SET bytes_ingested = 0, lines_ingested = 0, copy_replaced = 0 WHERE path = ?",
   );
 
   const forget = (path: string): void => {
@@ -94,7 +104,14 @@ export function createEventIngester(db: Database) {
   };
 
   return {
-    cursorOf: (path: string): Position | null => selectCursor.get(path),
+    cursorOf: (path: string): ReadCursor | null => {
+      const row = selectCursor.get(path);
+      return row === null ? null : readCursorOf(row);
+    },
+    markReplaced: (path: string): void =>
+      writeTransaction(db, () => {
+        setCopyReplaced.run(path);
+      }),
     resetLog: (path: string): void => writeTransaction(db, () => forget(path)),
     commit: (path: string, reset: boolean, events: readonly HookEventRow[], to: Position): void =>
       writeTransaction(db, () => {

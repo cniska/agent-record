@@ -4,7 +4,7 @@ import { HOWS } from "./ingest-skill-load";
 import { KINDS, TOOLS } from "./ingest-tools";
 
 const sqlList = (values: readonly string[]): string => values.map((value) => `'${value}'`).join(",");
-export const SCHEMA_VERSION = 19;
+export const SCHEMA_VERSION = 20;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS source_file (
@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS source_file (
   bytes_ingested  INTEGER NOT NULL DEFAULT 0,
   lines_ingested  INTEGER NOT NULL DEFAULT 0,
   cursor_state    TEXT,
+  copy_replaced   INTEGER NOT NULL DEFAULT 0 CHECK (copy_replaced IN (0, 1)),
   ingested_at     TEXT
 );
 CREATE INDEX IF NOT EXISTS source_file_session ON source_file(session_id, kind);
@@ -194,7 +195,8 @@ CREATE TABLE IF NOT EXISTS checkout (
 CREATE TABLE IF NOT EXISTS event_file (
   path            TEXT PRIMARY KEY,
   bytes_ingested  INTEGER NOT NULL DEFAULT 0,
-  lines_ingested  INTEGER NOT NULL DEFAULT 0
+  lines_ingested  INTEGER NOT NULL DEFAULT 0,
+  copy_replaced   INTEGER NOT NULL DEFAULT 0 CHECK (copy_replaced IN (0, 1))
 );
 
 CREATE TABLE IF NOT EXISTS hook_event (

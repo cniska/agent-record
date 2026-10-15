@@ -1,5 +1,5 @@
 import type { Database } from "bun:sqlite";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { type CodedError, codedOf, errorRecord, isRefusal, type PathFailure } from "./coded-error";
 import { backUpRecord, refusingBusy, writeTransaction } from "./db";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
@@ -85,8 +85,8 @@ export function sync(db: Database, env: Env): SyncReport {
   };
 
   report.archive = archiveSources(env, fail, {
-    resetSession: (copy) => ingester.resetFileSession(copy),
-    resetLog: (copy) => eventIngester.resetLog(copy),
+    markSession: (copy) => ingester.markReplaced(copy),
+    markLog: (copy) => eventIngester.markReplaced(copy),
   });
 
   for (const tool of TOOLS) {
@@ -100,24 +100,29 @@ export function sync(db: Database, env: Env): SyncReport {
       if (title) writeTransaction(db, () => setTitle.run(title, file.sessionId));
       return reset;
     };
-    const resetSessions = new Set<SessionId>();
-    const linked: SourceFile[] = [];
-    for (const listed of files) {
+    const link = (listed: SourceFile): SourceFile => {
       const orphan = listed.parentId !== null && !sessionExists.get(listed.parentId);
-      if (orphan) report.orphanSubagents.push(listed.sessionId);
-      const file = orphan ? { ...listed, parentId: null } : listed;
-      linked.push(file);
-      if (ingest(file)) resetSessions.add(file.sessionId);
-    }
-    for (const file of linked) {
-      if (resetSessions.has(file.sessionId)) ingest(file);
+      if (!orphan) return listed;
+      report.orphanSubagents.push(listed.sessionId);
+      return { ...listed, parentId: null };
+    };
+    for (const session of Map.groupBy(files, (file) => file.sessionId).values()) {
+      writeTransaction(db, () => {
+        const linked = session.map(link);
+        const resets = linked.map(ingest);
+        if (resets.includes(true)) for (const file of linked) ingest(file);
+      });
     }
     report.sources.push({ tool, files: files.length });
   }
   report.unlinkedSubagents = linkSpawnedSubagents(db);
 
   const eventLogs = scan(eventArchiveRoot(env), ARCHIVED_EVENT_LOGS);
-  for (const path of eventLogs) count(path, () => ingestEventLog(eventIngester, path));
+  for (const folder of Map.groupBy(eventLogs, dirname).values()) {
+    writeTransaction(db, () => {
+      for (const path of folder) count(path, () => ingestEventLog(eventIngester, path));
+    });
+  }
   report.eventLogs = eventLogs.length;
 
   const checkouts = probeCheckouts(repoRoots(db, env), fail);

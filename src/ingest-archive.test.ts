@@ -58,12 +58,12 @@ function rollout(env: Env, dir: "sessions" | "archived_sessions", stamp = "2026-
 function archive(env: Env) {
   const failures: { path: string; code: unknown }[] = [];
   const replaced: string[] = [];
-  const logsReset: (readonly [string, string])[] = [];
+  const logsReplaced: (readonly [string, string])[] = [];
   const report = archiveSources(env, (path, error) => failures.push({ path, code: errorCode(error) }), {
-    resetSession: (copy) => replaced.push(copy),
-    resetLog: (copy) => logsReset.push([copy, readFileSync(copy, "utf8")]),
+    markSession: (copy) => replaced.push(copy),
+    markLog: (copy) => logsReplaced.push([copy, readFileSync(copy, "utf8")]),
   });
-  return { report, replaced, logsReset, failures };
+  return { report, replaced, logsReplaced, failures };
 }
 
 describe("archiving hook event logs", () => {
@@ -96,7 +96,7 @@ describe("archiving hook event logs", () => {
     const segment = join(archiveDir(env), "plugin-data", "acme-kit", "events-1.jsonl");
     expect(readFileSync(segment, "utf8")).toBe('{"a":1}\n{"b":2}\n');
     expect(result.replaced).toEqual([]);
-    expect(result.logsReset).toEqual([[copyOf(env, "acme-kit"), '{"a":1}\n{"b":2}\n']]);
+    expect(result.logsReplaced).toEqual([[copyOf(env, "acme-kit"), '{"a":1}\n{"b":2}\n']]);
 
     write(live, '{"d":4}\n');
     age(live, 10);

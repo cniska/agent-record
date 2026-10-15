@@ -85,9 +85,9 @@ function archiveGrowing(onRewritten: (copy: string) => void): Archiver {
 
 const keepAsSegment = (copy: string): void => renameSync(copy, segmentOf(copy, existsSync));
 
-export type CopyResets = {
-  readonly resetSession: (copy: string) => void;
-  readonly resetLog: (copy: string) => void;
+export type ReplacedCopyMarks = {
+  readonly markSession: (copy: string) => void;
+  readonly markLog: (copy: string) => void;
 };
 
 const archiveWhole: Archiver = (live, copy) => copyIfChanged(live, copy) ?? UNTOUCHED;
@@ -135,7 +135,7 @@ function isReadable(path: string): boolean {
   }
 }
 
-export function archiveSources(env: Env, fail: Failure, resets: CopyResets): ArchiveReport {
+export function archiveSources(env: Env, fail: Failure, marks: ReplacedCopyMarks): ArchiveReport {
   let files = 0;
   let bytes = 0;
 
@@ -158,9 +158,9 @@ export function archiveSources(env: Env, fail: Failure, resets: CopyResets): Arc
     }
   };
 
-  const archiveGrowingFile = archiveGrowing(resets.resetSession);
+  const archiveGrowingFile = archiveGrowing(marks.markSession);
   const archiveEventLog = archiveGrowing((copy) => {
-    resets.resetLog(copy);
+    marks.markLog(copy);
     keepAsSegment(copy);
   });
 

@@ -391,6 +391,37 @@ describe("ingest", () => {
     });
   }
 
+  test("keeps every file's rows of a session through a fault while re-reading it, and the next sync re-reads both", () => {
+    const full = claudeTranscriptLines(SESSION).length;
+    const oneRoot = newRoot();
+    const oneEnv = scratchEnv(oneRoot);
+    writeTwoFileSession(oneEnv, full, 1);
+    const oneDb = run(oneEnv);
+    const expected = snapshot(oneDb, oneRoot);
+    oneDb.close();
+
+    const root = newRoot();
+    const env = scratchEnv(root);
+    writeTwoFileSession(env, full, sidecarLines.length);
+    const db = run(env);
+    try {
+      const before = snapshot(db, root);
+      writeTwoFileSession(env, full, 1);
+      db.run(
+        `CREATE TEMP TRIGGER refuse_transcript BEFORE INSERT ON message WHEN NEW.src_file NOT LIKE '%worktrees%'
+         BEGIN SELECT RAISE(ABORT, 'no'); END`,
+      );
+      expect(() => sync(db, env)).toThrow("no");
+      expect(snapshot(db, root)).toEqual(before);
+
+      db.run("DROP TRIGGER refuse_transcript");
+      sync(db, env);
+      expect(snapshot(db, root)).toEqual(expected);
+    } finally {
+      db.close();
+    }
+  });
+
   test("a rollout Codex archives keeps one source row and is not read twice", () => {
     const root = newRoot();
     const env = scratchEnv(root);
@@ -1000,7 +1031,14 @@ describe("the archive", () => {
     }
   });
 
-  test("stops on a fault while resetting a session whose copy it would replace, keeping the old copy", () => {
+  test("keeps a session's rows through a fault while resetting it for a replaced copy, and the next sync replaces them", () => {
+    const freshRoot = newRoot();
+    const freshEnv = scratchEnv(freshRoot);
+    writeTranscript(freshEnv, "add the lexers");
+    const freshDb = run(freshEnv);
+    const expected = snapshot(freshDb, freshRoot);
+    freshDb.close();
+
     const root = newRoot();
     const env = scratchEnv(root);
     writeTranscript(env, "add the parser");
@@ -1009,14 +1047,20 @@ describe("the archive", () => {
       const at = new Date(Date.now() - 60_000);
       utimesSync(claudeTranscriptPath(env), at, at);
       sync(db, env);
-      const copy = archivedPath("claude", claudeTranscriptPath(env), env);
-      const before = readFileSync(copy, "utf8");
+      const before = snapshot(db, root);
       writeTranscript(env, "add the lexers");
       db.run(
         "CREATE TEMP TRIGGER refuse_reset BEFORE DELETE ON message BEGIN SELECT RAISE(ABORT, 'no'); END",
       );
       expect(() => sync(db, env)).toThrow("no");
-      expect(readFileSync(copy, "utf8")).toBe(before);
+      expect(readFileSync(archivedPath("claude", claudeTranscriptPath(env), env), "utf8")).toBe(
+        readFileSync(claudeTranscriptPath(env), "utf8"),
+      );
+      expect(snapshot(db, root)).toEqual(before);
+
+      db.run("DROP TRIGGER refuse_reset");
+      sync(db, env);
+      expect(snapshot(db, root)).toEqual(expected);
     } finally {
       db.close();
     }

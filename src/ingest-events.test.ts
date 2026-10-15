@@ -72,14 +72,20 @@ describe("reading a hook event log", () => {
     writeFileSync(log, prompt("2026-10-14T08:00:00Z"));
     ingestEventLog(ingester, log);
 
-    ingester.resetLog(log);
-    ingester.resetLog(`${log}.other`);
-    expect(rows(db)).toEqual([]);
-    expect(db.query("SELECT path, bytes_ingested FROM event_file").all()).toEqual([
-      { path: log, bytes_ingested: 0 },
+    ingester.markReplaced(log);
+    ingester.markReplaced(`${log}.other`);
+    expect(rows(db)).toEqual([[1, "2026-10-14T08:00:00.000Z"]]);
+    expect(db.query("SELECT path, copy_replaced FROM event_file").all()).toEqual([
+      { path: log, copy_replaced: 1 },
     ]);
-    writeFileSync(log, prompt("2026-10-14T10:00:00Z"));
+    writeFileSync(log, prompt("2026-10-14T10:00:00Z") + prompt("2026-10-14T10:01:00Z"));
     ingestEventLog(ingester, log);
-    expect(rows(db)).toEqual([[1, "2026-10-14T10:00:00.000Z"]]);
+    expect(rows(db)).toEqual([
+      [1, "2026-10-14T10:00:00.000Z"],
+      [2, "2026-10-14T10:01:00.000Z"],
+    ]);
+    expect(db.query("SELECT path, copy_replaced FROM event_file").all()).toEqual([
+      { path: log, copy_replaced: 0 },
+    ]);
   });
 });

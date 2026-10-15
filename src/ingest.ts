@@ -6,7 +6,13 @@ import { writeTransaction } from "./db";
 import { gitRuns } from "./git-operations";
 import type { SessionId, ToolCallId } from "./ingest-ids";
 import { type ReadResult, readNewLines } from "./ingest-read-new";
-import { advance, type Position } from "./ingest-read-plan";
+import {
+  advance,
+  type Position,
+  type ReadCursor,
+  type ReadCursorRow,
+  readCursorOf,
+} from "./ingest-read-plan";
 import type { ChunkParser, ParsedChunk, SessionFacts, ToolCallRow } from "./ingest-session-records";
 import type { SkillLoadRow } from "./ingest-skill-load";
 import type { Kind, Tool } from "./ingest-tools";
@@ -27,7 +33,9 @@ export type SourceFile = {
 
 type FileResult = ReadResult & { readonly reset: boolean };
 
-type Cursor = Position & { readonly path: string };
+type Cursor = ReadCursor & { readonly path: string };
+
+type CursorRow = ReadCursorRow & { readonly path: string };
 
 const FROM_ANOTHER_FILE = "message.src_file IS NOT excluded.src_file";
 
@@ -37,7 +45,8 @@ const MERGED_TEXT = `CASE
   WHEN message.text IS NULL THEN excluded.text
   ELSE message.text || char(10) || excluded.text END`;
 
-const CURSOR_COLUMNS = "path, bytes_ingested AS bytes, lines_ingested AS lines, cursor_state AS state";
+const CURSOR_COLUMNS =
+  "path, bytes_ingested AS bytes, lines_ingested AS lines, cursor_state AS state, copy_replaced AS copyReplaced";
 
 type FoldedSession = {
   cwd: string | null;
@@ -79,10 +88,10 @@ function bitOf(value: boolean | null): number | null {
 }
 
 export function createIngester(db: Database, home: string) {
-  const selectCursor = db.prepare<Cursor, [string]>(
+  const selectCursor = db.prepare<CursorRow, [string]>(
     `SELECT ${CURSOR_COLUMNS} FROM source_file WHERE path = ?`,
   );
-  const selectSessionFiles = db.prepare<Cursor, [string, string]>(
+  const selectSessionFiles = db.prepare<CursorRow, [string, string]>(
     `SELECT ${CURSOR_COLUMNS} FROM source_file WHERE session_id = ? AND kind = ?`,
   );
   const movePath = db.prepare<void, [string, string]>("UPDATE source_file SET path = ? WHERE path = ?");
@@ -291,14 +300,12 @@ export function createIngester(db: Database, home: string) {
     resetCursors.run(sessionId);
   }
 
-  const selectFileSession = db.prepare<{ session_id: string }, [string]>(
-    "SELECT session_id FROM source_file WHERE path = ?",
+  const setCopyReplaced = db.prepare<void, [string]>(
+    "UPDATE source_file SET copy_replaced = 1 WHERE path = ?",
   );
-
-  function resetFileSession(path: string): void {
-    const row = selectFileSession.get(path);
-    if (row) writeTransaction(db, () => clearSession(row.session_id));
-  }
+  const clearCopyReplaced = db.prepare<void, [string]>(
+    "UPDATE source_file SET copy_replaced = 0 WHERE path = ?",
+  );
 
   function writeToolCall(t: ToolCallRow, spec: FileSpec): void {
     switch (t.kind) {
@@ -498,7 +505,7 @@ export function createIngester(db: Database, home: string) {
 
     db.run(
       `UPDATE source_file SET bytes_ingested = ?, lines_ingested = ?,
-         cursor_state = ?,
+         cursor_state = ?, copy_replaced = 0,
          ingested_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now')
        WHERE path = ?`,
       [to.bytes, to.lines, to.state, spec.path],
@@ -513,13 +520,23 @@ export function createIngester(db: Database, home: string) {
   }
 
   return {
-    cursorOf: (path: string): Cursor | null => selectCursor.get(path),
+    cursorOf: (path: string): Cursor | null => {
+      const row = selectCursor.get(path);
+      return row === null ? null : readCursorOf(row);
+    },
     sessionFiles: (sessionId: SessionId, kind: Kind): readonly Cursor[] =>
-      selectSessionFiles.all(sessionId, kind),
+      selectSessionFiles.all(sessionId, kind).map(readCursorOf),
     moveCursor: (to: string, from: string) => writeTransaction(db, () => movePath.run(to, from)),
-    resetSession: (sessionId: SessionId) => writeTransaction(db, () => clearSession(sessionId)),
+    resetSession: (spec: FileSpec) =>
+      writeTransaction(db, () => {
+        clearSession(spec.sessionId);
+        clearCopyReplaced.run(spec.path);
+      }),
+    markReplaced: (path: string) =>
+      writeTransaction(db, () => {
+        setCopyReplaced.run(path);
+      }),
     commit,
-    resetFileSession,
   };
 }
 
@@ -541,7 +558,7 @@ export function ingestFile(ingester: Ingester, spec: FileSpec): FileResult {
     ingester.cursorOf(spec.path) ?? claimMovedCursor(ingester, spec),
   );
   if (from === null) {
-    if (reset) ingester.resetSession(spec.sessionId);
+    if (reset) ingester.resetSession(spec);
     return { read: false, reset, dropped: [] };
   }
   const parsed = spec.parse(chunk.lines, from.lines + 1, from.state);

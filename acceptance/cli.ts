@@ -503,12 +503,22 @@ export function okLine<T extends z.ZodType>(ran: Ran, command: string, result: T
   return result.parse(line.result);
 }
 
-export function refused(ran: Ran, command: string): CliError {
+function errorLine(ran: Ran, command: string, kind: CliError["kind"]): CliError {
   expect({ exitCode: ran.exitCode, stdout: ran.stdout }).toEqual({ exitCode: 1, stdout: "" });
   expect(ran.stderr).toMatch(ONE_LINE);
-  return z
+  const { error } = z
     .strictObject({ command: z.literal(command), ok: z.literal(false), error: ERROR })
-    .parse(JSON.parse(ran.stderr)).error;
+    .parse(JSON.parse(ran.stderr));
+  expect(error.kind).toBe(kind);
+  return error;
+}
+
+export function refused(ran: Ran, command: string): CliError {
+  return errorLine(ran, command, "refusal");
+}
+
+export function faulted(ran: Ran, command: string): CliError {
+  return errorLine(ran, command, "fault");
 }
 
 const EVERY_ROW = "1000000";
@@ -561,4 +571,19 @@ export function holdingRecord<T>(home: Home, hold: "write" | "exclusive", run: (
 export function setSchemaVersion(home: Home, version: number): void {
   using db = new Database(home.record);
   db.run(`PRAGMA user_version = ${version}`);
+}
+
+export type PlantedInsertFailure = { readonly table: string; readonly when: string };
+
+export function failingRecordWrites<T>(home: Home, insert: PlantedInsertFailure, run: () => T): T {
+  using db = new Database(home.record);
+  db.run(
+    `CREATE TRIGGER planted_write_failure BEFORE INSERT ON ${insert.table} WHEN ${insert.when}
+     BEGIN SELECT RAISE(ABORT, 'planted write failure'); END`,
+  );
+  try {
+    return run();
+  } finally {
+    db.run("DROP TRIGGER planted_write_failure");
+  }
 }

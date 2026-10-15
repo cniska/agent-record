@@ -20,10 +20,13 @@ import {
   archivedPath,
   doctor,
   type Fixture,
+  failingRecordWrites,
+  faulted,
   filesUnder,
   type Home,
   livePath,
   lockHeldBy,
+  type PlantedInsertFailure,
   rebuild,
   refused,
   removeScratch,
@@ -57,6 +60,7 @@ import {
   REPO_SESSION,
   TEMP_REPO_SESSION,
 } from "./fixture-names";
+import { archivedEventLog, eventLogPath, withEventLog } from "./hook-events";
 
 afterEach(removeScratch);
 
@@ -508,7 +512,81 @@ test("AC-26 a sync with the network denied succeeds, recording every tool's sess
     ["repo-session"],
   ]);
 });
-test.todo("AC-28 a sync whose record write fails after archiving leaves the record unchanged, and the next records the file once", () => {});
+const syncFailingWrites = (home: Home, insert: PlantedInsertFailure): void => {
+  const error = failingRecordWrites(home, insert, () => faulted(runCli(home, ["sync"]), "sync"));
+  expect(error.code).toBe("command_failed");
+};
+
+test("AC-28 a sync whose record write fails after appending to the archive leaves the record unchanged, and the next records the lines once", () => {
+  const home = withFixtures(scratchHome(), [CLAUDE]);
+  sync(home);
+  const before = recordRows(home);
+  const recorded = messageTexts(home, "claude-session");
+  const at = "2026-09-16T10:30:00.000Z";
+  const appended = [
+    claudeUserLine("claude-session", "appended-1", at, "first appended"),
+    claudeUserLine("claude-session", "appended-2", at, "second appended"),
+  ];
+  appendFileSync(livePath(home, CLAUDE), `${appended.join("\n")}\n`);
+
+  syncFailingWrites(home, { table: "message", when: "NEW.id = 'appended-2'" });
+  expect(readFileSync(archivedPath(home, CLAUDE), "utf8")).toBe(readFileSync(livePath(home, CLAUDE), "utf8"));
+  expect(recordRows(home)).toEqual(before);
+
+  sync(home);
+  expect(messageTexts(home, "claude-session")).toEqual([
+    ...recorded,
+    ["appended-1", "first appended"],
+    ["appended-2", "second appended"],
+  ]);
+});
+
+test("AC-28 a sync whose record write fails after replacing a rewritten archive copy leaves the record unchanged, and the next holds only the new content", () => {
+  const home = withFixtures(scratchHome(), [LONG]);
+  sync(home);
+  const before = recordRows(home);
+  const rewritten = [0, 1].map((n) =>
+    claudeUserLine("long-session", `rewritten-${n}`, `2026-09-17T10:0${n}:00.000Z`, `rewritten step ${n}`),
+  );
+  writeFileSync(livePath(home, LONG), `${rewritten.join("\n")}\n`);
+
+  syncFailingWrites(home, { table: "message", when: "NEW.id = 'rewritten-1'" });
+  expect(readFileSync(archivedPath(home, LONG), "utf8")).toBe(readFileSync(livePath(home, LONG), "utf8"));
+  expect(recordRows(home)).toEqual(before);
+
+  sync(home);
+  expect(messageTexts(home, "long-session")).toEqual([
+    ["rewritten-0", "rewritten step 0"],
+    ["rewritten-1", "rewritten step 1"],
+  ]);
+});
+
+test("AC-28 a sync whose record write fails after keeping a restarted event log as a segment leaves its events unchanged, and the next records each event once", () => {
+  const home = withEventLog(scratchHome(), "event-session", [
+    { ts: "2026-10-14T10:00:00Z", event: "permission_prompt", tool: "Write" },
+    { ts: "2026-10-14T10:01:00Z", event: "permission_prompt", tool: "Edit" },
+  ]);
+  sync(home);
+  const events = "select src_file, src_line, ts, tool from hook_event order by src_file, src_line";
+  const before = rowsOf(home, events);
+  expect(before).toHaveLength(2);
+  rmSync(eventLogPath(home));
+  withEventLog(home, "event-session", [
+    { ts: "2026-10-14T11:00:00Z", event: "permission_prompt", tool: "Read" },
+  ]);
+
+  syncFailingWrites(home, { table: "hook_event", when: "NEW.tool = 'Read'" });
+  expect(rowsOf(home, events)).toEqual(before);
+
+  sync(home);
+  const log = archivedEventLog(home);
+  const segment = join(dirname(log), "events-1.jsonl");
+  expect(rowsOf(home, events)).toEqual([
+    [segment, 1, "2026-10-14T10:00:00.000Z", "Write"],
+    [segment, 2, "2026-10-14T10:01:00.000Z", "Edit"],
+    [log, 1, "2026-10-14T11:00:00.000Z", "Read"],
+  ]);
+});
 test("AC-30 a fresh archive copy of a large file takes far less free space than its size", () => {
   const home = scratchHome();
   const live = livePath(home, LARGE);
