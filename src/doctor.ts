@@ -7,6 +7,7 @@ import type { HeldRecordWait } from "./db";
 import { readingRecord } from "./db-read";
 import { SCHEMA_VERSION } from "./db-schema";
 import type { Env } from "./env";
+import { type Backup, backupsOf } from "./file-backup";
 import { type MirrorState, readMirror } from "./mirror";
 import { dbPath } from "./paths";
 import { readSyncStamp, type SyncStamp } from "./sync-stamp";
@@ -21,6 +22,7 @@ import {
   type UpdateStamp,
 } from "./update-state";
 
+const BYTES_PER_MB = 1_000_000;
 const SYNC_STOPPED_AFTER_MS = 24 * HOUR_MS;
 const MIRROR_STALE_AFTER_MS = 24 * HOUR_MS;
 
@@ -58,6 +60,30 @@ function recordHealth(env: Env, wait: HeldRecordWait): Health {
   const read = refusalOr(() => readingRecord(dbPath(env), wait, () => null));
   if (read instanceof CodedError) return { name, state: "fail", detail: read.message, fix: read.resolve };
   return { name, state: "ok", detail: `schema version ${SCHEMA_VERSION}`, fix: null };
+}
+
+function sizedBackup({ path, bytes }: Backup): string {
+  return `${path}, ${(bytes / BYTES_PER_MB).toFixed(1)} MB`;
+}
+
+function backupHealth(backups: readonly Backup[]): Health {
+  const name = "backup";
+  const [first] = backups;
+  if (first === undefined)
+    return { name, state: "ok", detail: "no rebuild has left a backup of the record", fix: null };
+  if (backups.length === 1)
+    return {
+      name,
+      state: "ok",
+      detail: `${sizedBackup(first)}, holds the record from before the last rebuild`,
+      fix: null,
+    };
+  return {
+    name,
+    state: "ok",
+    detail: `${backups.length} backups hold the record from before earlier rebuilds, and the next rebuild keeps only its own: ${backups.map(sizedBackup).join("; ")}`,
+    fix: null,
+  };
 }
 
 function syncHealth(stamp: SyncStamp, now: Date): Health {
@@ -263,6 +289,7 @@ export function recordDoctor(probes: DoctorProbes): DoctorReport {
   const { env, agentLoaded, now } = probes;
   const checks = [
     recordHealth(env, probes),
+    backupHealth(backupsOf(dbPath(env))),
     syncHealth(readSyncStamp(env), now()),
     agentHealth(planAgent(probes), probes.command, agentLoaded),
     mirrorHealth(readMirror(env), now()),

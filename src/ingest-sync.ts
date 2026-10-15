@@ -4,6 +4,7 @@ import { type CodedError, codedOf, errorRecord, isRefusal, type PathFailure } fr
 import { backUpRecord, refusingBusy, writeTransaction } from "./db";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
 import type { Env } from "./env";
+import { removeBackupsBut } from "./file-backup";
 import { createIngester, type FileSpec, ingestFile, type SourceFile } from "./ingest";
 import { type ArchiveReport, archiveRootOf, archiveSources } from "./ingest-archive";
 import { faultIngest, refuseIngest } from "./ingest-contract";
@@ -155,6 +156,17 @@ export type RebuildReport = SyncReport & { backup: string; unreadCheckouts: stri
 export function rebuild(db: Database, env: Env): RebuildReport {
   const before = recordedCheckouts(db);
   const backup = backUpRecord(db);
+  const report = readAgainNamingBackup(db, env, before, backup);
+  removeBackupsBut(db.filename, backup);
+  return report;
+}
+
+function readAgainNamingBackup(
+  db: Database,
+  env: Env,
+  before: readonly string[],
+  backup: string,
+): RebuildReport {
   try {
     return { ...refusingBusy(db.filename, () => readAgain(db, env, before)), backup };
   } catch (error) {

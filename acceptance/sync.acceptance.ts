@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import {
   appendFileSync,
   chmodSync,
+  copyFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -17,6 +18,7 @@ import { dirname, join } from "node:path";
 import { withClaudeSessions } from "./claude-sessions";
 import {
   archivedPath,
+  doctor,
   type Fixture,
   filesUnder,
   type Home,
@@ -420,7 +422,7 @@ function restored(home: Home, backup: string): Home {
   return home;
 }
 
-test("AC-69 a rebuild, and a sync that rebuilds an older record, name each checkout whose history they could not read, and back up the record first", () => {
+test("AC-69 a rebuild, and a sync that rebuilds an older record, name each checkout whose history they could not read, and back up the record first, keeping only the last backup", () => {
   const removed = homeWithRepo();
   sync(removed.home);
   const commits = rowsOf(removed.home, "select count(*) from repo_commit");
@@ -432,11 +434,23 @@ test("AC-69 a rebuild, and a sync that rebuilds an older record, name each check
     backup: `${removed.home.record}.agent-record-backup`,
     unreadCheckouts: [checkout],
   });
-  expect(rebuild(removed.home)).toMatchObject({
+  const keptAside = join(scratchTempDir(), "first-backup");
+  copyFileSync(first.backup, keptAside);
+  const second = rebuild(removed.home);
+  expect(second).toMatchObject({
     backup: `${removed.home.record}.agent-record-backup-2`,
     unreadCheckouts: [],
   });
-  expect(rowsOf(restored(removed.home, first.backup), "select count(*) from repo_commit")).toEqual(commits);
+  expect(existsSync(first.backup)).toBe(false);
+  const backupCheck = doctor(removed.home).report.checks.find(({ name }) => name === "backup");
+  expect({
+    state: backupCheck?.state,
+    detail: backupCheck?.detail.replace(/, \d+\.\d MB,/, ", <size> MB,"),
+  }).toEqual({
+    state: "ok",
+    detail: `${second.backup}, <size> MB, holds the record from before the last rebuild`,
+  });
+  expect(rowsOf(restored(removed.home, keptAside), "select count(*) from repo_commit")).toEqual(commits);
 
   const older = homeWithRepo();
   sync(older.home);

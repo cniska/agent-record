@@ -67,6 +67,7 @@ test("AC-18 doctor with no record fails the record and sync checks with their fi
           detail: expect.stringContaining("no database at"),
           fix: "agent-record sync",
         },
+        { name: "backup", state: "ok", detail: "no rebuild has left a backup of the record", fix: null },
         { name: "sync", state: "fail", detail: "no sync has ever finished", fix: "agent-record sync" },
         {
           name: "agent",
@@ -100,6 +101,7 @@ test("AC-18 doctor after a sync with a loaded agent passes every check and exits
     report: {
       checks: [
         { name: "record", state: "ok", detail: `schema version ${schemaVersion(home)}`, fix: null },
+        { name: "backup", state: "ok", detail: "no rebuild has left a backup of the record", fix: null },
         { name: "sync", state: "ok", detail: "last sync finished 0 hours ago", fix: null },
         { name: "agent", state: "ok", detail: "the launchd agent is loaded", fix: null },
         {

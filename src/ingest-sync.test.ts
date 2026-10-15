@@ -1,8 +1,16 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { openDb, recordVersion } from "./db";
 import { NO_WAIT_MS } from "./db-read.test-support";
 import { SCHEMA_VERSION } from "./db-schema";
@@ -170,6 +178,67 @@ describe("absorbing a schema change", () => {
     expect(recordVersion(db)).toBe(SCHEMA_VERSION);
     db.close();
   });
+  test("a rebuild that succeeds removes every older backup of the record and leaves other files", () => {
+    const { db, env } = scratch();
+    fill(db);
+    const record = dbPath(env);
+    const others = [
+      `${record}.agent-record-backup-old`,
+      join(dirname(record), "other.db.agent-record-backup"),
+    ];
+    for (const path of [`${record}.agent-record-backup`, `${record}.agent-record-backup-3`, ...others])
+      writeFileSync(path, "older");
+
+    const first = rebuild(db, env).backup;
+    const second = rebuild(db, env).backup;
+
+    expect([first, second]).toEqual([`${record}.agent-record-backup-2`, `${record}.agent-record-backup`]);
+    expect(
+      readdirSync(dirname(record))
+        .filter((name) => name.includes("agent-record-backup"))
+        .sort(),
+    ).toEqual([
+      "other.db.agent-record-backup",
+      "sessions.db.agent-record-backup",
+      "sessions.db.agent-record-backup-old",
+    ]);
+    expect(commitsIn(second)).toEqual([]);
+    db.close();
+  });
+
+  test("a rebuild removes the older backups of a record whose folder is a symlink", () => {
+    const home = mkdtempSync(join(tmpdir(), "agent-record-rebuild-"));
+    const env = scratchEnv(home);
+    const record = dbPath(env);
+    const target = join(home, "elsewhere");
+    mkdirSync(target);
+    mkdirSync(dirname(dirname(record)), { recursive: true });
+    symlinkSync(target, dirname(record));
+    const db = openDb(record, { heldRecordWaitMs: NO_WAIT_MS });
+    writeFileSync(`${record}.agent-record-backup`, "older");
+
+    expect(rebuild(db, env).backup).toBe(`${record}.agent-record-backup-2`);
+    expect(readdirSync(target).filter((name) => name.includes("agent-record-backup"))).toEqual([
+      "sessions.db.agent-record-backup-2",
+    ]);
+    db.close();
+  });
+
+  test("a rebuild that fails removes no backup", () => {
+    const { db, env } = scratch();
+    fill(db);
+    const older = `${dbPath(env)}.agent-record-backup`;
+    writeFileSync(older, "older");
+    const broken = { ...env, dataHome: join(env.home, "broken-data") };
+    mkdirSync(archiveDir(broken), { recursive: true });
+    writeFileSync(join(archiveDir(broken), "claude"), "");
+
+    expect(() => rebuild(db, broken)).toThrow(expect.objectContaining({ code: "rebuild_faulted" }));
+    expect(readFileSync(older, "utf8")).toBe("older");
+    expect(commitsIn(`${older}-2`)).toEqual([{ sha: "abc" }]);
+    db.close();
+  });
+
   test("a rebuild refused by a record another process holds names the backup that undoes it", () => {
     const { db, env } = scratch();
     fill(db);

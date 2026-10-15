@@ -80,6 +80,34 @@ describe("agent-record doctor", () => {
     });
   });
 
+  test("names the backup a rebuild left and its size, or that there is none", () => {
+    const env = newEnv();
+    expect(check(env, "backup")).toEqual({
+      name: "backup",
+      state: "ok",
+      detail: "no rebuild has left a backup of the record",
+      fix: null,
+    });
+    writeRecord(env);
+    const backup = `${dbPath(env)}.agent-record-backup-2`;
+    writeFileSync(backup, Buffer.alloc(2_500_000));
+    expect(check(env, "backup")).toEqual({
+      name: "backup",
+      state: "ok",
+      detail: `${backup}, 2.5 MB, holds the record from before the last rebuild`,
+      fix: null,
+    });
+    const first = `${dbPath(env)}.agent-record-backup`;
+    writeFileSync(first, Buffer.alloc(1_000_000));
+    writeFileSync(`${dbPath(env)}.agent-record-backup-old`, "");
+    expect(check(env, "backup")).toEqual({
+      name: "backup",
+      state: "ok",
+      detail: `2 backups hold the record from before earlier rebuilds, and the next rebuild keeps only its own: ${first}, 1.0 MB; ${backup}, 2.5 MB`,
+      fix: null,
+    });
+  });
+
   test("fails when no sync has ever finished, or the stamp holds no outcome", () => {
     const env = newEnv();
     expect(check(env, "sync")).toEqual({

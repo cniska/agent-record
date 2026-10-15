@@ -112,6 +112,7 @@ test("AC-11 a failing doctor still prints ok on stdout and exits 1", () => {
   }).toEqual({
     checks: [
       { name: "record", state: "fail" },
+      { name: "backup", state: "ok" },
       { name: "sync", state: "fail" },
       { name: "agent", state: "warn" },
       { name: "mirror", state: "warn" },
