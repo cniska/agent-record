@@ -18,6 +18,7 @@ const BUILT_IN = {
     ],
   },
   version: { columns: ["week", "version"], key: (event) => [weekOf(event.at), event.version] },
+  rule: { columns: ["week", "rule"], key: (event) => [weekOf(event.at), event.rule] },
 } as const satisfies Readonly<Record<string, Grouped>>;
 
 type BuiltIn = keyof typeof BUILT_IN;
@@ -69,8 +70,9 @@ function kindsOf(signal: Signal, events: readonly SignalEvent[]): string {
 export const signal: Query<"by" | "skill"> = {
   name: "signal",
   summary:
-    "count one friction signal per week, or per week and repo, version or tag, or in the tasks that loaded a skill",
-  usage: "agent-record query signal <name> [--by <week|repo|version|tag key>] [--skill <name>] [--rows <n>]",
+    "count one friction signal per week, or per week and repo, version, rule or tag, or in the tasks that loaded a skill",
+  usage:
+    "agent-record query signal <name> [--by <week|repo|version|rule|tag key>] [--skill <name>] [--rows <n>]",
   flags: ["by", "skill"],
   run: (db, ctx) => {
     const chosen = signalNamed(ctx.arg);
@@ -90,12 +92,19 @@ export const signal: Query<"by" | "skill"> = {
     const rows = [...groups.values()]
       .map(({ key, events: grouped }) => ({
         key,
+        size: grouped.length,
         rate: measured.rate(grouped),
         kinds: [kindsOf(chosen, grouped), measured.detail(grouped)]
           .filter((part) => part !== null)
           .join("; "),
       }))
-      .sort((a, b) => String(b.key[0]).localeCompare(String(a.key[0])) || b.rate.of - a.rate.of)
+      .sort(
+        (a, b) =>
+          String(b.key[0]).localeCompare(String(a.key[0])) ||
+          b.rate.of - a.rate.of ||
+          b.rate.count - a.rate.count ||
+          b.size - a.size,
+      )
       .map(({ key, rate, kinds }) => [...key, rate.value, rate.count, rate.of, kinds]);
     const weeks = new Set(events.map((event) => weekOf(event.at))).size;
     return {

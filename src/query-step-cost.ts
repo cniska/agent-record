@@ -37,7 +37,7 @@ type Priced = Spent & {
 
 const ms = (at: string): number => Date.parse(at);
 
-export function namedKind(session: SessionRow): NamedKind | null {
+function namedKind(session: SessionRow): NamedKind | null {
   if (session.parentId === null || session.agentType === null) return null;
   const agentType = session.agentType;
   return NAMED_KINDS.find((kind) => agentType.includes(kind)) ?? null;

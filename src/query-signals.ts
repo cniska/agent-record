@@ -1,3 +1,4 @@
+import { FINDING_KINDS } from "./ingest-event-kinds";
 import { refuseQuery } from "./query-contract";
 import { ESCAPE_CAUSES, ESCAPE_REACH_DAYS, GATE_REACH_MINUTES } from "./query-escaped-defects";
 import {
@@ -18,6 +19,7 @@ export type SignalEvent<Kind extends string = string> = Placed & {
   readonly minutes: number | null;
   readonly text: string | null;
   readonly version: string | null;
+  readonly rule: string | null;
 };
 
 type Rate = { readonly value: number | null; readonly count: number; readonly of: number };
@@ -105,6 +107,7 @@ function event<Kind extends string>(
     minutes,
     text,
     version: null,
+    rule: null,
   };
 }
 
@@ -166,22 +169,29 @@ const strandedWork = signalOf({
   },
 });
 
-const reviewLoops = signalOf({
-  name: "review-loops",
-  value: "reviewer runs per commit run",
+const CITED = "cited";
+
+const reviewFindings = signalOf({
+  name: "review-findings",
+  value: "findings per verdict that counted its findings",
   note:
-    "This counts reviewer subagents started and reaches back past the hook event log; review-returns counts " +
-    "the verdicts.",
-  kinds: ["reviewer run", "commit run"] as const,
-  events: (timeline) => [
-    ...timeline.reviewerRuns.map((run) => event(run, "reviewer run")),
-    ...timeline.commitRuns.map((run) => event(run, "commit run")),
-  ],
-  rate: (count) => ({
-    value: ratio(count("reviewer run"), count("commit run")),
-    count: count("reviewer run"),
-    of: count("commit run"),
-  }),
+    "A verdict line counts here only when it carries its findings, so a verdict before its workflow counted " +
+    "them is not seen. Each finding counts by its kind, each conflict once. --by rule puts each rule a finding " +
+    `cites in that rule's row, as ${CITED}; findings and verdicts fall in no rule.`,
+  kinds: ["verdict", ...FINDING_KINDS, "conflict", CITED],
+  events: (timeline) =>
+    timeline.countedVerdicts.flatMap((counted) => [
+      event(counted, "verdict"),
+      ...FINDING_KINDS.flatMap((kind) =>
+        Array.from({ length: counted.findings[kind] }, () => event(counted, kind)),
+      ),
+      ...Array.from({ length: counted.conflicts }, () => event(counted, "conflict")),
+      ...counted.rules.map((rule) => ({ ...event(counted, CITED, null, rule), rule })),
+    ]),
+  rate: (count) => {
+    const findings = FINDING_KINDS.reduce((sum, kind) => sum + count(kind), 0);
+    return { value: ratio(findings, count("verdict")), count: findings, of: count("verdict") };
+  },
 });
 
 const falseStops = signalOf<Judgement>({
@@ -209,7 +219,7 @@ const reviewReturns = signalOf({
   note:
     "A reviewed commit is a commit-gate allow after an accept for its repo in its session; its returns are " +
     "the returns since that session's previous allow there. The hook event log starts when the plugin " +
-    "first wrote it; review-loops reaches back further.",
+    "first wrote it.",
   kinds: REVIEW_KINDS,
   events: (timeline) => timeline.reviews.map((review) => event(review, review.kind)),
   rate: (count) => ({
@@ -405,7 +415,7 @@ export const SIGNALS: readonly Signal[] = [
   ownerInterrupts,
   timeToLand,
   strandedWork,
-  reviewLoops,
+  reviewFindings,
   falseStops,
   reviewReturns,
   blocks,

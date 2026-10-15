@@ -16,7 +16,7 @@ import {
   succeeded,
   sync,
 } from "./cli";
-import { gate, withEventLog } from "./hook-events";
+import { gate, verdict, withEventLog } from "./hook-events";
 
 afterEach(removeScratch);
 
@@ -169,35 +169,93 @@ test("AC-42 stranded-work counts two stranded commit runs of three, one of them 
   ]);
 });
 
-test("AC-43 review-loops gives two reviewer runs per commit run", () => {
-  const repo = appRepo();
-  const home = synced([
-    {
-      id: "reviewed",
-      cwd: repo,
-      steps: [
-        { owner: "build it and have it reviewed", at: "2026-09-16T09:00:00Z" },
-        ran("git commit -m a", "2026-09-16T09:30:00Z", "2026-09-16T09:30:00Z"),
-      ],
-      subagents: [
-        {
-          id: "r1",
-          agentType: "acme:reviewer",
-          steps: [{ agent: "Fix: x", at: "2026-09-16T09:10:00Z" }],
-        },
-        {
-          id: "r2",
-          agentType: "acme:reviewer",
-          steps: [{ agent: "Accept", at: "2026-09-16T09:20:00Z" }],
-        },
-        { id: "e1", agentType: "Explore", steps: [{ agent: "Found it", at: "2026-09-16T09:05:00Z" }] },
-      ],
-    },
-  ]);
+const counts = (more: Readonly<Record<string, number>> = {}) => ({
+  critical: 0,
+  major: 0,
+  minor: 0,
+  fix: 0,
+  consider: 0,
+  unrated: 0,
+  ...more,
+});
 
-  expect(query(home, ["signal", "review-loops"]).rows).toEqual([
-    ["2026-09-14", 2, 2, 1, "reviewer run 2, commit run 1"],
+test("AC-43 review-findings sums the findings counted verdicts carry, by kind, rule and repo, through a rebuild", () => {
+  const repo = appRepo();
+  const other = "/Users/x/code/elsewhere";
+  const home = withEventLog(withClaudeSessions(scratchHome(), []), "judged", [
+    verdict("2026-09-16T10:00:00Z", {
+      verdict: "return",
+      repo,
+      agent: "judge-1",
+      findings: counts({ critical: 1, major: 1, minor: 1 }),
+      conflicts: 1,
+      rules: ["Names", "Names", "No drift"],
+    }),
+    verdict("2026-09-16T10:05:00Z", {
+      verdict: "return",
+      repo,
+      agent: "judge-2",
+      findings: counts({ fix: 1, consider: 1, unrated: 1 }),
+      conflicts: 0,
+      rules: ["Fix the cause"],
+    }),
+    verdict("2026-09-16T10:10:00Z", {
+      verdict: "accept",
+      repo: other,
+      agent: "judge-3",
+      findings: counts(),
+      conflicts: 0,
+      rules: [],
+    }),
+    verdict("2026-09-16T10:15:00Z", { verdict: "accept", repo, agent: "judge-4" }),
+    verdict("2026-09-16T10:20:00Z", {
+      verdict: "accept",
+      repo,
+      agent: "judge-5",
+      findings: counts({ major: -1 }),
+    }),
   ]);
+  const report = sync(home);
+  const counted = () => query(home, ["signal", "review-findings"]).rows;
+  const weekly = [
+    [
+      "2026-09-14",
+      2,
+      6,
+      3,
+      "cited 4, verdict 3, critical 1, major 1, minor 1, fix 1, consider 1, unrated 1, conflict 1",
+    ],
+  ];
+
+  expect(report.dropped).toHaveLength(1);
+  expect(counted()).toEqual(weekly);
+  const byRule = query(home, ["signal", "review-findings", "--by", "rule"]);
+  expect(byRule.columns).toEqual(["week", "rule", "value", "count", "of", "kinds"]);
+  expect(byRule.rows.map(([week, rule, , count, of, kinds]) => [week, rule, count, of, kinds])).toEqual([
+    [
+      "2026-09-14",
+      null,
+      6,
+      3,
+      "verdict 3, critical 1, major 1, minor 1, fix 1, consider 1, unrated 1, conflict 1",
+    ],
+    ["2026-09-14", "Names", 0, 0, "cited 2"],
+    ["2026-09-14", "No drift", 0, 0, "cited 1"],
+    ["2026-09-14", "Fix the cause", 0, 0, "cited 1"],
+  ]);
+  const byRepo = query(home, ["signal", "review-findings", "--by", "repo"]);
+  expect(byRepo.rows.map(([week, shown, , , count, of]) => [week, shown, count, of])).toEqual([
+    ["2026-09-14", repo, 6, 2],
+    ["2026-09-14", null, 0, 1],
+  ]);
+  expect(
+    query(home, ["signal-events", "review-findings"])
+      .rows.filter(([, kind]) => kind === "cited")
+      .map(([, , , , , , text]) => text),
+  ).toEqual(["Fix the cause", "Names", "Names", "No drift"]);
+
+  rebuild(home);
+  expect(counted()).toEqual(weekly);
 });
 
 const twoWeeks = (repo: string): readonly ClaudeSession[] => [
@@ -257,13 +315,13 @@ test("AC-44 signal splits each week by repo or a tag's key, newest first, and re
   expect({ code: unknown.code, resolve: unknown.resolve }).toEqual({
     code: "unknown_signal",
     resolve:
-      "one of: owner-interrupts, time-to-land, stranded-work, review-loops, false-stops, review-returns, blocks, " +
+      "one of: owner-interrupts, time-to-land, stranded-work, review-findings, false-stops, review-returns, blocks, " +
       "skill-usage, lost-context, escaped-defects, step-cost, second-read-asks",
   });
   const grouping = refused(runCli(home, ["query", "signal", "stranded-work", "--by", "day"]), "query");
   expect({ code: grouping.code, resolve: grouping.resolve }).toEqual({
     code: "unknown_grouping",
-    resolve: "--by <week|repo|version|route>",
+    resolve: "--by <week|repo|version|rule|route>",
   });
 });
 
@@ -296,7 +354,7 @@ test("AC-45 before-after compares every signal on either side of a commit, from 
     "owner-interrupts",
     "time-to-land",
     "stranded-work",
-    "review-loops",
+    "review-findings",
     "false-stops",
     "review-returns",
     "blocks",
@@ -658,10 +716,10 @@ test("AC-56 step-cost gives each step's tokens and minutes per accepted commit, 
     byVersion.rows.map(([week, version, value, count, of]) => [week, version, value, count, of]),
   ).toEqual([
     ["2026-09-14", "coordinate c659bb76", 4000, 4000, 1],
-    ["2026-09-14", "Explore", 400, 400, 1],
-    ["2026-09-14", "review 43e4e411", 800, 800, 1],
-    ["2026-09-14", "task 464b6516", 1000, 1000, 1],
     ["2026-09-14", "build 115254a5", 2000, 2000, 1],
+    ["2026-09-14", "task 464b6516", 1000, 1000, 1],
+    ["2026-09-14", "review 43e4e411", 800, 800, 1],
+    ["2026-09-14", "Explore", 400, 400, 1],
   ]);
   const events = query(home, ["signal-events", "step-cost"]).rows;
   expect(events.map(([when, kind, , , minutes, , text]) => [when, kind, minutes, text])).toEqual([

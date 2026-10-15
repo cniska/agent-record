@@ -43,7 +43,7 @@ test("AC-13 query list names every query with its usage and summary", () => {
     {
       name: "signal",
       usage:
-        "agent-record query signal <name> [--by <week|repo|version|tag key>] [--skill <name>] [--rows <n>]",
+        "agent-record query signal <name> [--by <week|repo|version|rule|tag key>] [--skill <name>] [--rows <n>]",
     },
     { name: "signal-events", usage: "agent-record query signal-events <name> [--rows <n>]" },
     {

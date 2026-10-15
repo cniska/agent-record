@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { invariant, unreachable } from "./assert";
-import type { Decision, Gate, HookEvent, Verdict } from "./ingest-event-kinds";
+import { Counted, type Decision, type Gate, type HookEvent, type Verdict } from "./ingest-event-kinds";
 import { MID_TURN_PROMPT } from "./ingest-session-records";
 import type { HOWS } from "./ingest-skill-load";
 import type { Tool } from "./ingest-tools";
@@ -69,6 +69,7 @@ type HookColumns = {
   readonly head: string | null;
   readonly fingerprint: string | null;
   readonly verdict: Verdict | null;
+  readonly counted: string | null;
 };
 
 type HookActor = { readonly at: string; readonly sessionId: string; readonly agent: string | null };
@@ -88,6 +89,7 @@ export type VerdictRow = HookActor & {
   readonly verdict: Verdict;
   readonly repo: string;
   readonly fingerprint: string;
+  readonly counted: Counted | null;
 };
 
 export type HookRow =
@@ -105,9 +107,18 @@ function hookRowOf(columns: HookColumns): HookRow {
       return { at, sessionId, agent, event: "gate", gate, decision, reason, repo, head, fingerprint };
     }
     case "verdict": {
-      const { verdict, repo, fingerprint } = columns;
+      const { verdict, repo, fingerprint, counted } = columns;
       invariant(verdict !== null && repo !== null && fingerprint !== null, "a verdict event has its fields");
-      return { at, sessionId, agent, event: "verdict", verdict, repo, fingerprint };
+      return {
+        at,
+        sessionId,
+        agent,
+        event: "verdict",
+        verdict,
+        repo,
+        fingerprint,
+        counted: counted === null ? null : Counted.parse(JSON.parse(counted)),
+      };
     }
     case "permission_prompt":
       return { at, sessionId, agent, event: "permission_prompt" };
@@ -203,7 +214,7 @@ export function readSignalRecord(db: Database): SignalRecord {
     .all(READ_TOOL);
   const hookEvents = db
     .query<HookColumns, [string]>(
-      `SELECT ts AS at, event, session AS sessionId, agent, gate, decision, reason, repo, head, fingerprint, verdict
+      `SELECT ts AS at, event, session AS sessionId, agent, gate, decision, reason, repo, head, fingerprint, verdict, counted
        FROM hook_event WHERE event <> ? ORDER BY ts, src_file, src_line`,
     )
     .all(TAG)

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { unreachable } from "./assert";
+import type { Counted } from "./ingest-event-kinds";
 import { type Escape, escapesOf, type Gated, gateCommits, isAccepted } from "./query-escaped-defects";
 import {
   type Blocked,
@@ -14,7 +15,7 @@ import { type Cause, classify } from "./query-interrupt";
 import { type Reread, rereadsAfterCompactions } from "./query-lost-context";
 import { asksSecondRead } from "./query-second-read";
 import type { CheckoutRow, GitRunRow, HookRow, SessionRow, SignalRecord } from "./query-signal-record";
-import { namedKind, type Stretch, stepStretches } from "./query-step-cost";
+import { type Stretch, stepStretches } from "./query-step-cost";
 import { EpochMs } from "./timestamp";
 
 const TaskKey = z.string().brand<"TaskKey">();
@@ -58,6 +59,8 @@ type Escaped = Placed & {
   readonly earlierAt: string;
 };
 
+type CountedVerdict = Placed & Counted;
+
 type StepSpent = Placed & Omit<Stretch, "sessionId" | "at">;
 
 export type SkillLoaded = Placed & {
@@ -71,10 +74,10 @@ export type Timeline = {
   readonly secondReadAsks: readonly Ask[];
   readonly tasks: readonly TaskOutcome[];
   readonly commitRuns: readonly CommitRun[];
-  readonly reviewerRuns: readonly Placed[];
   readonly steps: readonly StepSpent[];
   readonly denials: readonly Kinded<Judged["kind"]>[];
   readonly reviews: readonly Kinded<Reviewed["kind"]>[];
+  readonly countedVerdicts: readonly CountedVerdict[];
   readonly blocks: readonly Kinded<Blocked["kind"]>[];
   readonly skillLoads: readonly SkillLoaded[];
   readonly compactions: readonly Compaction[];
@@ -268,14 +271,6 @@ export function timelineOf(record: SignalRecord): Timeline {
     lastOfSession: lastOfRoot.get(run.root) === run,
   }));
 
-  const reviewerRuns: Placed[] = record.sessions.flatMap((session) => {
-    if (namedKind(session) !== "reviewer" || session.start === null) return [];
-    const root = rootOf(session.id);
-    return [
-      { at: session.start, sessionId: root, repo: repoOfRoot(root), ...inTask(root, ms(session.start)) },
-    ];
-  });
-
   const steps: StepSpent[] = stepStretches(record.sessions, record.responses, record.skillLoads, {
     ownerMessages: record.ownerMessages,
     subagentReturns: record.subagentReturns,
@@ -328,7 +323,7 @@ export function timelineOf(record: SignalRecord): Timeline {
     earlierAt: escaped.earlier.at,
   }));
 
-  const placeHook = <Kind extends string>({ row, kind }: { row: HookRow; kind: Kind }): Kinded<Kind> => {
+  const placeRow = (row: HookRow): Placed => {
     const root = rootOf(row.sessionId);
     const named = repoNamed(row);
     return {
@@ -336,19 +331,25 @@ export function timelineOf(record: SignalRecord): Timeline {
       sessionId: root,
       repo: named === null ? repoOfRoot(root) : repoOf(named),
       ...inTask(root, ms(row.at)),
-      kind,
     };
   };
+  const placeHook = <Kind extends string>({ row, kind }: { row: HookRow; kind: Kind }): Kinded<Kind> => ({
+    ...placeRow(row),
+    kind,
+  });
+  const countedVerdicts: CountedVerdict[] = record.hookEvents.flatMap((row) =>
+    row.event === "verdict" && row.counted !== null ? [{ ...placeRow(row), ...row.counted }] : [],
+  );
 
   return {
     interrupts,
     secondReadAsks,
     tasks,
     commitRuns,
-    reviewerRuns,
     steps,
     denials: judgeDenials(record.hookEvents).map(placeHook),
     reviews: reviewRounds(record.hookEvents).map(placeHook),
+    countedVerdicts,
     blocks: blocksOf(record.hookEvents)
       .filter(({ row }) => hookLoggedTasks.has(taskKey(rootOf(row.sessionId), ms(row.at))))
       .map(placeHook),

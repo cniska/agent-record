@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { DECISIONS, GATES, type HookEvent, VERDICTS } from "./ingest-event-kinds";
+import { Counted, DECISIONS, GATES, type HookEvent, VERDICTS } from "./ingest-event-kinds";
 import { SessionId, ToolCallId } from "./ingest-ids";
 import { byKind, textAt } from "./ingest-parse";
 import { parseJson } from "./ingest-source-read";
@@ -29,13 +29,31 @@ const GateLine = z.object({
   fingerprint: unknown,
 });
 
-const VerdictLine = z.object({
+const verdict = {
   ...placed,
   event: z.literal("verdict"),
   verdict: z.enum(VERDICTS),
   repo: known,
   fingerprint: known,
-});
+};
+
+const CountedVerdictLine = z
+  .object({ ...verdict, ...Counted.shape })
+  .transform(({ findings, conflicts, rules, ...rest }) => ({
+    ...rest,
+    counted: { findings, conflicts, rules },
+  }));
+
+const UncountedVerdictLine = z
+  .object({
+    ...verdict,
+    findings: z.never().optional(),
+    conflicts: z.never().optional(),
+    rules: z.never().optional(),
+  })
+  .transform(({ findings, conflicts, rules, ...rest }) => ({ ...rest, counted: null }));
+
+const VerdictLine = z.union([CountedVerdictLine, UncountedVerdictLine]);
 
 const PromptLine = z.object({ ...placed, event: z.literal("permission_prompt"), tool: known });
 

@@ -64,6 +64,7 @@ describe("a hook event log", () => {
         verdict: "return",
         repo: "/h/code/demo",
         fingerprint: "073ce55f",
+        counted: null,
       },
       { ...PLACE, srcLine: 9, event: "permission_prompt", tool: "Bash" },
       {
@@ -109,6 +110,44 @@ describe("a hook event log", () => {
         fingerprint: null,
       },
     ]);
+  });
+
+  test("reads a verdict's finding counts, conflicts and cited rules", () => {
+    const findings = { critical: 0, major: 1, minor: 2, fix: 1, consider: 0, unrated: 0 };
+    const { events } = parseEventChunk(
+      [line({ ...VERDICT, findings, conflicts: 1, rules: ["Names", "Names"] })],
+      1,
+    );
+
+    expect(events).toEqual<object[]>([
+      {
+        ...PLACE,
+        srcLine: 1,
+        event: "verdict",
+        verdict: "return",
+        repo: "/h/code/demo",
+        fingerprint: "073ce55f",
+        counted: { findings, conflicts: 1, rules: ["Names", "Names"] },
+      },
+    ]);
+  });
+
+  test("reports a verdict whose counts are malformed or only partly there", () => {
+    const findings = { critical: 0, major: 1, minor: 2, fix: 1, consider: 0, unrated: 0 };
+    const { events, dropped } = parseEventChunk(
+      [
+        line({ ...VERDICT, findings: { ...findings, major: -1 }, conflicts: 0, rules: [] }),
+        line({ ...VERDICT, findings: { ...findings, unrated: undefined }, conflicts: 0, rules: [] }),
+        line({ ...VERDICT, findings, conflicts: 1.5, rules: [] }),
+        line({ ...VERDICT, findings, conflicts: 0, rules: [""] }),
+        line({ ...VERDICT, conflicts: 3 }),
+        line({ ...VERDICT, findings, conflicts: 0 }),
+      ],
+      1,
+    );
+
+    expect(dropped).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(events).toEqual([]);
   });
 
   test("reads a field added to a kind without a new version", () => {

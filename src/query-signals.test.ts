@@ -234,20 +234,6 @@ describe("finding commit runs stranded off origin", () => {
   });
 });
 
-describe("counting reviewer runs per commit run", () => {
-  test("counts reviewer subagents against the commit runs", () => {
-    const record = recordOf({
-      sessions: [
-        session("a", "2026-10-14T09:00:00.000Z"),
-        session("r1", "2026-10-14T09:05:00.000Z", { parentId: "a", agentType: "acme:reviewer" }),
-        session("r2", "2026-10-14T09:15:00.000Z", { parentId: "a", agentType: "acme:reviewer" }),
-      ],
-      gitRuns: [run("a", "2026-10-14T09:20:00.000Z", "commit")],
-    });
-    expect(rateOf("review-loops", record)).toEqual({ value: 2, count: 2, of: 1 });
-  });
-});
-
 const OTHER = "/h/code/other";
 
 const allow = (at: string, more: Partial<GateRow> = {}): GateRow => ({
@@ -275,7 +261,41 @@ const said = (at: string, verdict: "accept" | "return", more: Partial<VerdictRow
   verdict,
   repo: REPO,
   fingerprint: "f",
+  counted: null,
   ...more,
+});
+
+const NO_FINDINGS = { critical: 0, major: 0, minor: 0, fix: 0, consider: 0, unrated: 0 };
+
+describe("summing the findings verdicts counted", () => {
+  test("sums each counted verdict's findings, conflicts and cited rules, and skips a verdict that counted none", () => {
+    const record = recordOf({
+      sessions: [session("a", "2026-10-14T08:00:00.000Z")],
+      hookEvents: [
+        said("2026-10-14T09:00:00.000Z", "return", {
+          counted: {
+            findings: { ...NO_FINDINGS, major: 2, minor: 1 },
+            conflicts: 1,
+            rules: ["Names", "Names"],
+          },
+        }),
+        said("2026-10-14T09:10:00.000Z", "return", {
+          counted: { findings: { ...NO_FINDINGS, unrated: 1 }, conflicts: 0, rules: [] },
+        }),
+        said("2026-10-14T09:20:00.000Z", "accept", {
+          counted: { findings: NO_FINDINGS, conflicts: 0, rules: [] },
+        }),
+        said("2026-10-14T09:30:00.000Z", "accept"),
+      ],
+    });
+    expect(rateOf("review-findings", record)).toEqual({ value: 1.33, count: 4, of: 3 });
+    const cited = eventsOf("review-findings", record).filter((e) => e.rule !== null);
+    expect(cited.map((e) => [e.kind, e.rule])).toEqual([
+      ["cited", "Names"],
+      ["cited", "Names"],
+    ]);
+    expect(eventsOf("review-findings", record).filter((e) => e.kind === "conflict")).toHaveLength(1);
+  });
 });
 
 const timed = (minute: number): string => `2026-10-14T09:${String(minute).padStart(2, "0")}:00.000Z`;
