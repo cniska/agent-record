@@ -1,5 +1,8 @@
 import { refuser } from "./coded-error";
 
+const UPGRADE =
+  "upgrade agent-record the way it was installed: brew upgrade agent-record, npm update -g @cniska/agent-record, or curl -fsSL https://github.com/cniska/agent-record/releases/latest/download/install.sh | sh";
+
 export const refuseRecord = refuser<{
   readonly record_version: { readonly found: number; readonly expected: number };
   readonly no_database: { readonly path: string };
@@ -15,9 +18,7 @@ export const refuseRecord = refuser<{
         ? `the record is schema version ${found}, newer than the version ${expected} this agent-record reads`
         : `the record is schema version ${found} and this agent-record reads version ${expected}; the next \`agent-record sync\` rebuilds it, or run \`agent-record rebuild\``,
     resolve: ({ found, expected }) =>
-      found > expected
-        ? `run an agent-record that reads schema version ${found}`
-        : "the next agent-record sync rebuilds it, or run agent-record rebuild",
+      found > expected ? UPGRADE : "the next agent-record sync rebuilds it, or run agent-record rebuild",
   },
   no_database: {
     message: ({ path }) => `no database at ${path}; run \`agent-record sync\` first`,

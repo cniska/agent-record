@@ -58,7 +58,7 @@ The record is what agent workflows improve from. Its first use is search: an age
 
 - **FR-27** — The record carries one schema version.
 - **FR-28** — `sync` on a record of an older schema version archives the tool files as every `sync` does, then rebuilds the record (FR-24) under its lock and reports `rebuilt` with the version it was `from`, the one it is `to` and its `backup`; every other command that reads or writes the record, except `rebuild`, refuses a record of an older schema version, and every command but `rebuild` refuses a record of a newer one.
-- **FR-29** — A refusal of an older record names the next `agent-record sync`, which rebuilds it, or `agent-record rebuild` as its fix; a refusal of a newer record names running an agent-record that reads that version.
+- **FR-29** — A refusal of an older record names the next `agent-record sync`, which rebuilds it, or `agent-record rebuild` as its fix; a refusal of a newer record names upgrading agent-record the way it was installed, listing `brew upgrade agent-record`, `npm update -g @cniska/agent-record` and the installer's curl line.
 
 ### 2.6 Commands and output
 
@@ -262,7 +262,7 @@ The steps of one task, for an agent to read instead of whole transcripts.
 - **AC-7** — Sync a fixture of each tool holding a malformed line, with an unreadable file and an orphan subagent: the sync finishes, and its report names each malformed line, the failure with its fix, and the orphan. (FR-10, FR-11, FR-12)
 - **AC-8** — Sync with a fixture session in a fixture git repo with an origin remote, and in a repo under a temp directory: the first repo's commits with their types, its label and its files are recorded, the temp repo's are not; a second sync with no change reads neither. (FR-19, FR-20, FR-21, FR-22)
 - **AC-9** — Sync fixtures, then `rebuild`: the session, message, turn, usage, tool-call, git-run and skill-load rows are identical. (FR-26)
-- **AC-10** — Set the record's schema version lower: `query` and `sql` each refuse, naming the next sync or `agent-record rebuild`, `sync` with a new fixture file rebuilds it, holding that file's session, and reports `rebuilt` from the lower version to the current one, and `rebuild` succeeds on it too. Set it higher: `sync`, `query` and `sql` each refuse, naming a newer agent-record. (FR-24, FR-27, FR-28, FR-29)
+- **AC-10** — Set the record's schema version lower: `query` and `sql` each refuse, naming the next sync or `agent-record rebuild`, `sync` with a new fixture file rebuilds it, holding that file's session, and reports `rebuilt` from the lower version to the current one, and `rebuild` succeeds on it too. Set it higher: `sync`, `query` and `sql` each refuse, naming all three upgrades: `brew upgrade agent-record`, `npm update -g @cniska/agent-record` and the installer's curl line. (FR-24, FR-27, FR-28, FR-29)
 - **AC-11** — Run each command once successfully and once with bad input, and `doctor` with a failing check: the successful runs and `doctor` print `ok: true` on stdout, `doctor` exiting 1; the bad input prints `ok: false` on stderr with exit 1, and the error carries kind, code, message, meta and resolve. (FR-30, FR-31)
 - **AC-12** — Run `agent-record` alone, an unknown command, and each malformed argument form: the listing and each refusal with its usage. (FR-32, FR-33)
 - **AC-13** — `query list`, an unknown query, `--rows 0`, and a query with more rows than the default: listing, refusals, and the `more` note. (FR-34, FR-35, FR-36)

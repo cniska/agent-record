@@ -80,12 +80,16 @@ test("AC-10 a record of an older schema version is refused by query and sql nami
   expect(schemaVersion(home)).toBe(current);
 });
 
-test("AC-10 a record of a newer schema version is refused by sync, query and sql naming a newer agent-record", () => {
+test("AC-10 a record of a newer schema version is refused by sync, query and sql naming the upgrade of each channel", () => {
   const home = syncedHome();
   const newer = schemaVersion(home) + 1;
   setSchemaVersion(home, newer);
 
-  expectVersionRefused(home, READERS_AND_WRITER, `run an agent-record that reads schema version ${newer}`);
+  expectVersionRefused(
+    home,
+    READERS_AND_WRITER,
+    "upgrade agent-record the way it was installed: brew upgrade agent-record, npm update -g @cniska/agent-record, or curl -fsSL https://github.com/cniska/agent-record/releases/latest/download/install.sh | sh",
+  );
   expect(schemaVersion(home)).toBe(newer);
 });
 

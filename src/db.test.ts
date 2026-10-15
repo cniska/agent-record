@@ -242,14 +242,16 @@ describe("a writer on a record another process holds", () => {
 });
 
 describe("a record of another version", () => {
-  test("is rebuilt when older, and read by the agent-record that wrote it when newer", () => {
+  test("is rebuilt when older, and met by an upgrade through each channel when newer", () => {
     const older = refuseRecord("record_version", { found: 4, expected: 5 });
     const newer = refuseRecord("record_version", { found: 6, expected: 5 });
     expect(older.resolve).toBe("the next agent-record sync rebuilds it, or run agent-record rebuild");
     expect(newer.message).toBe(
       "the record is schema version 6, newer than the version 5 this agent-record reads",
     );
-    expect(newer.resolve).toBe("run an agent-record that reads schema version 6");
+    expect(newer.resolve).toBe(
+      "upgrade agent-record the way it was installed: brew upgrade agent-record, npm update -g @cniska/agent-record, or curl -fsSL https://github.com/cniska/agent-record/releases/latest/download/install.sh | sh",
+    );
   });
 
   for (const found of [0, SCHEMA_VERSION + 1]) {
