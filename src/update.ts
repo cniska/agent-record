@@ -1,6 +1,6 @@
 import { rmSync } from "node:fs";
 import type { Runtime } from "./cli-contract";
-import { isRefusal } from "./coded-error";
+import { errorRecord, isRefusal } from "./coded-error";
 import { withUpdateLock } from "./db-lock";
 import { stagedBuildsDir } from "./paths";
 import { refuseUpdate, type UpdateSource } from "./update-contract";
@@ -71,7 +71,7 @@ export function runUpdate(runtime: Runtime, mode: UpdateMode): Promise<UpdateRep
       writeUpdateStamp(stamp, env);
       return report;
     } catch (error) {
-      if (isRefusal(error)) writeUpdateStamp({ kind: "failed", at, detail: error.message }, env);
+      if (isRefusal(error)) writeUpdateStamp({ kind: "failed", at, error: errorRecord(error) }, env);
       throw error;
     }
   });

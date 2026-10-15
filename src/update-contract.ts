@@ -9,6 +9,7 @@ export const refuseUpdate = refuser<{
   readonly update_skipped: Record<string, never>;
   readonly no_build_for_platform: { readonly platform: string };
   readonly update_failed: { readonly detail: string };
+  readonly build_unrunnable: { readonly version: string; readonly failure: string };
   readonly nothing_staged: { readonly dir: string };
   readonly rejected_unreadable: { readonly path: string; readonly detail: string };
 }>({
@@ -27,6 +28,10 @@ export const refuseUpdate = refuser<{
   update_failed: {
     message: ({ detail }) => `the update check failed: ${detail}`,
     resolve: () => `check that this machine is online and can reach github.com, then ${UPDATE}`,
+  },
+  build_unrunnable: {
+    message: ({ version, failure }) => `the downloaded ${version} build ${failure}, so it is not staged`,
+    resolve: () => `keep running this build; ${UPDATE} stages the next release once one is published`,
   },
   nothing_staged: {
     message: ({ dir }) => `no update is staged in ${dir}, so there is nothing to roll back`,

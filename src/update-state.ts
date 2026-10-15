@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
+import { ErrorRecord } from "./coded-error";
 import type { Env } from "./env";
 import { parseJson } from "./ingest-source-read";
 import { stagedBuildPath, stagedBuildsDir, updateRejectedPath, updateStampPath } from "./paths";
@@ -12,7 +13,7 @@ const UpdateCheck = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("checking"), at: StampAt }),
   z.strictObject({ kind: z.literal("current"), at: StampAt, latest: z.string() }),
   z.strictObject({ kind: z.literal("staged"), at: StampAt, latest: z.string() }),
-  z.strictObject({ kind: z.literal("failed"), at: StampAt, detail: z.string() }),
+  z.strictObject({ kind: z.literal("failed"), at: StampAt, error: ErrorRecord }),
 ]);
 export type UpdateCheck = z.infer<typeof UpdateCheck>;
 

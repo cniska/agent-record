@@ -152,15 +152,22 @@ test(
     expect(await updateCheck(corrupt.run)).toEqual({
       name: "update",
       state: "warn",
-      detail: `the last update check failed, and this machine was likely offline: ${mismatch.message}`,
-      fix: "agent-record update",
+      detail: `the last update check failed: ${mismatch.message}`,
+      fix: "check that this machine is online and can reach github.com, then agent-record update",
     });
 
     const mislabelled = released({ builds: "0.3.0" });
     const wrong = refused(await mislabelled.run(["update"]), "update");
-    expect(wrong.message).toContain(
-      'the downloaded 0.2.0 build prints "0.3.0" on --version, so it is not staged',
-    );
+    expect(wrong).toMatchObject({
+      code: "build_unrunnable",
+      message: 'the downloaded 0.2.0 build prints "0.3.0" on --version, so it is not staged',
+    });
+    expect(await updateCheck(mislabelled.run)).toEqual({
+      name: "update",
+      state: "warn",
+      detail: `the last update check failed: ${wrong.message}`,
+      fix: "keep running this build; agent-record update stages the next release once one is published",
+    });
     expect(staged(mislabelled.home)).toEqual([]);
     expect((await mislabelled.run(["--version"])).stdout).toBe("0.1.0\n");
   },

@@ -220,8 +220,8 @@ function releaseUpdateHealth(
       return {
         name,
         state: "warn",
-        detail: `the last update check failed, and ${LIKELY_OFFLINE}: ${stamp.detail}`,
-        fix: UPDATE,
+        detail: `the last update check failed: ${stamp.error.message}`,
+        fix: stamp.error.resolve,
       };
     case "checking":
     case "current":
