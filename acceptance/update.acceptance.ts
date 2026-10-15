@@ -70,7 +70,7 @@ function released({ tag = "v0.2.0", builds = "0.2.0" } = {}): Released {
   mkdirSync(assets);
   const server = releaseServer(assets, tag);
   servers.push(server);
-  releaseAssets(assets, compiledRelease(join(dir, "latest"), builds, server.url));
+  releaseAssets(assets, compiledRelease(join(dir, "latest"), builds, server.url), "darwin-arm64");
   const baseline = compiledRelease(join(dir, "lib"), "0.1.0", server.url);
   const bin = join(dir, "bin");
   installedLauncher(bin, baseline, "0.1.0");

@@ -45,6 +45,33 @@ platform_target() {
   esac
 }
 
+remove_leftovers() {
+  if [ -f "${tmpdir}/partials" ]; then
+    while IFS= read -r partial; do
+      rm -f "$partial"
+    done <"${tmpdir}/partials"
+  fi
+  rm -rf "$tmpdir"
+}
+
+install_file() {
+  from="$1"
+  dest="$2"
+  partial="$(mktemp "$(dirname "$dest")/.agent-record.XXXXXX")" || die "could not write beside ${dest}"
+  printf '%s\n' "$partial" >>"${tmpdir}/partials"
+  cp "$from" "$partial" || die "could not write ${partial}"
+  chmod 755 "$partial"
+  mv -f "$partial" "$dest" || die "could not move ${partial} to ${dest}"
+}
+
+prune_other_builds() {
+  for entry in "$lib_dir"/*; do
+    if [ -e "$entry" ] && [ "$entry" != "$1" ]; then
+      rm -rf "$entry"
+    fi
+  done
+}
+
 shell_config() {
   case "${SHELL:-}" in
     */zsh) printf '%s\n' "${HOME}/.zshrc" ;;
@@ -60,7 +87,7 @@ shell_config() {
 
 put_on_path() {
   install_dir="$1"
-  if echo "$PATH" | tr ':' '\n' | grep -qx "$install_dir"; then
+  if echo "$PATH" | tr ':' '\n' | grep -Fqx "$install_dir"; then
     return 0
   fi
   config="$(shell_config)"
@@ -86,7 +113,7 @@ main() {
   base_url="https://github.com/${REPO}/releases/latest/download"
 
   tmpdir="$(mktemp -d)"
-  trap 'rm -rf "$tmpdir"' EXIT
+  trap remove_leftovers EXIT
 
   echo "Downloading the latest agent-record for ${target}..."
   fetch_verified "${base_url}/${asset}" "${base_url}/agent-record-${target}.sha256" "${tmpdir}/${asset}"
@@ -95,17 +122,21 @@ main() {
   tar -xzf "${tmpdir}/${asset}" -C "$tmpdir" agent-record || die "${asset} holds no agent-record binary"
   chmod +x "${tmpdir}/agent-record"
   version="$("${tmpdir}/agent-record" --version)" || die "the downloaded agent-record does not run on this machine"
+  [ -n "$version" ] && [ "$(printf '%s\n' "$version" | grep -Ex '[0-9]+\.[0-9]+\.[0-9]+')" = "$version" ] ||
+    die "the downloaded agent-record reports version '$(printf '%s' "$version" | tr '\n' ' ')', not x.y.z; this release is broken, so install a later one"
+  build_dir="${lib_dir}/${version}"
+  build="${build_dir}/agent-record"
 
-  mkdir -p "$lib_dir" "$install_dir"
-  mv "${tmpdir}/agent-record" "${lib_dir}/agent-record"
-  sed -e "s|__BASELINE_BIN__|$(escape_replacement "${lib_dir}/agent-record")|" \
+  mkdir -p "$build_dir" "$install_dir"
+  install_file "${tmpdir}/agent-record" "$build"
+  sed -e "s|__BASELINE_BIN__|$(escape_replacement "$build")|" \
     -e "s|__BASELINE_VERSION__|$(escape_replacement "$version")|" \
     "${tmpdir}/launcher.sh" >"${tmpdir}/launcher"
-  chmod +x "${tmpdir}/launcher"
-  mv "${tmpdir}/launcher" "${install_dir}/agent-record"
+  install_file "${tmpdir}/launcher" "${install_dir}/agent-record"
+  prune_other_builds "$build_dir"
 
   put_on_path "$install_dir"
-  echo "agent-record ${version} installed: ${install_dir}/agent-record runs ${lib_dir}/agent-record."
+  echo "agent-record ${version} installed: ${install_dir}/agent-record runs ${build}."
   echo "Run 'agent-record sync' to build the record, then 'agent-record doctor'."
 }
 

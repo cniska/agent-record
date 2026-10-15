@@ -104,7 +104,7 @@ test(
   "AC-63 install.sh installs the latest release after checking its checksums, and installs nothing from a bad download",
   () => {
     const dir = scratchTempDir();
-    const assets = releaseAssets(join(dir, "assets"), compiledRelease(join(dir, "build")));
+    const assets = releaseAssets(join(dir, "assets"), compiledRelease(join(dir, "build")), "darwin-arm64");
     const curl = curlServing(join(dir, "fake-bin"), assets);
     const home = scratchHome();
     const installed = join(home.root, ".local", "bin");
@@ -132,7 +132,7 @@ test(
   "AC-64 the npm package runs its platform's binary through the launcher, and the agent runs the npm command",
   () => {
     const dir = scratchTempDir();
-    const assets = releaseAssets(join(dir, "assets"), compiledRelease(join(dir, "build")));
+    const assets = releaseAssets(join(dir, "assets"), compiledRelease(join(dir, "build")), "darwin-arm64");
     cpSync(join(assets, "agent-record-darwin-arm64.tar.gz"), join(assets, "agent-record-linux-x64.tar.gz"));
     const tree = join(dir, "npm");
     const built = Bun.spawnSync([process.execPath, BUILD_NPM, assets, tree]);

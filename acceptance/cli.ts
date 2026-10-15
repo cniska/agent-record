@@ -21,7 +21,7 @@ const SCRATCH_OUTSIDE_TEMP = join(import.meta.dir, ".scratch");
 const BUN_CACHE_OUTSIDE_HOMES = join(tmpdir(), "agent-record-acceptance-bun-cache");
 const CWD_PLACEHOLDER = "{{cwd}}";
 const BUILD_RELEASE = join(import.meta.dir, "..", "scripts", "build-compiled.sh");
-const SYSTEM_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
+export const SYSTEM_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
 const LAUNCHER = join(import.meta.dir, "..", "scripts", "launcher.sh");
 const RELEASE_DOWNLOADS = "https://github.com/cniska/agent-record/releases/latest/download";
 
@@ -226,13 +226,13 @@ export function installedLauncher(bin: string, baseline: string, version: string
   return launcher;
 }
 
-export function releaseAssets(dir: string, binary: string): string {
+export function releaseAssets(dir: string, binary: string, target: string): string {
   mkdirSync(dir, { recursive: true });
-  const tarball = join(dir, "agent-record-darwin-arm64.tar.gz");
+  const tarball = join(dir, `agent-record-${target}.tar.gz`);
   const packed = Bun.spawnSync(["tar", "-czf", tarball, "-C", dirname(binary), "agent-record"]);
   expect(packed.exitCode).toBe(0);
   writeFileSync(join(dir, "launcher.sh"), readFileSync(LAUNCHER));
-  writeChecksum(tarball, join(dir, "agent-record-darwin-arm64.sha256"));
+  writeChecksum(tarball, join(dir, `agent-record-${target}.sha256`));
   writeChecksum(join(dir, "launcher.sh"), join(dir, "launcher.sha256"));
   return dir;
 }
