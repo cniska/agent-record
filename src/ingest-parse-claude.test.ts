@@ -316,6 +316,39 @@ describe("parseClaudeChunk", () => {
     ]);
   });
 
+  test("marks a result Claude Code refused before the call ran, and not one whose call ran and errored", () => {
+    const result = (id: string, content: unknown, isError: boolean) =>
+      JSON.stringify({
+        type: "user",
+        uuid: `u-${id}`,
+        timestamp: "2026-09-16T10:03:00.000Z",
+        message: { content: [{ type: "tool_result", tool_use_id: id, content, is_error: isError }] },
+      });
+    const chunk = parseClaudeChunk(
+      [
+        result("tu-1", "<tool_use_error>File has not been read yet.</tool_use_error>", true),
+        result(
+          "tu-2",
+          [{ type: "text", text: "<tool_use_error>InputValidationError: bad</tool_use_error>" }],
+          true,
+        ),
+        result("tu-3", "<tool_use_error>Error calling tool (mcp__acme__label): </tool_use_error>", true),
+        result("tu-4", "Exit code 2\nboom", true),
+        result("tu-5", "<tool_use_error>quoted in a file</tool_use_error>", false),
+      ],
+      1,
+    );
+    expect(
+      chunk.toolCalls.map((call) => [call.id, call.kind === "result" ? call.hostRefused : "call"]),
+    ).toEqual([
+      ["tu-1", true],
+      ["tu-2", true],
+      ["tu-3", false],
+      ["tu-4", false],
+      ["tu-5", false],
+    ]);
+  });
+
   test("reads a failed command's exit code from the result Claude Code writes for it", () => {
     const result = (id: string, content: unknown, isError: boolean) =>
       JSON.stringify({

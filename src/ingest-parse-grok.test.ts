@@ -94,6 +94,7 @@ describe("a grok update line", () => {
         toolName: null,
         isError: true,
         isInterrupted: null,
+        hostRefused: null,
         exitCode: null,
         durationMs: null,
         resultBytes: null,

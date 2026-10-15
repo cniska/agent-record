@@ -13,6 +13,7 @@ export type Step =
   | { readonly read: string; readonly at: string }
   | { readonly compacted: string }
   | { readonly rejected: string; readonly at: string }
+  | { readonly hostRefused: string; readonly at: string }
   | {
       readonly skill: string;
       readonly at: string;
@@ -181,6 +182,31 @@ function linesOf(sessionId: string, cwd: string, steps: readonly Step[], prefix:
             content: [
               { type: "text", text: `<command-name>${step.preload}</command-name>` },
               { type: "text", text: `${SKILL_BODY_PREFIX} ${step.dir}\n\n${step.body}` },
+            ],
+          },
+        },
+      ];
+    }
+    if ("hostRefused" in step) {
+      return [
+        assistant(step.at, [
+          { type: "tool_use", id: tool, name: "Edit", input: { file_path: step.hostRefused } },
+        ]),
+        {
+          ...base,
+          type: "user",
+          uuid: `${uuid}-result`,
+          timestamp: step.at,
+          message: {
+            role: "user",
+            content: [
+              {
+                type: "tool_result",
+                tool_use_id: tool,
+                content:
+                  "<tool_use_error>File has not been read yet. Read it first before writing to it.</tool_use_error>",
+                is_error: true,
+              },
             ],
           },
         },

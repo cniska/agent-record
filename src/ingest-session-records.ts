@@ -148,6 +148,7 @@ const ToolResult = z
     toolName: nullableString,
     isError: z.boolean().nullable(),
     isInterrupted: z.boolean().nullable(),
+    hostRefused: z.boolean().nullable(),
     exitCode: nullableNumber,
     durationMs: nullableNumber,
     resultBytes: nullableNumber,

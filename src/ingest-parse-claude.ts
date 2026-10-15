@@ -271,6 +271,8 @@ function visibleText(texts: readonly string[]): string | null {
 }
 
 const FAILED_COMMAND_HEAD = /^Exit code (\d+)(?:\n|$)/;
+const HOST_REFUSAL_HEAD = "<tool_use_error>";
+const CALL_THAT_RAN_HEAD = "<tool_use_error>Error calling tool (";
 
 function resultTexts(content: unknown): string[] {
   if (typeof content === "string") return [content];
@@ -281,6 +283,11 @@ function resultTexts(content: unknown): string[] {
 function exitCodeOf(content: unknown): number | null {
   const code = resultTexts(content)[0]?.match(FAILED_COMMAND_HEAD)?.[1];
   return code === undefined ? null : Number(code);
+}
+
+function hostRefused(content: unknown): boolean {
+  const head = resultTexts(content)[0] ?? "";
+  return head.startsWith(HOST_REFUSAL_HEAD) && !head.startsWith(CALL_THAT_RAN_HEAD);
 }
 
 function resultSize(content: unknown, result: ClaudeToolUseResult | undefined): number | null {
@@ -460,6 +467,7 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
               isError: block.isError,
               isInterrupted: r?.interrupted === true,
               exitCode: block.isError ? exitCodeOf(block.content) : null,
+              hostRefused: block.isError && hostRefused(block.content),
               durationMs: null,
               resultBytes: resultSize(block.content, r),
               srcLine,

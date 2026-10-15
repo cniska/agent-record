@@ -207,15 +207,16 @@ export function createIngester(db: Database, home: string) {
   );
 
   const upsertResult = db.prepare(
-    `INSERT INTO tool_call (id, session_id, ts_result, tool_name, is_error, is_interrupted, exit_code,
-       duration_ms, result_bytes, src_file, src_line_result)
-     VALUES ($id, $sessionId, $ts, $toolName, $isError, $isInterrupted, $exitCode,
+    `INSERT INTO tool_call (id, session_id, ts_result, tool_name, is_error, is_interrupted, host_refused,
+       exit_code, duration_ms, result_bytes, src_file, src_line_result)
+     VALUES ($id, $sessionId, $ts, $toolName, $isError, $isInterrupted, $hostRefused, $exitCode,
        $durationMs, $resultBytes, $srcFile, $srcLine)
      ON CONFLICT(id) DO UPDATE SET
        ts_result       = excluded.ts_result,
        tool_name       = coalesce(excluded.tool_name, tool_call.tool_name),
        is_error        = coalesce(excluded.is_error, tool_call.is_error),
        is_interrupted  = coalesce(excluded.is_interrupted, tool_call.is_interrupted),
+       host_refused    = coalesce(excluded.host_refused, tool_call.host_refused),
        exit_code       = coalesce(excluded.exit_code, tool_call.exit_code),
        duration_ms     = coalesce(excluded.duration_ms, tool_call.duration_ms),
        result_bytes    = coalesce(excluded.result_bytes, tool_call.result_bytes),
@@ -335,6 +336,7 @@ export function createIngester(db: Database, home: string) {
           $toolName: t.toolName,
           $isError: bitOf(t.isError),
           $isInterrupted: bitOf(t.isInterrupted),
+          $hostRefused: bitOf(t.hostRefused),
           $exitCode: t.exitCode,
           $durationMs: t.durationMs,
           $resultBytes: t.resultBytes,

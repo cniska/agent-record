@@ -158,6 +158,7 @@ function toolRowsOf({ update, ts }: GrokToolLine, srcLine: number): ToolCallRow[
       toolName: null,
       isError: failed ? true : null,
       isInterrupted: null,
+      hostRefused: null,
       exitCode: update.shellExitCode,
       durationMs: null,
       resultBytes: null,

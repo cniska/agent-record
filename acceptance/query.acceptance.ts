@@ -305,7 +305,7 @@ const tracedHome = (): Home =>
                 done: "2026-09-16T10:05:31Z",
               },
               {
-                bash: "git commit -m 'feat: add the step'",
+                bash: "git add -A && git commit -m 'feat: add the step'",
                 at: "2026-09-16T10:06:00Z",
                 done: "2026-09-16T10:06:01Z",
               },
@@ -329,6 +329,7 @@ const tracedHome = (): Home =>
             startedBy: "toolu-watcher",
             steps: [
               { owner: "watch the build", at: "2026-09-16T10:09:02Z" },
+              { hostRefused: `${TRACED}/build.log`, at: "2026-09-16T10:09:10Z" },
               { pending: "sleep 600", at: "2026-09-16T10:09:30Z" },
             ],
           },
@@ -365,7 +366,7 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
   const worker = { session: "worker@coordinator", parent: "coordinator", task: "coordinator" };
 
   expect(result.denominator).toBe(
-    "session coordinator and the 3 subagents under it: 23 steps, 2 still running",
+    "session coordinator and the 3 subagents under it: 21 steps, 2 still running",
   );
   expect(lines.map(shape)).toEqual([
     ["coordinator", 1, "agent", "started", "-"],
@@ -390,26 +391,22 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
     ["checker", 6, "agent", "ended", "failed"],
     ["worker", 13, "tool", "ended", "failed"],
     ["worker", 14, "tool", "started", "-"],
-    ["worker", 15, "commit", "started", "-"],
-    ["worker", 16, "gate", "started", "-"],
-    ["worker", 17, "gate", "ended", "changed_since_accept"],
-    ["worker", 18, "tool", "ended", "ok"],
-    ["worker", 19, "commit", "ended", "ok"],
-    ["worker", 20, "tool", "started", "-"],
-    ["worker", 21, "commit", "started", "-"],
-    ["worker", 22, "gate", "started", "-"],
-    ["worker", 23, "gate", "ended", "ok"],
-    ["worker", 24, "tool", "ended", "ok"],
-    ["worker", 25, "commit", "ended", "ok"],
-    ["worker", 26, "tool", "started", "-"],
-    ["worker", 27, "push", "started", "-"],
-    ["worker", 28, "tool", "ended", "ok"],
-    ["worker", 29, "push", "ended", "ok"],
-    ["worker", 30, "agent", "ended", "ok"],
+    ["worker", 15, "gate", "started", "-"],
+    ["worker", 16, "gate", "ended", "changed_since_accept"],
+    ["worker", 17, "tool", "ended", "ok"],
+    ["worker", 18, "tool", "started", "-"],
+    ["worker", 19, "gate", "started", "-"],
+    ["worker", 20, "gate", "ended", "ok"],
+    ["worker", 21, "tool", "ended", "ok"],
+    ["worker", 22, "tool", "started", "-"],
+    ["worker", 23, "tool", "ended", "ok"],
+    ["worker", 24, "agent", "ended", "ok"],
     ["coordinator", 3, "tool", "started", "-"],
     ["coordinator", 4, "tool", "ended", "ok"],
     ["watcher", 1, "agent", "started", "-"],
     ["watcher", 2, "tool", "started", "-"],
+    ["watcher", 3, "tool", "ended", "host"],
+    ["watcher", 4, "tool", "started", "-"],
     ["coordinator", 5, "tool", "ended", "ok"],
     ["coordinator", 6, "agent", "ended", "ok"],
   ]);
@@ -423,6 +420,7 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
       call: "coordinator-worker-1-tool",
       name: "Skill",
       target: "acme:build",
+      git: null,
     },
     {
       at: "2026-09-16T10:01:10.000Z",
@@ -498,29 +496,38 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
     ms: 0,
     outcome: { kind: "refused", code: "user-rejected" },
     call: "coordinator-worker-5-tool",
+    name: "Bash",
   });
-  expect(lines[24]).toEqual({
+  expect(lines[5]).toMatchObject({ seq: 4, step: "skill", phase: "ended", name: "build" });
+  expect(lines[23]).toEqual({
     at: "2026-09-16T10:05:30.000Z",
     ...worker,
-    seq: 17,
+    seq: 16,
     step: "gate",
     phase: "ended",
     ms: 0,
     outcome: { kind: "refused", code: "changed_since_accept" },
   });
-  expect(lines[34]).toEqual({
+  expect(lines[29]).toEqual({
     at: "2026-09-16T10:07:00.000Z",
     ...worker,
-    seq: 27,
-    step: "push",
+    seq: 22,
+    step: "tool",
     phase: "started",
     call: "coordinator-worker-9-tool",
-    dir: TRACED,
+    name: "Bash",
+    target: null,
+    git: ["push"],
   });
-  expect(lines[37]).toEqual({
+  expect(lines.filter((line) => Array.isArray(line.git)).map((line) => [line.seq, line.git])).toEqual([
+    [14, ["commit"]],
+    [18, ["add", "commit"]],
+    [22, ["push"]],
+  ]);
+  expect(lines[31]).toEqual({
     at: "2026-09-16T10:08:00.000Z",
     ...worker,
-    seq: 30,
+    seq: 24,
     step: "agent",
     phase: "ended",
     ms: 419000,

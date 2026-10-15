@@ -287,6 +287,7 @@ export function parseCodexChunk(
             toolName: null,
             isError: item.status != null ? item.status !== "completed" : null,
             isInterrupted: null,
+            hostRefused: null,
             exitCode: item.exit_code ?? null,
             durationMs: durationMs(item.duration),
             resultBytes: (item.stdout?.length ?? 0) + (item.stderr?.length ?? 0) || null,

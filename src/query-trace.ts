@@ -21,19 +21,25 @@ type Tokens = {
   readonly outputTokens: number;
 };
 
-type Called = { readonly call: string };
+type Called = { readonly call: string; readonly name: string | null };
 
 type How = (typeof HOWS)[number];
 
 type Steps = {
   readonly agent: Step<{ readonly agentType: string | null; readonly model: string | null }, Tokens>;
   readonly tool: Step<
-    { readonly call: string; readonly name: string | null; readonly target: string | null },
+    {
+      readonly call: string;
+      readonly name: string | null;
+      readonly target: string | null;
+      readonly git: readonly string[] | null;
+    },
     Called
   >;
-  readonly skill: Step<{ readonly name: string; readonly how: How; readonly call: string | null }>;
-  readonly commit: Step<{ readonly call: string; readonly dir: string | null }, Called>;
-  readonly push: Step<{ readonly call: string; readonly dir: string | null }, Called>;
+  readonly skill: Step<
+    { readonly name: string; readonly how: How; readonly call: string | null },
+    { readonly name: string }
+  >;
   readonly verdict: Step<{ readonly repo: string }, { readonly verdict: Verdict }>;
   readonly gate: Step<{ readonly gate: Gate; readonly repo: string | null }>;
   readonly compact: Step<Readonly<Record<never, never>>>;
@@ -66,6 +72,8 @@ const NOTHING = {};
 
 const OK: Outcome = { kind: "ok" };
 
+const HOST_REFUSAL = "host";
+
 const TREE = `WITH RECURSIVE tree(id) AS (
   SELECT ?1 UNION SELECT s.id FROM session s JOIN tree ON s.parent_id = tree.id
 )`;
@@ -97,28 +105,27 @@ type CallRow = {
   readonly session: string;
   readonly name: string | null;
   readonly target: string | null;
-  readonly dir: string | null;
-  readonly subcommand: string | null;
+  readonly git: string | null;
   readonly called: string;
   readonly returned: string | null;
   readonly denial: string | null;
+  readonly hostRefused: number | null;
   readonly failure: string | null;
 };
 
 const CALL_OUTCOME = `c.id, c.session_id AS session, c.ts_call AS called, c.ts_result AS returned,
   coalesce(c.skill_name, c.file_path) AS target,
-  ${callFailureSql("c")} AS failure,
+  ${callFailureSql("c")} AS failure, c.host_refused AS hostRefused,
   (SELECT m.denial_kind FROM message m
    WHERE m.src_file = c.src_file AND m.src_line = c.src_line_result AND m.denial_kind IS NOT NULL) AS denial`;
 
+const GIT_RUN_SEPARATOR = " ";
+
 const CALLS = `${TREE}
-SELECT ${CALL_OUTCOME}, c.tool_name AS name, NULL AS dir, NULL AS subcommand
+SELECT ${CALL_OUTCOME}, c.tool_name AS name,
+  (SELECT group_concat(g.subcommand, '${GIT_RUN_SEPARATOR}' ORDER BY g.position)
+   FROM git_command g WHERE g.tool_call_id = c.id) AS git
 FROM tree JOIN tool_call c ON c.session_id = tree.id
-WHERE c.ts_call IS NOT NULL
-UNION ALL
-SELECT ${CALL_OUTCOME}, c.tool_name AS name, g.dir, g.subcommand
-FROM tree JOIN tool_call c ON c.session_id = tree.id
-JOIN git_command g ON g.tool_call_id = c.id AND g.subcommand IN ('commit', 'push')
 WHERE c.ts_call IS NOT NULL`;
 
 type SkillRow = {
@@ -171,6 +178,7 @@ function failedOr(failure: string | null): Outcome {
 
 function callOutcome(call: CallRow): Outcome {
   if (call.denial !== null) return { kind: "refused", code: call.denial };
+  if (call.hostRefused === 1) return { kind: "refused", code: HOST_REFUSAL };
   return failedOr(call.failure);
 }
 
@@ -195,11 +203,10 @@ function callStep(call: CallRow): Taken {
   const ended =
     call.returned === null
       ? null
-      : { at: call.returned, outcome: callOutcome(call), result: { call: call.id } };
+      : { at: call.returned, outcome: callOutcome(call), result: { call: call.id, name: call.name } };
   const { id, session, called: at } = call;
-  if (call.subcommand === "commit" || call.subcommand === "push")
-    return { step: call.subcommand, session, at, start: { call: id, dir: call.dir }, ended };
-  return { step: "tool", session, at, start: { call: id, name: call.name, target: call.target }, ended };
+  const git = call.git === null ? null : call.git.split(GIT_RUN_SEPARATOR);
+  return { step: "tool", session, at, start: { call: id, name: call.name, target: call.target, git }, ended };
 }
 
 function verdictStep(row: VerdictRow): Taken {
@@ -229,7 +236,7 @@ function skillStep(row: SkillRow): Taken {
     session: row.session,
     at: row.at,
     start: { name: row.name, how: row.how, call: row.call },
-    ended: { at: row.at, outcome: OK, result: NOTHING },
+    ended: { at: row.at, outcome: OK, result: { name: row.name } },
   };
 }
 
@@ -304,7 +311,7 @@ function stepsUnder(
   const rows = db.query<SessionRow, [string]>(SESSIONS).all(task);
   const sessions = new Map(rows.map((row) => [row.id, row]));
   const calls = db.query<CallRow, [string]>(CALLS).all(task).map(callStep);
-  const waiting = new Set(calls.filter((c) => c.step === "tool" && c.ended === null).map((c) => c.session));
+  const waiting = new Set(calls.filter((c) => c.ended === null).map((c) => c.session));
   const agents = rows.map((row) => agentStep(row, waiting));
   const skills = db.query<SkillRow, [string]>(SKILLS).all(task).map(skillStep);
   const compactions = db.query<CompactionRow, [string]>(COMPACTIONS).all(task).map(compactStep);
@@ -338,8 +345,8 @@ export const trace: Query = {
       rows: lines.map((line) => [JSON.stringify(line)]),
       note:
         "Each row is one JSON line, in time order. An agent has ended, at its last line, once every tool call it " +
-        "made has returned. A refused tool call's code is the tool's denial kind, not a hook's reason. gate and " +
-        "verdict steps appear only where a hook event log recorded them.",
+        "made has returned. A refused tool call's code is the tool's denial kind, or host when Claude Code refused " +
+        "it before it ran, not a hook's reason. gate and verdict steps appear only where a hook event log recorded them.",
     };
   },
 };

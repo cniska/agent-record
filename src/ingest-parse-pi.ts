@@ -181,6 +181,7 @@ function resultOf(line: PiToolResultLine, srcLine: number): ToolCallRow {
     toolName: line.toolName,
     isError: line.isError,
     isInterrupted: null,
+    hostRefused: null,
     exitCode: line.exitCode,
     durationMs: null,
     resultBytes: null,
