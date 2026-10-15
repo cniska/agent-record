@@ -40,6 +40,13 @@ export const refuseQuery = refuser<{
   readonly ambiguous_commit: { readonly prefix: string; readonly matches: readonly string[] };
   readonly from_before_commit: { readonly from: string; readonly sha: string; readonly at: string };
   readonly unknown_skill: { readonly skill: string; readonly skills: readonly string[] };
+  readonly unknown_task: { readonly session: string; readonly prefix: string };
+  readonly ambiguous_task: {
+    readonly session: string;
+    readonly prefix: string;
+    readonly matches: readonly string[];
+  };
+  readonly task_of_subagent: { readonly session: string };
 }>({
   unknown_query: {
     message: ({ name }) => `no query named ${name}`,
@@ -84,5 +91,18 @@ export const refuseQuery = refuser<{
   unknown_skill: {
     message: ({ skill }) => `no load of a skill named ${skill} is in the record`,
     resolve: ({ skills }) => `--skill <name>, named without its plugin, one of: ${skills.join(", ")}`,
+  },
+  unknown_task: {
+    message: ({ session, prefix }) => `no task of session ${session} starts with ${prefix}`,
+    resolve: ({ session }) => `agent-record query tasks ${session}`,
+  },
+  ambiguous_task: {
+    message: ({ prefix, matches }) =>
+      `${prefix} matches more than one task, among them ${matches.join(" and ")}`,
+    resolve: ({ matches }) => `--task <a longer prefix of one of: ${matches.join(", ")}>`,
+  },
+  task_of_subagent: {
+    message: ({ session }) => `${session} is a subagent, so it runs in one task and --task picks none`,
+    resolve: ({ session }) => `agent-record query trace ${session}, or --task with its top-level session`,
   },
 });

@@ -88,6 +88,7 @@ function linesOf(sessionId: string, cwd: string, steps: readonly Step[], prefix:
           uuid,
           timestamp: step.at,
           promptSource: "typed",
+          promptId: `${uuid}-prompt`,
           message: { role: "user", content: step.owner },
         },
       ];

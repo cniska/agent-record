@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { unreachable } from "./assert";
 import type { Counted } from "./ingest-event-kinds";
 import { type Escape, escapesOf, type Gated, gateCommits, isAccepted } from "./query-escaped-defects";
@@ -11,20 +10,17 @@ import {
   repoNamed,
   reviewRounds,
 } from "./query-hook-timeline";
-import { type Cause, classify } from "./query-interrupt";
+import type { Cause } from "./query-interrupt";
 import { type Reread, rereadsAfterCompactions } from "./query-lost-context";
 import { asksSecondRead } from "./query-second-read";
 import type { CheckoutRow, GitRunRow, HookRow, SessionRow, SignalRecord } from "./query-signal-record";
 import { type Stretch, stepStretches } from "./query-step-cost";
+import { type SaidRow, saidRows, TaskId, type TaskStart, taskAt, taskStartsOf } from "./query-task";
 import { EpochMs } from "./timestamp";
-
-const TaskKey = z.string().brand<"TaskKey">();
-
-export type TaskKey = z.infer<typeof TaskKey>;
 
 export type Placed = {
   readonly at: string;
-  readonly task: TaskKey;
+  readonly task: TaskId;
   readonly sessionId: string;
   readonly repo: string | null;
   readonly tags: Tags;
@@ -87,8 +83,6 @@ export type Timeline = {
   readonly newest: string | null;
 };
 
-type Prompt = { readonly at: string; readonly ms: number };
-
 type Run = GitRunRow & { readonly repo: string; readonly root: string; readonly ms: number };
 
 type Pending = {
@@ -124,52 +118,53 @@ function rootFinder(sessions: ReadonlyMap<string, SessionRow>): (id: string) => 
   };
 }
 
-function promptsByRoot(record: SignalRecord): {
-  readonly prompts: ReadonlyMap<string, readonly Prompt[]>;
+function tasksByRoot(
+  record: SignalRecord,
+  said: readonly SaidRow[],
+): {
+  readonly tasks: ReadonlyMap<string, readonly TaskStart[]>;
   readonly ownerTyped: ReadonlySet<string>;
   readonly pending: readonly Pending[];
 } {
-  const starts: { readonly root: string; readonly at: string }[] = record.sessions.flatMap((session) =>
-    session.parentId === null && session.start !== null ? [{ root: session.id, at: session.start }] : [],
-  );
   const ownerTyped = new Set<string>();
   const pending: Pending[] = [];
-  for (const message of record.ownerMessages) {
-    const said = classify(message.text, message.agentBefore, message.midTurn);
-    switch (said.kind) {
+  for (const message of said) {
+    switch (message.said.kind) {
       case "command":
         break;
       case "interrupt":
         ownerTyped.add(message.sessionId);
-        pending.push({ ...message, cause: said.cause });
+        pending.push({ ...message, cause: message.said.cause });
         break;
       case "task":
-        ownerTyped.add(message.sessionId);
-        if (message.agentBefore !== null) starts.push({ root: message.sessionId, at: message.at });
-        break;
       case "within":
         ownerTyped.add(message.sessionId);
         break;
       default:
-        unreachable(said);
+        unreachable(message.said);
     }
   }
   for (const rejection of record.rejections) pending.push({ ...rejection, cause: "permission", text: null });
-  const prompts = new Map(
-    [...Map.groupBy(starts, (start) => start.root)].map(([root, list]) => [
-      root,
-      list.map(({ at }) => ({ at, ms: ms(at) })).sort((a, b) => a.ms - b.ms),
-    ]),
+  const bySession = Map.groupBy(said, (message) => message.sessionId);
+  const openings = new Map(record.openings.map((opening) => [opening.sessionId, opening]));
+  const tasks = new Map(
+    record.sessions.flatMap((session) =>
+      session.parentId === null && session.start !== null
+        ? [
+            [
+              session.id,
+              taskStartsOf(
+                session.id,
+                session.start,
+                openings.get(session.id) ?? null,
+                bySession.get(session.id) ?? [],
+              ),
+            ] as const,
+          ]
+        : [],
+    ),
   );
-  return { prompts, ownerTyped, pending };
-}
-
-function taskIndex(prompts: readonly Prompt[], at: number): number {
-  let found = 0;
-  prompts.forEach((prompt, index) => {
-    if (prompt.ms <= at) found = index;
-  });
-  return found;
+  return { tasks, ownerTyped, pending };
 }
 
 function pushesByRepo(runs: readonly Run[]): (run: Run) => number | null {
@@ -185,11 +180,14 @@ export function timelineOf(record: SignalRecord): Timeline {
   const rootOf = rootFinder(sessions);
   const repoOf = repoFinder(record.checkouts);
   const repoOfRoot = (root: string) => repoOf(sessions.get(root)?.project ?? null);
-  const { prompts, ownerTyped, pending } = promptsByRoot(record);
-  const keyOf = (root: string, index: number): TaskKey => TaskKey.parse(`${root}#${index}`);
-  const taskKey = (root: string, at: number): TaskKey => keyOf(root, taskIndex(prompts.get(root) ?? [], at));
+  const said = saidRows(record.ownerMessages);
+  const { tasks: startsByRoot, ownerTyped, pending } = tasksByRoot(record, said);
+  const taskKey = (root: string, at: number): TaskId => {
+    const starts = startsByRoot.get(root);
+    return starts === undefined ? TaskId.parse(root) : taskAt(starts, at).id;
+  };
 
-  const tagged = new Map<TaskKey, Map<string, string>>();
+  const tagged = new Map<TaskId, Map<string, string>>();
   for (const tag of record.tags) {
     const key = taskKey(rootOf(tag.sessionId), ms(tag.at));
     const tags = tagged.get(key) ?? new Map<string, string>();
@@ -197,8 +195,8 @@ export function timelineOf(record: SignalRecord): Timeline {
     tagged.set(key, tags);
   }
   const untagged: Tags = new Map();
-  const tagsOf = (key: TaskKey): Tags => tagged.get(key) ?? untagged;
-  const inTask = (root: string, at: number): { readonly task: TaskKey; readonly tags: Tags } => {
+  const tagsOf = (key: TaskId): Tags => tagged.get(key) ?? untagged;
+  const inTask = (root: string, at: number): { readonly task: TaskId; readonly tags: Tags } => {
     const task = taskKey(root, at);
     return { task, tags: tagsOf(task) };
   };
@@ -219,12 +217,8 @@ export function timelineOf(record: SignalRecord): Timeline {
     return { ...said, sessionId: root, repo: repoOfRoot(root), ...inTask(root, ms(said.at)) };
   });
 
-  const secondReadAsks: Ask[] = record.ownerMessages.flatMap((message) => {
-    if (
-      classify(message.text, message.agentBefore, message.midTurn).kind === "command" ||
-      !asksSecondRead(message.text)
-    )
-      return [];
+  const secondReadAsks: Ask[] = said.flatMap((message) => {
+    if (message.said.kind === "command" || !asksSecondRead(message.text)) return [];
     const root = rootOf(message.sessionId);
     return [
       {
@@ -241,9 +235,9 @@ export function timelineOf(record: SignalRecord): Timeline {
   const hookLogged = (root: string, at: string): boolean =>
     firstHook !== null && sessions.get(root)?.tool === "claude" && ms(at) >= ms(firstHook);
 
-  const keyedTasks = [...prompts.entries()].flatMap(([root, list]) =>
-    list.map((prompt, index) => {
-      const key = keyOf(root, index);
+  const keyedTasks = [...startsByRoot.entries()].flatMap(([root, list]) =>
+    list.map((prompt) => {
+      const key = prompt.id;
       const last = lastOfTask.get(key) ?? null;
       const task: TaskOutcome = {
         at: prompt.at,

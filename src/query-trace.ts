@@ -1,9 +1,19 @@
 import type { Database } from "bun:sqlite";
+import { invariant, unreachable } from "./assert";
 import type { Decision, Gate, Verdict } from "./ingest-event-kinds";
 import { subagentSessionIdSql } from "./ingest-ids";
 import type { HOWS } from "./ingest-skill-load";
 import { callFailureSql, sessionByPrefix } from "./query";
-import type { Query } from "./query-contract";
+import { type Query, refuseQuery } from "./query-contract";
+import {
+  type RootRow,
+  readTasks,
+  rootOf,
+  type TaskId,
+  type TaskStart,
+  taskAt,
+  taskByPrefix,
+} from "./query-task";
 
 type LineKey = "at" | "session" | "parent" | "task" | "seq" | "step" | "phase" | "ms" | "outcome";
 
@@ -301,34 +311,163 @@ function linesOf(
   });
 }
 
+type Window = { readonly from: TaskStart; readonly to: TaskStart | null };
+
+type Picked =
+  | { readonly kind: "task"; readonly root: string; readonly task: TaskId; readonly window: Window }
+  | { readonly kind: "subagent"; readonly root: string; readonly task: TaskId };
+
+type UsageRow = { readonly at: string; readonly model: string | null } & Tokens;
+
+const ROOT_USAGE = `SELECT ts AS at, model, input_tokens AS inputTokens, cache_read_tokens AS cacheReadTokens,
+  cache_write_tokens AS cacheWriteTokens, output_tokens AS outputTokens
+FROM usage WHERE session_id = ?1 ORDER BY ts`;
+
+const ROOT_LINES = "SELECT ts AS at FROM message WHERE session_id = ?1 ORDER BY ts";
+
+const ms = (at: string): number => Date.parse(at);
+
+const within =
+  (window: Window | null) =>
+  (at: string): boolean =>
+    window === null || (ms(at) >= window.from.ms && (window.to === null || ms(at) < window.to.ms));
+
+type Placement =
+  | { readonly kind: "root"; readonly id: string; readonly first: string }
+  | {
+      readonly kind: "subagent";
+      readonly root: string;
+      readonly first: string;
+      readonly branchFirst: string;
+    };
+
+function placementOf(traced: string, root: RootRow): Placement | null {
+  if (root.first === null) return null;
+  if (root.id === traced) return { kind: "root", id: root.id, first: root.first };
+  if (root.branchFirst === null) return null;
+  return { kind: "subagent", root: root.id, first: root.first, branchFirst: root.branchFirst };
+}
+
+function pick(db: Database, traced: string, picked: string | undefined, placement: Placement): Picked {
+  switch (placement.kind) {
+    case "subagent": {
+      if (picked !== undefined) throw refuseQuery("task_of_subagent", { session: traced });
+      const starts = readTasks(db, placement.root, placement.first);
+      return { kind: "subagent", root: placement.root, task: taskAt(starts, ms(placement.branchFirst)).id };
+    }
+    case "root": {
+      const starts = readTasks(db, placement.id, placement.first);
+      const from = picked === undefined ? starts.at(-1) : taskByPrefix(starts, placement.id, picked);
+      invariant(from !== undefined, "a session has at least one task");
+      const to = starts[starts.indexOf(from) + 1] ?? null;
+      return { kind: "task", root: placement.id, task: from.id, window: { from, to } };
+    }
+    default:
+      return unreachable(placement);
+  }
+}
+
+function topChildOf(sessions: ReadonlyMap<string, SessionRow>, root: string): (id: string) => string {
+  return (id) => {
+    let at = id;
+    for (let parent = sessions.get(at)?.parent ?? null; parent !== null && parent !== root; ) {
+      at = parent;
+      parent = sessions.get(at)?.parent ?? null;
+    }
+    return at;
+  };
+}
+
+function rootInTask(db: Database, root: SessionRow, window: Window, waiting: boolean): Taken {
+  const inTask = within(window);
+  const usage = db
+    .query<UsageRow, [string]>(ROOT_USAGE)
+    .all(root.id)
+    .filter((row) => inTask(row.at));
+  const lines = db
+    .query<{ readonly at: string }, [string]>(ROOT_LINES)
+    .all(root.id)
+    .filter((row) => inTask(row.at));
+  const sum = (field: keyof Tokens) => usage.reduce((total, row) => total + row[field], 0);
+  const last = window.to === null ? root.last : (lines.at(-1)?.at ?? window.from.at);
+  return {
+    step: "agent",
+    session: root.id,
+    at: window.from.at,
+    start: { agentType: root.agentType, model: usage.find((row) => row.model !== null)?.model ?? null },
+    ended: waiting
+      ? null
+      : {
+          at: last,
+          outcome: OK,
+          result: {
+            inputTokens: sum("inputTokens"),
+            cacheReadTokens: sum("cacheReadTokens"),
+            cacheWriteTokens: sum("cacheWriteTokens"),
+            outputTokens: sum("outputTokens"),
+          },
+        },
+  };
+}
+
 function stepsUnder(
   db: Database,
-  task: string,
+  traced: string,
+  window: Window | null,
 ): {
   readonly taken: readonly Taken[];
   readonly sessions: ReadonlyMap<string, SessionRow>;
 } {
-  const rows = db.query<SessionRow, [string]>(SESSIONS).all(task);
-  const sessions = new Map(rows.map((row) => [row.id, row]));
-  const calls = db.query<CallRow, [string]>(CALLS).all(task).map(callStep);
+  const rows = db.query<SessionRow, [string]>(SESSIONS).all(traced);
+  const all = new Map(rows.map((row) => [row.id, row]));
+  const topChild = topChildOf(all, traced);
+  const inTask = within(window);
+  const startedInTask = (row: SessionRow): boolean => {
+    const top = all.get(topChild(row.id));
+    invariant(top !== undefined, "a session's top child is in its tree");
+    return inTask(top.first);
+  };
+  const sessions = new Map(
+    rows.filter((row) => row.id === traced || startedInTask(row)).map((row) => [row.id, row]),
+  );
+  const keeps = (t: Taken) => (t.session === traced ? inTask(t.at) : sessions.has(t.session));
+  const calls = db.query<CallRow, [string]>(CALLS).all(traced).map(callStep).filter(keeps);
   const waiting = new Set(calls.filter((c) => c.ended === null).map((c) => c.session));
-  const agents = rows.map((row) => agentStep(row, waiting));
-  const skills = db.query<SkillRow, [string]>(SKILLS).all(task).map(skillStep);
-  const compactions = db.query<CompactionRow, [string]>(COMPACTIONS).all(task).map(compactStep);
-  const verdicts = db.query<VerdictRow, [string]>(VERDICTS).all(task).map(verdictStep);
-  const gates = db.query<GateRow, [string]>(GATES).all(task).map(gateStep);
-  return { taken: [...agents, ...calls, ...skills, ...compactions, ...verdicts, ...gates], sessions };
+  const agents = [...sessions.values()].map((row) =>
+    row.id === traced && window !== null
+      ? rootInTask(db, row, window, waiting.has(row.id))
+      : agentStep(row, waiting),
+  );
+  const others = [
+    ...db.query<SkillRow, [string]>(SKILLS).all(traced).map(skillStep),
+    ...db.query<CompactionRow, [string]>(COMPACTIONS).all(traced).map(compactStep),
+    ...db.query<VerdictRow, [string]>(VERDICTS).all(traced).map(verdictStep),
+    ...db.query<GateRow, [string]>(GATES).all(traced).map(gateStep),
+  ].filter(keeps);
+  return { taken: [...agents, ...calls, ...others], sessions };
 }
 
-export const trace: Query = {
+function describe(traced: string, picked: Picked, subagents: number): string {
+  switch (picked.kind) {
+    case "task":
+      return `task ${picked.task} of session ${traced}, from ${picked.window.from.at}, and the ${subagents} subagents started in it`;
+    case "subagent":
+      return `session ${traced} and the ${subagents} subagents under it, in task ${picked.task} of ${picked.root}`;
+    default:
+      return unreachable(picked);
+  }
+}
+
+export const trace: Query<"task"> = {
   name: "trace",
-  summary: "trace the steps of a session and every subagent under it, each row one JSON line",
-  usage: "agent-record query trace <id-prefix> [--rows <n>]",
-  flags: [],
+  summary:
+    "trace the steps of one task of a session, or of a subagent and every subagent under it, each row one JSON line",
+  usage: "agent-record query trace <id-prefix> [--task <id-prefix>] [--rows <n>]",
+  flags: ["task"],
   run: (db, ctx) => {
     const prefix = ctx.arg;
-    const task = sessionByPrefix(db, "trace", prefix);
-    if (task === null) {
+    const traced = sessionByPrefix(db, "trace", prefix);
+    if (traced === null) {
       return {
         denominator: "0 sessions",
         columns: ["line"],
@@ -336,15 +475,27 @@ export const trace: Query = {
         note: `no session starts with ${prefix}`,
       };
     }
-    const { taken, sessions } = stepsUnder(db, task);
-    const lines = linesOf(taken, sessions, task);
+    const placement = placementOf(traced, rootOf(db, traced));
+    if (placement === null) {
+      return {
+        denominator: `session ${traced}: 0 steps`,
+        columns: ["line"],
+        rows: [],
+        note: `session ${traced}, or the branch of its top-level session it runs in, has no timed line, so it falls in no task`,
+      };
+    }
+    const picked = pick(db, traced, ctx.flags.task, placement);
+    const { taken, sessions } = stepsUnder(db, traced, picked.kind === "task" ? picked.window : null);
+    const lines = linesOf(taken, sessions, picked.task);
     const running = taken.filter((t) => t.ended === null).length;
     return {
-      denominator: `session ${task} and the ${sessions.size - 1} subagents under it: ${taken.length} steps, ${running} still running`,
+      denominator: `${describe(traced, picked, sessions.size - 1)}: ${taken.length} steps, ${running} still running`,
       columns: ["line"],
       rows: lines.map((line) => [JSON.stringify(line)]),
       note:
-        "Each row is one JSON line, in time order. An agent has ended, at its last line, once every tool call it " +
+        "Each row is one JSON line, in time order. A top-level session's task runs from one task prompt to the " +
+        "next, with the subagents started in it; the latest is traced unless --task names another, as query tasks " +
+        "lists them. An agent has ended, at its last line, once every tool call it " +
         "made has returned. A refused tool call's code is the tool's denial kind, or host when Claude Code refused " +
         "it before it ran, not a hook's reason. gate and verdict steps appear only where a hook event log recorded them.",
     };

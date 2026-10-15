@@ -28,6 +28,7 @@ const run = (sessionId: string, at: string, subcommand: GitRunRow["subcommand"],
 const recordOf = (more: Partial<SignalRecord>): SignalRecord => ({
   sessions: [],
   ownerMessages: [],
+  openings: [],
   rejections: [],
   gitRuns: [],
   tags: [],
@@ -67,6 +68,8 @@ describe("counting the owner's interrupts per task", () => {
     ],
     ownerMessages: [
       {
+        id: "m1",
+        turnId: null,
         sessionId: "s",
         at: "2026-10-14T09:00:00.000Z",
         text: "add the parser",
@@ -74,6 +77,8 @@ describe("counting the owner's interrupts per task", () => {
         midTurn: false,
       },
       {
+        id: "m2",
+        turnId: null,
         sessionId: "s",
         at: "2026-10-14T09:10:00.000Z",
         text: "the second",
@@ -81,6 +86,8 @@ describe("counting the owner's interrupts per task", () => {
         midTurn: false,
       },
       {
+        id: "m3",
+        turnId: null,
         sessionId: "s",
         at: "2026-10-14T09:20:00.000Z",
         text: "no, the other file",
@@ -88,6 +95,8 @@ describe("counting the owner's interrupts per task", () => {
         midTurn: false,
       },
       {
+        id: "m4",
+        turnId: null,
         sessionId: "s",
         at: "2026-10-14T09:30:00.000Z",
         text: "now add the printer",
@@ -95,6 +104,8 @@ describe("counting the owner's interrupts per task", () => {
         midTurn: false,
       },
       {
+        id: "m5",
+        turnId: null,
         sessionId: "s",
         at: "2026-10-14T09:40:00.000Z",
         text: "<command-name>/clear</command-name>",
@@ -123,6 +134,8 @@ describe("counting the owner's interrupts per task", () => {
 
 describe("counting a message the owner typed while a turn ran", () => {
   const typed = (at: string, text: string, agentBefore: string | null, midTurn: boolean) => ({
+    id: at,
+    turnId: null,
     sessionId: "s",
     at,
     text,
@@ -395,7 +408,15 @@ describe("counting blocks by source per task", () => {
         session("codex", "2026-10-14T09:30:00.000Z", { tool: "codex" }),
       ],
       ownerMessages: [
-        { sessionId: "a", at: timed(2), text: "now add the printer", agentBefore: TOLD, midTurn: false },
+        {
+          id: "m6",
+          turnId: null,
+          sessionId: "a",
+          at: timed(2),
+          text: "now add the printer",
+          agentBefore: TOLD,
+          midTurn: false,
+        },
       ],
       hookEvents: [
         { at: timed(1), event: "permission_prompt", sessionId: "a", agent: null },
@@ -427,6 +448,8 @@ describe("counting skill loads per task by version", () => {
     ],
     ownerMessages: [
       {
+        id: "m7",
+        turnId: null,
         sessionId: "s",
         at: "2026-10-14T09:30:00.000Z",
         text: "now add the printer",
@@ -603,8 +626,24 @@ describe("costing each step of every loop by its tokens and minutes", () => {
       session("e", timed(25), { parentId: "a", agentType: "Explore" }),
     ],
     ownerMessages: [
-      { sessionId: "a", at: timed(0), text: "add the parser", agentBefore: null, midTurn: false },
-      { sessionId: "a", at: timed(40), text: "now add the printer", agentBefore: TOLD, midTurn: false },
+      {
+        id: "m8",
+        turnId: null,
+        sessionId: "a",
+        at: timed(0),
+        text: "add the parser",
+        agentBefore: null,
+        midTurn: false,
+      },
+      {
+        id: "m9",
+        turnId: null,
+        sessionId: "a",
+        at: timed(40),
+        text: "now add the printer",
+        agentBefore: TOLD,
+        midTurn: false,
+      },
     ],
     subagentReturns: [{ sessionId: "a", at: timed(30) }],
     skillLoads: [
@@ -653,6 +692,8 @@ describe("costing each step of every loop by its tokens and minutes", () => {
 
 describe("counting the owner's asks for another model's read per task", () => {
   const said = (at: string, text: string) => ({
+    id: at,
+    turnId: null,
     sessionId: "s",
     at,
     text,
@@ -663,6 +704,8 @@ describe("counting the owner's asks for another model's read per task", () => {
     sessions: [session("s", "2026-10-14T09:00:00.000Z")],
     ownerMessages: [
       {
+        id: "m10",
+        turnId: null,
         sessionId: "s",
         at: "2026-10-14T09:00:00.000Z",
         text: "add the parser",

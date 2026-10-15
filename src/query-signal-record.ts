@@ -18,10 +18,15 @@ export type SessionRow = {
   readonly agentType: string | null;
 };
 
-type OwnerMessageRow = {
+export type OpeningRow = {
+  readonly id: string;
+  readonly turnId: string | null;
   readonly sessionId: string;
-  readonly at: string;
   readonly text: string;
+};
+
+export type OwnerMessageRow = OpeningRow & {
+  readonly at: string;
   readonly agentBefore: string | null;
   readonly midTurn: boolean;
 };
@@ -133,6 +138,7 @@ function hookRowOf(columns: HookColumns): HookRow {
 export type SignalRecord = {
   readonly sessions: readonly SessionRow[];
   readonly ownerMessages: readonly OwnerMessageRow[];
+  readonly openings: readonly OpeningRow[];
   readonly rejections: readonly TimedRow[];
   readonly gitRuns: readonly GitRunRow[];
   readonly compactions: readonly TimedRow[];
@@ -172,6 +178,36 @@ const PRELOAD = "preload" satisfies (typeof HOWS)[number];
 
 const SUBAGENT_TOOL = "Agent";
 
+function readOwnerMessages(
+  db: Database,
+  where: string,
+  params: readonly string[],
+): readonly OwnerMessageRow[] {
+  return db
+    .query<Omit<OwnerMessageRow, "midTurn"> & { readonly midTurn: number }, string[]>(
+      `SELECT m.id, m.turn_id AS turnId, m.session_id AS sessionId, m.ts AS at, m.text,
+              ${AGENT_BEFORE} AS agentBefore, m.prompt_source IS ? AS midTurn
+       FROM message m JOIN session s ON s.id = m.session_id
+       WHERE ${where} ORDER BY m.ts`,
+    )
+    .all(MID_TURN_PROMPT, ...params)
+    .map((message) => ({ ...message, midTurn: message.midTurn === 1 }));
+}
+
+const FIRST_USER = (where: string) => `SELECT sessionId, id, turnId, text FROM (
+  SELECT m.session_id AS sessionId, m.id, m.turn_id AS turnId, m.text,
+    row_number() OVER (PARTITION BY m.session_id ORDER BY m.ts, m.src_line) AS n
+  FROM message m JOIN session s ON s.id = m.session_id
+  WHERE s.parent_id IS NULL AND m.role = 'user' AND m.is_meta = 0 AND m.text IS NOT NULL AND m.text <> ''
+    AND ${where}
+) WHERE n = 1`;
+
+export const openingOf = (db: Database, sessionId: string): OpeningRow | null =>
+  db.query<OpeningRow, [string]>(FIRST_USER("m.session_id = ?1")).get(sessionId);
+
+export const ownerMessagesOf = (db: Database, sessionId: string): readonly OwnerMessageRow[] =>
+  readOwnerMessages(db, `${OWNER} AND m.session_id = ?`, [sessionId]);
+
 export function readSignalRecord(db: Database): SignalRecord {
   const sessions = db
     .query<SessionRow, []>(
@@ -179,15 +215,8 @@ export function readSignalRecord(db: Database): SignalRecord {
        FROM session`,
     )
     .all();
-  const ownerMessages = db
-    .query<Omit<OwnerMessageRow, "midTurn"> & { readonly midTurn: number }, [string]>(
-      `SELECT m.session_id AS sessionId, m.ts AS at, m.text, ${AGENT_BEFORE} AS agentBefore,
-              m.prompt_source IS ? AS midTurn
-       FROM message m JOIN session s ON s.id = m.session_id
-       WHERE ${OWNER} ORDER BY m.ts`,
-    )
-    .all(MID_TURN_PROMPT)
-    .map((message) => ({ ...message, midTurn: message.midTurn === 1 }));
+  const ownerMessages = readOwnerMessages(db, OWNER, []);
+  const openings = db.query<OpeningRow, []>(FIRST_USER("1")).all();
   const rejections = db
     .query<TimedRow, []>(
       `SELECT session_id AS sessionId, ts AS at FROM message WHERE denial_kind = 'user-rejected' ORDER BY ts`,
@@ -272,6 +301,7 @@ export function readSignalRecord(db: Database): SignalRecord {
   return {
     sessions,
     ownerMessages,
+    openings,
     rejections,
     gitRuns,
     compactions,

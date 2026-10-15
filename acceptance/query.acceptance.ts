@@ -39,7 +39,8 @@ test("AC-13 query list names every query with its usage and summary", () => {
     { name: "prior-art", usage: 'agent-record query prior-art "<path fragment>" [--rows <n>]' },
     { name: "search", usage: 'agent-record query search "<words>" [--rows <n>]' },
     { name: "thread", usage: "agent-record query thread <id-prefix> [--at <ts>] [--rows <n>]" },
-    { name: "trace", usage: "agent-record query trace <id-prefix> [--rows <n>]" },
+    { name: "tasks", usage: "agent-record query tasks <id-prefix> [--rows <n>]" },
+    { name: "trace", usage: "agent-record query trace <id-prefix> [--task <id-prefix>] [--rows <n>]" },
     {
       name: "signal",
       usage:
@@ -262,9 +263,12 @@ const tracedHome = (): Home =>
         id: "coordinator",
         cwd: TRACED,
         steps: [
-          { owner: "run the task", at: "2026-09-16T10:00:00Z" },
+          { owner: "<command-name>/run</command-name>", at: "2026-09-16T10:00:00Z" },
           { spawn: "toolu-worker", at: "2026-09-16T10:01:00Z", done: "2026-09-16T10:20:00Z" },
           { spawn: "toolu-watcher", at: "2026-09-16T10:09:00Z", done: "2026-09-16T10:09:01Z" },
+          { agent: "Both are running.", at: "2026-09-16T10:20:30Z" },
+          { owner: "now write the docs", at: "2026-09-16T10:30:00Z" },
+          { bash: "ls docs", at: "2026-09-16T10:30:10Z", done: "2026-09-16T10:30:11Z" },
         ],
         subagents: [
           {
@@ -348,7 +352,7 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
   const home = tracedHome();
   sync(home);
 
-  const result = query(home, ["trace", "coord", "--rows", "100"]);
+  const result = query(home, ["trace", "coord", "--task", "coordinator-0", "--rows", "100"]);
   const lines = result.rows.map(([line]) => JSON.parse(String(line)));
   const shape = (line: Record<string, unknown>) => {
     const outcome = z
@@ -363,10 +367,11 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
       outcome?.code ?? outcome?.kind ?? "-",
     ];
   };
-  const worker = { session: "worker@coordinator", parent: "coordinator", task: "coordinator" };
+  const first = "coordinator-0-prompt";
+  const worker = { session: "worker@coordinator", parent: "coordinator", task: first };
 
   expect(result.denominator).toBe(
-    "session coordinator and the 3 subagents under it: 21 steps, 2 still running",
+    `task ${first} of session coordinator, from 2026-09-16T10:00:00.000Z, and the 3 subagents started in it: 21 steps, 2 still running`,
   );
   expect(lines.map(shape)).toEqual([
     ["coordinator", 1, "agent", "started", "-"],
@@ -453,7 +458,7 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
     at: "2026-09-16T10:03:01.000Z",
     session: "checker@coordinator",
     parent: "worker@coordinator",
-    task: "coordinator",
+    task: first,
     seq: 1,
     step: "agent",
     phase: "started",
@@ -464,7 +469,7 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
     at: "2026-09-16T10:04:00.000Z",
     session: "checker@coordinator",
     parent: "worker@coordinator",
-    task: "coordinator",
+    task: first,
     seq: 5,
     step: "verdict",
     phase: "ended",
@@ -476,7 +481,7 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
     at: "2026-09-16T10:04:00.000Z",
     session: "checker@coordinator",
     parent: "worker@coordinator",
-    task: "coordinator",
+    task: first,
     seq: 6,
     step: "agent",
     phase: "ended",
@@ -537,6 +542,130 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
     cacheWriteTokens: 300,
     outputTokens: 40,
   });
+  expect(lines.at(-1)).toMatchObject({
+    at: "2026-09-16T10:20:30.000Z",
+    session: "coordinator",
+    step: "agent",
+  });
+
+  const later = "coordinator-4-prompt";
+  const listed = query(home, ["tasks", "coord"]);
+  expect({ denominator: listed.denominator, rows: listed.rows }).toEqual({
+    denominator: "2 tasks of session coordinator",
+    rows: [
+      [first, "2026-09-16T10:00:00.000Z", "<command-name>/run</command-name>"],
+      [later, "2026-09-16T10:30:00.000Z", "now write the docs"],
+    ],
+  });
+  const latest = query(home, ["trace", "coord"]);
+  expect(latest.denominator).toBe(
+    `task ${later} of session coordinator, from 2026-09-16T10:30:00.000Z, and the 0 subagents started in it: 2 steps, 0 still running`,
+  );
+  const root = { session: "coordinator", parent: null, task: later };
+  expect(latest.rows.map(([line]) => JSON.parse(String(line)))).toEqual([
+    {
+      at: "2026-09-16T10:30:00.000Z",
+      ...root,
+      seq: 1,
+      step: "agent",
+      phase: "started",
+      agentType: null,
+      model: null,
+    },
+    {
+      at: "2026-09-16T10:30:10.000Z",
+      ...root,
+      seq: 2,
+      step: "tool",
+      phase: "started",
+      call: "coordinator-5-tool",
+      name: "Bash",
+      target: null,
+      git: null,
+    },
+    {
+      at: "2026-09-16T10:30:11.000Z",
+      ...root,
+      seq: 3,
+      step: "tool",
+      phase: "ended",
+      ms: 1000,
+      outcome: { kind: "ok" },
+      call: "coordinator-5-tool",
+      name: "Bash",
+    },
+    {
+      at: "2026-09-16T10:30:11.000Z",
+      ...root,
+      seq: 4,
+      step: "agent",
+      phase: "ended",
+      ms: 11000,
+      outcome: { kind: "ok" },
+      inputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      outputTokens: 0,
+    },
+  ]);
+  const subagent = query(home, ["trace", "worker", "--rows", "100"]);
+  expect(subagent.denominator).toBe(
+    `session worker@coordinator and the 1 subagents under it, in task ${first} of coordinator: 15 steps, 0 still running`,
+  );
+  expect(new Set(subagent.rows.map(([line]) => JSON.parse(String(line)).task))).toEqual(new Set([first]));
+  const refusal = (args: readonly string[]) => {
+    const error = refused(runCli(home, ["query", "trace", ...args]), "query");
+    return { code: error.code, meta: error.meta };
+  };
+  expect(refusal(["coord", "--task", "nosuch"])).toEqual({
+    code: "unknown_task",
+    meta: { session: "coordinator", prefix: "nosuch" },
+  });
+  expect(refusal(["coord", "--task", "coordinator-"])).toEqual({
+    code: "ambiguous_task",
+    meta: { session: "coordinator", prefix: "coordinator-", matches: [first, later] },
+  });
+  expect(refusal(["worker", "--task", first])).toEqual({
+    code: "task_of_subagent",
+    meta: { session: "worker@coordinator" },
+  });
+
+  const nested = withClaudeSessions(scratchHome(), [
+    {
+      id: "lead",
+      cwd: TRACED,
+      steps: [
+        { owner: "draft the plan", at: "2026-09-16T10:00:00Z" },
+        { spawn: "toolu-drafter", at: "2026-09-16T10:01:00Z", done: "2026-09-16T10:40:00Z" },
+        { agent: "Drafting.", at: "2026-09-16T10:02:00Z" },
+        { owner: "and then the tests", at: "2026-09-16T10:30:00Z" },
+      ],
+      subagents: [
+        {
+          id: "drafter",
+          agentType: "general-purpose",
+          startedBy: "toolu-drafter",
+          steps: [
+            { owner: "draft it", at: "2026-09-16T10:01:01Z" },
+            { spawn: "toolu-helper", at: "2026-09-16T10:35:00Z", done: "2026-09-16T10:36:00Z" },
+          ],
+        },
+        {
+          id: "helper",
+          agentType: "Explore",
+          startedBy: "toolu-helper",
+          steps: [
+            { owner: "find the notes", at: "2026-09-16T10:35:01Z" },
+            { agent: "Found.", at: "2026-09-16T10:35:30Z" },
+          ],
+        },
+      ],
+    },
+  ]);
+  sync(nested);
+  expect(query(nested, ["trace", "helper"]).denominator).toBe(
+    "session helper@lead and the 0 subagents under it, in task lead-0-prompt of lead: 1 steps, 0 still running",
+  );
 
   const unknown = query(home, ["trace", "nobody"]);
   expect({ rows: unknown.rows, note: unknown.note }).toEqual({

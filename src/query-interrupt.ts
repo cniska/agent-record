@@ -2,7 +2,7 @@ export const CAUSES = ["stop", "permission", "answer", "correct", "unblock"] as 
 
 export type Cause = (typeof CAUSES)[number];
 
-type Said =
+export type Said =
   | { readonly kind: "interrupt"; readonly cause: Cause }
   | { readonly kind: "task" }
   | { readonly kind: "within" }

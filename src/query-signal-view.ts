@@ -2,7 +2,8 @@ import type { Database } from "bun:sqlite";
 import { refuseQuery } from "./query-contract";
 import { readSignalRecord } from "./query-signal-record";
 import type { Signal } from "./query-signals";
-import { type Placed, type SkillLoaded, type TaskKey, type Timeline, timelineOf } from "./query-timeline";
+import type { TaskId } from "./query-task";
+import { type Placed, type SkillLoaded, type Timeline, timelineOf } from "./query-timeline";
 
 const HOME_SIGN = "~";
 
@@ -24,7 +25,7 @@ export const described = (signal: Signal): string => `${signal.name}: ${signal.v
 export type SkillScope = {
   readonly skill: string;
   readonly loads: readonly SkillLoaded[];
-  readonly tasks: ReadonlySet<TaskKey>;
+  readonly tasks: ReadonlySet<TaskId>;
   readonly shown: string;
 };
 
