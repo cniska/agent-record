@@ -253,6 +253,8 @@ test("AC-23 a query answers beside a writer and is refused as busy under an excl
 
 const TRACED = "/Users/x/code/demo";
 
+const KIT = "/Users/x/.claude/plugins/cache/acme/kit/1.0.0/skills";
+
 const tracedHome = (): Home =>
   withEventLog(
     withClaudeSessions(scratchHome(), [
@@ -271,6 +273,14 @@ const tracedHome = (): Home =>
             startedBy: "toolu-worker",
             steps: [
               { owner: "build the step", at: "2026-09-16T10:01:01Z" },
+              {
+                skill: "acme:build",
+                at: "2026-09-16T10:01:10Z",
+                done: "2026-09-16T10:01:11Z",
+                dir: `${KIT}/build`,
+                body: "Build it.",
+              },
+              { read: `${KIT}/build/references/slices.md`, at: "2026-09-16T10:01:20Z" },
               {
                 agent: "building",
                 at: "2026-09-16T10:01:30Z",
@@ -309,6 +319,7 @@ const tracedHome = (): Home =>
             startedBy: "toolu-checker",
             steps: [
               { owner: "judge the diff", at: "2026-09-16T10:03:01Z" },
+              { preload: "acme:judge", at: "2026-09-16T10:03:01Z", dir: `${KIT}/judge`, body: "Judge it." },
               { agent: "Verdict: accept", at: "2026-09-16T10:04:00Z" },
             ],
           },
@@ -354,39 +365,47 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
   const worker = { session: "worker@coordinator", parent: "coordinator", task: "coordinator" };
 
   expect(result.denominator).toBe(
-    "session coordinator and the 3 subagents under it: 19 steps, 2 still running",
+    "session coordinator and the 3 subagents under it: 23 steps, 2 still running",
   );
   expect(lines.map(shape)).toEqual([
     ["coordinator", 1, "agent", "started", "-"],
     ["coordinator", 2, "tool", "started", "-"],
     ["worker", 1, "agent", "started", "-"],
-    ["worker", 2, "compact", "started", "-"],
-    ["worker", 3, "compact", "ended", "ok"],
-    ["worker", 4, "tool", "started", "-"],
-    ["worker", 5, "tool", "ended", "user-rejected"],
+    ["worker", 2, "tool", "started", "-"],
+    ["worker", 3, "skill", "started", "-"],
+    ["worker", 4, "skill", "ended", "ok"],
+    ["worker", 5, "tool", "ended", "ok"],
     ["worker", 6, "tool", "started", "-"],
+    ["worker", 7, "tool", "ended", "ok"],
+    ["worker", 8, "compact", "started", "-"],
+    ["worker", 9, "compact", "ended", "ok"],
+    ["worker", 10, "tool", "started", "-"],
+    ["worker", 11, "tool", "ended", "user-rejected"],
+    ["worker", 12, "tool", "started", "-"],
     ["checker", 1, "agent", "started", "-"],
-    ["checker", 2, "verdict", "started", "-"],
-    ["checker", 3, "verdict", "ended", "ok"],
-    ["checker", 4, "agent", "ended", "failed"],
-    ["worker", 7, "tool", "ended", "failed"],
-    ["worker", 8, "tool", "started", "-"],
-    ["worker", 9, "commit", "started", "-"],
-    ["worker", 10, "gate", "started", "-"],
-    ["worker", 11, "gate", "ended", "changed_since_accept"],
-    ["worker", 12, "tool", "ended", "ok"],
-    ["worker", 13, "commit", "ended", "ok"],
+    ["checker", 2, "skill", "started", "-"],
+    ["checker", 3, "skill", "ended", "ok"],
+    ["checker", 4, "verdict", "started", "-"],
+    ["checker", 5, "verdict", "ended", "ok"],
+    ["checker", 6, "agent", "ended", "failed"],
+    ["worker", 13, "tool", "ended", "failed"],
     ["worker", 14, "tool", "started", "-"],
     ["worker", 15, "commit", "started", "-"],
     ["worker", 16, "gate", "started", "-"],
-    ["worker", 17, "gate", "ended", "ok"],
+    ["worker", 17, "gate", "ended", "changed_since_accept"],
     ["worker", 18, "tool", "ended", "ok"],
     ["worker", 19, "commit", "ended", "ok"],
     ["worker", 20, "tool", "started", "-"],
-    ["worker", 21, "push", "started", "-"],
-    ["worker", 22, "tool", "ended", "ok"],
-    ["worker", 23, "push", "ended", "ok"],
-    ["worker", 24, "agent", "ended", "ok"],
+    ["worker", 21, "commit", "started", "-"],
+    ["worker", 22, "gate", "started", "-"],
+    ["worker", 23, "gate", "ended", "ok"],
+    ["worker", 24, "tool", "ended", "ok"],
+    ["worker", 25, "commit", "ended", "ok"],
+    ["worker", 26, "tool", "started", "-"],
+    ["worker", 27, "push", "started", "-"],
+    ["worker", 28, "tool", "ended", "ok"],
+    ["worker", 29, "push", "ended", "ok"],
+    ["worker", 30, "agent", "ended", "ok"],
     ["coordinator", 3, "tool", "started", "-"],
     ["coordinator", 4, "tool", "ended", "ok"],
     ["watcher", 1, "agent", "started", "-"],
@@ -394,7 +413,45 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
     ["coordinator", 5, "tool", "ended", "ok"],
     ["coordinator", 6, "agent", "ended", "ok"],
   ]);
-  expect(lines[8]).toEqual({
+  expect(lines.slice(3, 5)).toEqual([
+    {
+      at: "2026-09-16T10:01:10.000Z",
+      ...worker,
+      seq: 2,
+      step: "tool",
+      phase: "started",
+      call: "coordinator-worker-1-tool",
+      name: "Skill",
+      target: "acme:build",
+    },
+    {
+      at: "2026-09-16T10:01:10.000Z",
+      ...worker,
+      seq: 3,
+      step: "skill",
+      phase: "started",
+      name: "build",
+      how: "model",
+      call: "coordinator-worker-1-tool",
+    },
+  ]);
+  expect(lines[7]).toMatchObject({
+    seq: 6,
+    step: "tool",
+    name: "Read",
+    target: `${KIT}/build/references/slices.md`,
+  });
+  expect(lines[11]).toMatchObject({ seq: 10, step: "tool", name: "Bash", target: null });
+  expect(lines[15]).toMatchObject({
+    session: "checker@coordinator",
+    seq: 2,
+    step: "skill",
+    phase: "started",
+    name: "judge",
+    how: "preload",
+    call: null,
+  });
+  expect(lines[14]).toEqual({
     at: "2026-09-16T10:03:01.000Z",
     session: "checker@coordinator",
     parent: "worker@coordinator",
@@ -405,24 +462,24 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
     agentType: "acme:checker",
     model: null,
   });
-  expect(lines[10]).toEqual({
+  expect(lines[18]).toEqual({
     at: "2026-09-16T10:04:00.000Z",
     session: "checker@coordinator",
     parent: "worker@coordinator",
     task: "coordinator",
-    seq: 3,
+    seq: 5,
     step: "verdict",
     phase: "ended",
     ms: 0,
     outcome: { kind: "ok" },
     verdict: "accept",
   });
-  expect(lines[11]).toEqual({
+  expect(lines[19]).toEqual({
     at: "2026-09-16T10:04:00.000Z",
     session: "checker@coordinator",
     parent: "worker@coordinator",
     task: "coordinator",
-    seq: 4,
+    seq: 6,
     step: "agent",
     phase: "ended",
     ms: 59000,
@@ -432,38 +489,38 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
     cacheWriteTokens: 0,
     outputTokens: 0,
   });
-  expect(lines[6]).toEqual({
+  expect(lines[12]).toEqual({
     at: "2026-09-16T10:02:30.000Z",
     ...worker,
-    seq: 5,
+    seq: 11,
     step: "tool",
     phase: "ended",
     ms: 0,
     outcome: { kind: "refused", code: "user-rejected" },
-    call: "coordinator-worker-3-tool",
+    call: "coordinator-worker-5-tool",
   });
-  expect(lines[16]).toEqual({
+  expect(lines[24]).toEqual({
     at: "2026-09-16T10:05:30.000Z",
     ...worker,
-    seq: 11,
+    seq: 17,
     step: "gate",
     phase: "ended",
     ms: 0,
     outcome: { kind: "refused", code: "changed_since_accept" },
   });
-  expect(lines[26]).toEqual({
+  expect(lines[34]).toEqual({
     at: "2026-09-16T10:07:00.000Z",
     ...worker,
-    seq: 21,
+    seq: 27,
     step: "push",
     phase: "started",
-    call: "coordinator-worker-7-tool",
+    call: "coordinator-worker-9-tool",
     dir: TRACED,
   });
-  expect(lines[29]).toEqual({
+  expect(lines[37]).toEqual({
     at: "2026-09-16T10:08:00.000Z",
     ...worker,
-    seq: 24,
+    seq: 30,
     step: "agent",
     phase: "ended",
     ms: 419000,

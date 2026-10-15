@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import type { Decision, Gate, Verdict } from "./ingest-event-kinds";
 import { subagentSessionIdSql } from "./ingest-ids";
+import type { HOWS } from "./ingest-skill-load";
 import { callFailureSql, sessionByPrefix } from "./query";
 import type { Query } from "./query-contract";
 
@@ -22,9 +23,15 @@ type Tokens = {
 
 type Called = { readonly call: string };
 
+type How = (typeof HOWS)[number];
+
 type Steps = {
   readonly agent: Step<{ readonly agentType: string | null; readonly model: string | null }, Tokens>;
-  readonly tool: Step<{ readonly call: string; readonly name: string | null }, Called>;
+  readonly tool: Step<
+    { readonly call: string; readonly name: string | null; readonly target: string | null },
+    Called
+  >;
+  readonly skill: Step<{ readonly name: string; readonly how: How; readonly call: string | null }>;
   readonly commit: Step<{ readonly call: string; readonly dir: string | null }, Called>;
   readonly push: Step<{ readonly call: string; readonly dir: string | null }, Called>;
   readonly verdict: Step<{ readonly repo: string }, { readonly verdict: Verdict }>;
@@ -89,6 +96,7 @@ type CallRow = {
   readonly id: string;
   readonly session: string;
   readonly name: string | null;
+  readonly target: string | null;
   readonly dir: string | null;
   readonly subcommand: string | null;
   readonly called: string;
@@ -98,6 +106,7 @@ type CallRow = {
 };
 
 const CALL_OUTCOME = `c.id, c.session_id AS session, c.ts_call AS called, c.ts_result AS returned,
+  coalesce(c.skill_name, c.file_path) AS target,
   ${callFailureSql("c")} AS failure,
   (SELECT m.denial_kind FROM message m
    WHERE m.src_file = c.src_file AND m.src_line = c.src_line_result AND m.denial_kind IS NOT NULL) AS denial`;
@@ -111,6 +120,18 @@ SELECT ${CALL_OUTCOME}, c.tool_name AS name, g.dir, g.subcommand
 FROM tree JOIN tool_call c ON c.session_id = tree.id
 JOIN git_command g ON g.tool_call_id = c.id AND g.subcommand IN ('commit', 'push')
 WHERE c.ts_call IS NOT NULL`;
+
+type SkillRow = {
+  readonly session: string;
+  readonly at: string;
+  readonly name: string;
+  readonly how: How;
+  readonly call: string | null;
+};
+
+const SKILLS = `${TREE}
+SELECT l.session_id AS session, l.ts AS at, l.skill_name AS name, l.how, l.tool_call_id AS call
+FROM tree JOIN skill_load l ON l.session_id = tree.id`;
 
 type CompactionRow = { readonly session: string; readonly at: string };
 
@@ -178,7 +199,7 @@ function callStep(call: CallRow): Taken {
   const { id, session, called: at } = call;
   if (call.subcommand === "commit" || call.subcommand === "push")
     return { step: call.subcommand, session, at, start: { call: id, dir: call.dir }, ended };
-  return { step: "tool", session, at, start: { call: id, name: call.name }, ended };
+  return { step: "tool", session, at, start: { call: id, name: call.name, target: call.target }, ended };
 }
 
 function verdictStep(row: VerdictRow): Taken {
@@ -199,6 +220,16 @@ function gateStep(row: GateRow): Taken {
     at: row.at,
     start: { gate: row.gate, repo: row.repo },
     ended: { at: row.at, outcome, result: NOTHING },
+  };
+}
+
+function skillStep(row: SkillRow): Taken {
+  return {
+    step: "skill",
+    session: row.session,
+    at: row.at,
+    start: { name: row.name, how: row.how, call: row.call },
+    ended: { at: row.at, outcome: OK, result: NOTHING },
   };
 }
 
@@ -275,10 +306,11 @@ function stepsUnder(
   const calls = db.query<CallRow, [string]>(CALLS).all(task).map(callStep);
   const waiting = new Set(calls.filter((c) => c.step === "tool" && c.ended === null).map((c) => c.session));
   const agents = rows.map((row) => agentStep(row, waiting));
+  const skills = db.query<SkillRow, [string]>(SKILLS).all(task).map(skillStep);
   const compactions = db.query<CompactionRow, [string]>(COMPACTIONS).all(task).map(compactStep);
   const verdicts = db.query<VerdictRow, [string]>(VERDICTS).all(task).map(verdictStep);
   const gates = db.query<GateRow, [string]>(GATES).all(task).map(gateStep);
-  return { taken: [...agents, ...calls, ...compactions, ...verdicts, ...gates], sessions };
+  return { taken: [...agents, ...calls, ...skills, ...compactions, ...verdicts, ...gates], sessions };
 }
 
 export const trace: Query = {

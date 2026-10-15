@@ -13,7 +13,13 @@ export type Step =
   | { readonly read: string; readonly at: string }
   | { readonly compacted: string }
   | { readonly rejected: string; readonly at: string }
-  | { readonly skill: string; readonly at: string; readonly dir: string; readonly body: string }
+  | {
+      readonly skill: string;
+      readonly at: string;
+      readonly dir: string;
+      readonly body: string;
+      readonly done?: string;
+    }
   | { readonly preload: string; readonly at: string; readonly dir: string; readonly body: string };
 
 type Usage = {
@@ -150,6 +156,7 @@ function linesOf(sessionId: string, cwd: string, steps: readonly Step[], prefix:
     if ("skill" in step) {
       return [
         assistant(step.at, [{ type: "tool_use", id: tool, name: "Skill", input: { skill: step.skill } }]),
+        result(step.done ?? step.at, tool),
         {
           ...base,
           type: "user",
