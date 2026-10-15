@@ -20,6 +20,12 @@ describe("the tasks of a top-level session", () => {
     ]);
   });
 
+  test("opens one task at a first user message that is itself a task prompt", () => {
+    const prompt = owner("m1", "p1", "2026-10-14T09:00:05.000Z", "add the parser", "Ready.");
+    const starts = taskStartsOf("s", START, prompt, saidRows([prompt]));
+    expect(starts.map(({ id, at }) => ({ id: String(id), at }))).toEqual([{ id: "p1", at: prompt.at }]);
+  });
+
   test("names a session with no user message by its id", () => {
     expect(taskStartsOf("s", START, null, []).map(({ id }) => String(id))).toEqual(["s"]);
   });
