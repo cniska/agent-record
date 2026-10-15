@@ -2,21 +2,21 @@ import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import { bareSkillName, type SkillBody, skillBodyOf } from "./ingest-skill-load";
 
-const SKILL_FILE_BODY = "# Coordinate\n\nRun the work.\n\n## Red flags\n\n- A stalled agent";
+const SKILL_FILE_BODY = "# Deploy\n\nRun the work.\n\n## Red flags\n\n- A stalled agent";
 
 const injectedBody = (text: string) => skillBodyOf([text]);
 
 const sha256 = (text: string) => createHash("sha256").update(text, "utf8").digest("hex");
 
 const injected = (tail: string) =>
-  `Base directory for this skill: /Users/x/.claude/plugins/cache/acme/kit/41c40cc68eb7/skills/coordinate\n\n${SKILL_FILE_BODY}${tail}`;
+  `Base directory for this skill: /Users/x/.claude/plugins/cache/acme/kit/41c40cc68eb7/skills/deploy\n\n${SKILL_FILE_BODY}${tail}`;
 
 describe("parsing an injected skill body", () => {
   test("hashes the body as the skill's file holds it, whatever the caller passed", () => {
     const expected: SkillBody = {
       kind: "injected",
-      name: "coordinate",
-      skillPath: "/Users/x/.claude/plugins/cache/acme/kit/41c40cc68eb7/skills/coordinate",
+      name: "deploy",
+      skillPath: "/Users/x/.claude/plugins/cache/acme/kit/41c40cc68eb7/skills/deploy",
       bodyChars: SKILL_FILE_BODY.length,
       bodySha256: sha256(SKILL_FILE_BODY),
       install: "41c40cc68eb7",
@@ -34,7 +34,7 @@ describe("parsing an injected skill body", () => {
   });
 
   test("reads no body from text that is not one", () => {
-    expect(injectedBody("# Coordinate")).toBeNull();
+    expect(injectedBody("# Deploy")).toBeNull();
     expect(injectedBody("Base directory for this skill: \n\n# Body")).toBeNull();
   });
 
@@ -50,8 +50,8 @@ describe("parsing an injected skill body", () => {
 
 describe("naming a skill", () => {
   test("drops the plugin a name is qualified by", () => {
-    expect(bareSkillName("cniska-skills:coordinate")).toBe("coordinate");
-    expect(bareSkillName("coordinate")).toBe("coordinate");
+    expect(bareSkillName("acme:deploy")).toBe("deploy");
+    expect(bareSkillName("deploy")).toBe("deploy");
   });
 });
 

@@ -182,12 +182,12 @@ test("AC-43 review-loops gives two reviewer runs per commit run", () => {
       subagents: [
         {
           id: "r1",
-          agentType: "cniska-skills:reviewer",
+          agentType: "acme:reviewer",
           steps: [{ agent: "Fix: x", at: "2026-09-16T09:10:00Z" }],
         },
         {
           id: "r2",
-          agentType: "cniska-skills:reviewer",
+          agentType: "acme:reviewer",
           steps: [{ agent: "Accept", at: "2026-09-16T09:20:00Z" }],
         },
         { id: "e1", agentType: "Explore", steps: [{ agent: "Found it", at: "2026-09-16T09:05:00Z" }] },
@@ -200,7 +200,7 @@ test("AC-43 review-loops gives two reviewer runs per commit run", () => {
   ]);
 });
 
-const ROUTE = "/Users/x/.claude/plugins/cniska-skills/skills/task/references/feature.md";
+const ROUTE = "/Users/x/.claude/plugins/cache/m/acme/aaa/skills/task/references/feature.md";
 
 const twoWeeks = (repo: string): readonly ClaudeSession[] => [
   {

@@ -234,8 +234,8 @@ describe("counting reviewer runs per commit run", () => {
     const record = recordOf({
       sessions: [
         session("a", "2026-10-14T09:00:00.000Z"),
-        session("r1", "2026-10-14T09:05:00.000Z", { parentId: "a", agentType: "cniska-skills:reviewer" }),
-        session("r2", "2026-10-14T09:15:00.000Z", { parentId: "a", agentType: "cniska-skills:reviewer" }),
+        session("r1", "2026-10-14T09:05:00.000Z", { parentId: "a", agentType: "acme:reviewer" }),
+        session("r2", "2026-10-14T09:15:00.000Z", { parentId: "a", agentType: "acme:reviewer" }),
       ],
       gitRuns: [run("a", "2026-10-14T09:20:00.000Z", "commit")],
     });
@@ -574,7 +574,7 @@ describe("costing each step of every loop by its tokens and minutes", () => {
     sessions: [
       session("a", timed(0)),
       session("w", timed(10), { parentId: "a", agentType: "general-purpose" }),
-      session("r", timed(20), { parentId: "a", agentType: "cniska-skills:reviewer" }),
+      session("r", timed(20), { parentId: "a", agentType: "acme:reviewer" }),
       session("e", timed(25), { parentId: "a", agentType: "Explore" }),
     ],
     ownerMessages: [
