@@ -827,12 +827,12 @@ describe("ingest", () => {
         ...claudeTranscriptLines(SESSION),
         spawning("toolu-worker", 10),
       ]);
-      writeSubagent(env, "areviewer", [spawning("toolu-unused", 12)], {
-        agentType: "acme:reviewer",
-        toolUseId: "toolu-reviewer",
+      writeSubagent(env, "achecker", [spawning("toolu-unused", 12)], {
+        agentType: "acme:checker",
+        toolUseId: "toolu-checker",
         spawnDepth: 2,
       });
-      writeSubagent(env, "zworker", [spawning("toolu-reviewer", 11)], {
+      writeSubagent(env, "zworker", [spawning("toolu-checker", 11)], {
         agentType: "general-purpose",
         toolUseId: "toolu-worker",
         spawnDepth: 1,
@@ -840,10 +840,10 @@ describe("ingest", () => {
       const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
       try {
         expect(sync(db, env).unlinkedSubagents).toBe(0);
-        expect(parentOf(db, "areviewer")).toEqual({ parent_id: `zworker@${SESSION}` });
+        expect(parentOf(db, "achecker")).toEqual({ parent_id: `zworker@${SESSION}` });
         expect(parentOf(db, "zworker")).toEqual({ parent_id: SESSION });
         expect(sync(db, env).unlinkedSubagents).toBe(0);
-        expect(parentOf(db, "areviewer")).toEqual({ parent_id: `zworker@${SESSION}` });
+        expect(parentOf(db, "achecker")).toEqual({ parent_id: `zworker@${SESSION}` });
       } finally {
         db.close();
       }

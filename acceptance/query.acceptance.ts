@@ -284,7 +284,7 @@ const tracedHome = (): Home =>
               { compacted: "2026-09-16T10:02:00Z" },
               { rejected: "rm -rf build", at: "2026-09-16T10:02:30Z" },
               {
-                spawn: "toolu-reviewer",
+                spawn: "toolu-checker",
                 at: "2026-09-16T10:03:00Z",
                 done: "2026-09-16T10:05:00Z",
                 failed: true,
@@ -304,9 +304,9 @@ const tracedHome = (): Home =>
             ],
           },
           {
-            id: "reviewer",
-            agentType: "acme:reviewer",
-            startedBy: "toolu-reviewer",
+            id: "checker",
+            agentType: "acme:checker",
+            startedBy: "toolu-checker",
             steps: [
               { owner: "judge the diff", at: "2026-09-16T10:03:01Z" },
               { agent: "Verdict: accept", at: "2026-09-16T10:04:00Z" },
@@ -326,13 +326,13 @@ const tracedHome = (): Home =>
     ]),
     "coordinator",
     [
-      verdict("2026-09-16T10:04:00Z", { agent: "reviewer", verdict: "accept", repo: TRACED }),
+      verdict("2026-09-16T10:04:00Z", { agent: "checker", verdict: "accept", repo: TRACED }),
       gate("2026-09-16T10:05:30Z", { agent: "worker", decision: "deny", reason: "changed_since_accept" }),
       gate("2026-09-16T10:06:00Z", { agent: "worker", decision: "allow", reason: "accepted" }),
     ],
   );
 
-test("AC-61 trace prints a worker's steps and the reviewer it started, one JSON line per step, a running one with no end", () => {
+test("AC-61 trace prints a worker's steps and the checker it started, one JSON line per step, a running one with no end", () => {
   const home = tracedHome();
   sync(home);
 
@@ -365,10 +365,10 @@ test("AC-61 trace prints a worker's steps and the reviewer it started, one JSON 
     ["worker", 4, "tool", "started", "-"],
     ["worker", 5, "tool", "ended", "user-rejected"],
     ["worker", 6, "tool", "started", "-"],
-    ["reviewer", 1, "agent", "started", "-"],
-    ["reviewer", 2, "verdict", "started", "-"],
-    ["reviewer", 3, "verdict", "ended", "ok"],
-    ["reviewer", 4, "agent", "ended", "failed"],
+    ["checker", 1, "agent", "started", "-"],
+    ["checker", 2, "verdict", "started", "-"],
+    ["checker", 3, "verdict", "ended", "ok"],
+    ["checker", 4, "agent", "ended", "failed"],
     ["worker", 7, "tool", "ended", "failed"],
     ["worker", 8, "tool", "started", "-"],
     ["worker", 9, "commit", "started", "-"],
@@ -396,18 +396,18 @@ test("AC-61 trace prints a worker's steps and the reviewer it started, one JSON 
   ]);
   expect(lines[8]).toEqual({
     at: "2026-09-16T10:03:01.000Z",
-    session: "reviewer@coordinator",
+    session: "checker@coordinator",
     parent: "worker@coordinator",
     task: "coordinator",
     seq: 1,
     step: "agent",
     phase: "started",
-    agentType: "acme:reviewer",
+    agentType: "acme:checker",
     model: null,
   });
   expect(lines[10]).toEqual({
     at: "2026-09-16T10:04:00.000Z",
-    session: "reviewer@coordinator",
+    session: "checker@coordinator",
     parent: "worker@coordinator",
     task: "coordinator",
     seq: 3,
@@ -419,7 +419,7 @@ test("AC-61 trace prints a worker's steps and the reviewer it started, one JSON 
   });
   expect(lines[11]).toEqual({
     at: "2026-09-16T10:04:00.000Z",
-    session: "reviewer@coordinator",
+    session: "checker@coordinator",
     parent: "worker@coordinator",
     task: "coordinator",
     seq: 4,

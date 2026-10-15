@@ -276,7 +276,7 @@ describe("summing the findings verdicts counted", () => {
           counted: {
             findings: { ...NO_FINDINGS, major: 2, minor: 1 },
             conflicts: 1,
-            rules: ["Names", "Names"],
+            rules: ["Clear names", "Clear names"],
           },
         }),
         said("2026-10-14T09:10:00.000Z", "return", {
@@ -291,8 +291,8 @@ describe("summing the findings verdicts counted", () => {
     expect(rateOf("review-findings", record)).toEqual({ value: 1.33, count: 4, of: 3 });
     const cited = eventsOf("review-findings", record).filter((e) => e.rule !== null);
     expect(cited.map((e) => [e.kind, e.rule])).toEqual([
-      ["cited", "Names"],
-      ["cited", "Names"],
+      ["cited", "Clear names"],
+      ["cited", "Clear names"],
     ]);
     expect(eventsOf("review-findings", record).filter((e) => e.kind === "conflict")).toHaveLength(1);
   });

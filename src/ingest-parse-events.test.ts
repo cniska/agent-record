@@ -115,7 +115,7 @@ describe("a hook event log", () => {
   test("reads a verdict's finding counts, conflicts and cited rules", () => {
     const findings = { critical: 0, major: 1, minor: 2, fix: 1, consider: 0, unrated: 0 };
     const { events } = parseEventChunk(
-      [line({ ...VERDICT, findings, conflicts: 1, rules: ["Names", "Names"] })],
+      [line({ ...VERDICT, findings, conflicts: 1, rules: ["Clear names", "Clear names"] })],
       1,
     );
 
@@ -127,7 +127,7 @@ describe("a hook event log", () => {
         verdict: "return",
         repo: "/h/code/demo",
         fingerprint: "073ce55f",
-        counted: { findings, conflicts: 1, rules: ["Names", "Names"] },
+        counted: { findings, conflicts: 1, rules: ["Clear names", "Clear names"] },
       },
     ]);
   });

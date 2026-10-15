@@ -1,6 +1,6 @@
 # agent-record
 
-Query your past agent work: every coding-agent session on this machine, kept verbatim even after the tools delete theirs and joined to the commits it made, in one SQLite database. It is not memory, since it puts nothing into an agent's context, and it gates nothing; agent-gates does.
+Query your past agent work: every coding-agent session on this machine, kept verbatim even after the tools delete theirs and joined to the commits it made, in one SQLite database. It is not memory, since it puts nothing into an agent's context, and it gates nothing.
 
 - `agent-record sync` reads the session files of Claude Code, Codex, Grok, pi and omp into that database, with the commits of the repos those sessions worked in and the hook event log any Claude Code plugin writes in the format [`SPEC.md`](SPEC.md) §2.13 defines.
 - `agent-record query` and `agent-record sql` read it. Search comes first: `query search` finds where earlier work was said, decided or ran into friction, and `query thread` shows what happened around it.
@@ -41,9 +41,7 @@ Git keeps what landed. Everything else an agent did lives in each tool's own ses
 
 `rg` over the transcripts is fine for a phrase from last week. It cannot search what the tools have deleted, and it cannot count or join: grouping corrections, tying a session to its commits, or checking whether the files a session touched have changed since, so you know whether what it decided still holds. The named queries cover the common questions; `agent-record sql` asks any other.
 
-The questions lead to a workflow that improves itself (kaizen). A reviewing agent, such as the [workflow-review](https://github.com/cniska/agent-skills/tree/main/skills/workflow/workflow-review) skill, finds the friction that repeats; a change to a skill, gate or hook removes it; and the record shows whether that friction dropped after the commit and under the new skill version.
-
-The [search-sessions](https://github.com/cniska/agent-skills/tree/main/skills/workflow/search-sessions) skill in [cniska/agent-skills](https://github.com/cniska/agent-skills) asks it first.
+The questions lead to a workflow that improves itself (kaizen). An agent reading the record finds the friction that repeats; a change to a skill, gate or hook removes it; and the record shows whether that friction dropped after the commit and under the new skill version. A workflow that writes `tag` lines to its hook event log groups any signal by them.
 
 ## Commands
 
@@ -59,7 +57,7 @@ Each command prints one JSON line.
 | `agent-record query list` | Name the queries |
 | `agent-record query search "<words>"` | Find messages by keyword |
 | `agent-record query thread <id-prefix> [--at <ts>]` | Read the exchange around a hit |
-| `agent-record query trace <id-prefix>` | Trace a session and every subagent under it step by step, one JSON line per row, for a coach to read instead of transcripts |
+| `agent-record query trace <id-prefix>` | Trace a session and every subagent under it step by step, one JSON line per row, for an agent to read instead of transcripts |
 | `agent-record query prior-art "<path fragment>"` | Find where a file shape already exists on disk |
 | `agent-record query signal <name> [--by <week\|repo\|version\|rule\|tag key>] [--skill <name>]` | Count one friction signal per week, over every task or the tasks that loaded a skill: `owner-interrupts`, `time-to-land`, `stranded-work`, `review-findings`, `false-stops`, `review-returns`, `blocks`, `skill-usage`, `lost-context`, `escaped-defects`, `step-cost` or `second-read-asks` |
 | `agent-record query signal-events <name>` | List what a signal counted, to check it by hand |
@@ -107,13 +105,12 @@ The plugin brings neither Bun nor the CLI, and does nothing when `agent-record` 
 
 ```bash
 mise trust && mise install
-agent-worktree create <name>
-agent-gates doctor
 ```
 
 - `mise install` sets up the clone as [Install](#install) says, and the `bun install` its postinstall runs calls the `prepare` script, which points `core.hooksPath` at `.githooks/`.
-- `agent-worktree create <name>` makes a task worktree and runs `scripts/worktree-setup.sh` in it, which installs the same way without linking the CLI.
-- `.githooks/` holds the commit-subject, format and no-comments gates that [agent-gates](https://github.com/cniska/agent-gates) installs, and `agent-gates doctor` reports their health.
+- `scripts/worktree-setup.sh` sets up a task worktree the same way, without linking the CLI.
+- `.githooks/` holds the commit-subject, format and no-comments gates.
+- [cniska-skills](https://github.com/cniska/agent-skills) is one workflow to contribute with: the skills and hooks this repository is worked with.
 
 ### Checks
 

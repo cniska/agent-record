@@ -189,7 +189,7 @@ test("AC-43 review-findings sums the findings counted verdicts carry, by kind, r
       agent: "judge-1",
       findings: counts({ critical: 1, major: 1, minor: 1 }),
       conflicts: 1,
-      rules: ["Names", "Names", "No drift"],
+      rules: ["Clear names", "Clear names", "One source"],
     }),
     verdict("2026-09-16T10:05:00Z", {
       verdict: "return",
@@ -197,7 +197,7 @@ test("AC-43 review-findings sums the findings counted verdicts carry, by kind, r
       agent: "judge-2",
       findings: counts({ fix: 1, consider: 1, unrated: 1 }),
       conflicts: 0,
-      rules: ["Fix the cause"],
+      rules: ["Root causes"],
     }),
     verdict("2026-09-16T10:10:00Z", {
       verdict: "accept",
@@ -239,9 +239,9 @@ test("AC-43 review-findings sums the findings counted verdicts carry, by kind, r
       3,
       "verdict 3, critical 1, major 1, minor 1, fix 1, consider 1, unrated 1, conflict 1",
     ],
-    ["2026-09-14", "Names", 0, 0, "cited 2"],
-    ["2026-09-14", "No drift", 0, 0, "cited 1"],
-    ["2026-09-14", "Fix the cause", 0, 0, "cited 1"],
+    ["2026-09-14", "Clear names", 0, 0, "cited 2"],
+    ["2026-09-14", "One source", 0, 0, "cited 1"],
+    ["2026-09-14", "Root causes", 0, 0, "cited 1"],
   ]);
   const byRepo = query(home, ["signal", "review-findings", "--by", "repo"]);
   expect(byRepo.rows.map(([week, shown, , , count, of]) => [week, shown, count, of])).toEqual([
@@ -252,7 +252,7 @@ test("AC-43 review-findings sums the findings counted verdicts carry, by kind, r
     query(home, ["signal-events", "review-findings"])
       .rows.filter(([, kind]) => kind === "cited")
       .map(([, , , , , , text]) => text),
-  ).toEqual(["Fix the cause", "Names", "Names", "No drift"]);
+  ).toEqual(["Root causes", "Clear names", "Clear names", "One source"]);
 
   rebuild(home);
   expect(counted()).toEqual(weekly);
@@ -405,7 +405,7 @@ test("AC-50 skill-usage counts each skill version loaded per task, an agent's pr
       subagents: [
         {
           id: "judge",
-          agentType: "acme:reviewer",
+          agentType: "acme:checker",
           steps: [
             { owner: "review the plan", at: "2026-09-16T09:03:00Z" },
             {

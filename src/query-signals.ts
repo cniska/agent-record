@@ -200,7 +200,7 @@ const falseStops = signalOf<Judgement>({
   note:
     "A stop is a gate denial, an agent's retry of the same denial counted once; an auto-mode denial is not " +
     "one. A commit-gate stop is false when the same agent later committed in its repo with no review between; " +
-    "one carrying a fingerprint is upheld. A verdict-gate stop is never false: it is unfixed when the reviewer " +
+    "one carrying a fingerprint is upheld. A verdict-gate stop is never false: it is unfixed when the agent " +
     "ended on the gate's allow. A stop with nothing after it in its session is pending. An owner override " +
     "leaves no line, so its stop is judged by what the agent did next. The hook event log starts when the " +
     "plugin first wrote it.",

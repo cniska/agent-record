@@ -475,7 +475,7 @@ test("AC-30 a fresh archive copy of a large file takes far less free space than 
 });
 
 test("AC-52 a subagent's hand-back report is its last message text, through sync and rebuild", () => {
-  const report = "## Fix\nnone\n\nRepo: /Users/x/code/demo\nVerdict: accept";
+  const report = "## Notes\nnone\n\nOutcome: done";
   const home = withClaudeSessions(scratchHome(), [
     {
       id: "parent",
@@ -484,7 +484,7 @@ test("AC-52 a subagent's hand-back report is its last message text, through sync
       subagents: [
         {
           id: "judge",
-          agentType: "acme:reviewer",
+          agentType: "acme:checker",
           steps: [
             { owner: "judge the diff", at: "2026-09-16T10:01:00Z" },
             { read: "/Users/x/code/demo/src/parser.ts", at: "2026-09-16T10:02:00Z" },
@@ -495,7 +495,7 @@ test("AC-52 a subagent's hand-back report is its last message text, through sync
     },
   ]);
   const lastText = `select m.text from message m join session s on s.id = m.session_id
-    where s.agent_type = 'acme:reviewer' and m.role = 'assistant' and m.text is not null
+    where s.agent_type = 'acme:checker' and m.role = 'assistant' and m.text is not null
     order by m.ts desc limit 1`;
 
   const said = `Reviewed.\n${report}`;
@@ -506,7 +506,7 @@ test("AC-52 a subagent's hand-back report is its last message text, through sync
   expect(rowsOf(home, lastText)).toEqual([[said]]);
 });
 
-test("AC-59 a reviewer a worker started is recorded under the worker, and an unlinked subagent is counted", () => {
+test("AC-59 a checker a worker started is recorded under the worker, and an unlinked subagent is counted", () => {
   const home = withClaudeSessions(scratchHome(), [
     {
       id: "coordinator",
@@ -517,9 +517,9 @@ test("AC-59 a reviewer a worker started is recorded under the worker, and an unl
       ],
       subagents: [
         {
-          id: "reviewer",
-          agentType: "acme:reviewer",
-          startedBy: "toolu-reviewer",
+          id: "checker",
+          agentType: "acme:checker",
+          startedBy: "toolu-checker",
           steps: [{ owner: "judge the diff", at: "2026-09-16T10:03:00Z" }],
         },
         {
@@ -528,7 +528,7 @@ test("AC-59 a reviewer a worker started is recorded under the worker, and an unl
           startedBy: "toolu-worker",
           steps: [
             { owner: "build the step", at: "2026-09-16T10:01:01Z" },
-            { spawn: "toolu-reviewer", at: "2026-09-16T10:02:59Z", done: "2026-09-16T10:04:00Z" },
+            { spawn: "toolu-checker", at: "2026-09-16T10:02:59Z", done: "2026-09-16T10:04:00Z" },
           ],
         },
         {
@@ -541,9 +541,9 @@ test("AC-59 a reviewer a worker started is recorded under the worker, and an unl
   ]);
   const parents = "select id, parent_id from session order by id";
   const linked = [
+    ["checker@coordinator", "worker@coordinator"],
     ["coordinator", null],
     ["older@coordinator", "coordinator"],
-    ["reviewer@coordinator", "worker@coordinator"],
     ["worker@coordinator", "coordinator"],
   ];
 
