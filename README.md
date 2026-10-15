@@ -109,7 +109,7 @@ mise trust && mise install
 ```
 
 - `mise install` sets up the clone as [Install](#install) says, and the `bun install` its postinstall runs calls the `prepare` script, which points `core.hooksPath` at `.githooks/`.
-- `scripts/worktree-setup.sh` sets up a task worktree the same way, without linking the CLI.
+- `.worktree-hooks/setup` sets up a task worktree the same way, without linking the CLI.
 - `.githooks/` holds the commit-subject, format and no-comments gates.
 - [cniska-skills](https://github.com/cniska/agent-skills) is one workflow to contribute with: the skills and hooks this repository is worked with.
 
