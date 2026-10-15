@@ -11,6 +11,7 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, relative } from "node:path";
 import type { SyncSubprocess } from "bun";
@@ -230,8 +231,7 @@ export function cliOnPathExit(home: Home): Promise<number> {
   const cli = join(home.bin, "agent-record");
   writeFileSync(cli, `#!/bin/sh\n"${process.execPath}" "${CLI}" "$@"\necho "$?" > "${exited}"\n`);
   chmodSync(cli, 0o755);
-  const reader = Bun.spawn(["cat", exited], { stdout: "pipe" });
-  return new Response(reader.stdout).text().then((status) => EXIT_STATUS.parse(status.trim()));
+  return readFile(exited, "utf8").then((status) => EXIT_STATUS.parse(status.trim()));
 }
 
 export function pluginNote(): string {

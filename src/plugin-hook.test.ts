@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const HOOKS = join(import.meta.dir, "..", "plugin", "hooks");
 const HOOK = join(HOOKS, "session-start.sh");
-const SETTLE_TRIES = 200;
 const roots: string[] = [];
 
 afterEach(() => {
@@ -19,8 +19,9 @@ function binWith(cli: boolean): { bin: string; synced: string } {
   mkdirSync(bin);
   const synced = join(root, "synced");
   if (cli) {
+    expect(Bun.spawnSync(["mkfifo", synced]).exitCode).toBe(0);
     const stub = join(bin, "agent-record");
-    writeFileSync(stub, `#!/bin/sh\necho "$@" > "${synced}.tmp" && mv "${synced}.tmp" "${synced}"\n`);
+    writeFileSync(stub, `#!/bin/sh\necho "$@" > "${synced}"\n`);
     chmodSync(stub, 0o755);
   }
   return { bin, synced };
@@ -31,19 +32,13 @@ function runHook(bin: string) {
   return { exitCode: ran.exitCode, stdout: ran.stdout.toString() };
 }
 
-async function settled(path: string): Promise<boolean> {
-  for (let tries = 0; tries < SETTLE_TRIES && !existsSync(path); tries += 1) await Bun.sleep(20);
-  return existsSync(path);
-}
-
 describe("the plugin's session-start hook", () => {
   test("starts a sync and prints the note that points the session at the record", async () => {
     const { bin, synced } = binWith(true);
     const ran = runHook(bin);
     expect(ran.exitCode).toBe(0);
     expect(ran.stdout).toBe(readFileSync(join(HOOKS, "note.md"), "utf8"));
-    expect(await settled(synced)).toBe(true);
-    expect(readFileSync(synced, "utf8")).toBe("sync\n");
+    expect(await readFile(synced, "utf8")).toBe("sync\n");
   });
 
   test("prints nothing when the CLI is not on PATH", () => {
