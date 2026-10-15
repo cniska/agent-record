@@ -440,7 +440,7 @@ describe("parseClaudeChunk", () => {
     const source = claudeTranscriptLines("s-1");
     const untimed = (index: number) => withoutTimestamp(source[index]);
     const chunk = parseClaudeChunk(
-      [...lines.slice(0, 1), untimed(1), untimed(2), ...lines.slice(3, 4), untimed(8)],
+      [...lines.slice(0, 1), untimed(1), untimed(2), ...lines.slice(3, 4), untimed(9)],
       1,
     );
     expect(chunk.dropped).toEqual([2, 3, 5]);

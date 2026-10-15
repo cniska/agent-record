@@ -176,6 +176,25 @@ export function claudeTranscriptLines(sessionId: string): unknown[] {
       userFeedback: "no, not like that",
       message: { role: "user", content: [{ type: "text", text: "stop" }] },
     },
+    {
+      ...base,
+      type: "user",
+      uuid: "u-5",
+      timestamp: TS(6),
+      toolDenialKind: "permission-rule",
+      toolUseResult: "Error: PreToolUse:Bash hook error: Made-up gate says wait.",
+      message: {
+        role: "user",
+        content: [
+          {
+            type: "tool_result",
+            tool_use_id: "toolu-hooked",
+            is_error: true,
+            content: "PreToolUse:Bash hook error: Made-up gate says wait.",
+          },
+        ],
+      },
+    },
     { type: "ai-title", sessionId, aiTitle: "Add the parser" },
     {
       ...base,

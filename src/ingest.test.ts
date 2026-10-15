@@ -68,7 +68,7 @@ function snapshot(db: Database, root: string) {
       db
         .prepare<Record<string, unknown>, []>(
           `SELECT id, session_id, role, model, ts, text, text_chars, src_file, src_line,
-                  is_meta, is_skill_body, denial_kind, user_feedback FROM message ORDER BY id`,
+                  is_meta, is_skill_body, denial_kind, user_feedback, denial_reason FROM message ORDER BY id`,
         )
         .all(),
     ),
@@ -109,6 +109,31 @@ describe("ingest", () => {
     try {
       const row = db.prepare<{ text: string }, []>("SELECT text FROM message WHERE id = 'msg-1'").get();
       expect(row?.text).toBe("First half.\nSecond half.");
+    } finally {
+      db.close();
+    }
+  });
+
+  test("stores the reason a hook denied a call with its denial", () => {
+    const root = newRoot();
+    const env = scratchEnv(root);
+    writeClaudeTranscript(env, "-Users-x-code-demo", SESSION);
+    const db = run(env);
+    try {
+      const denials = db
+        .prepare<Record<string, unknown>, []>(
+          "SELECT id, denial_kind, user_feedback, denial_reason FROM message WHERE denial_kind IS NOT NULL ORDER BY id",
+        )
+        .all();
+      expect(denials).toEqual([
+        { id: "u-4", denial_kind: "user-rejected", user_feedback: "no, not like that", denial_reason: null },
+        {
+          id: "u-5",
+          denial_kind: "permission-rule",
+          user_feedback: null,
+          denial_reason: "PreToolUse:Bash hook error: Made-up gate says wait.",
+        },
+      ]);
     } finally {
       db.close();
     }
