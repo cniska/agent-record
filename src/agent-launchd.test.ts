@@ -24,11 +24,11 @@ function host(dir: string): AgentHost {
 describe("launchd agent", () => {
   test("runs the command's sync by absolute path, because launchd has no PATH to look it up on", () => {
     const plist = agentPlist(
-      ["/opt/homebrew/bin/bun", "/Users/x/code/agent-record/src/cli.ts"],
+      ["/opt/homebrew/bin/bun", "/Users/x/code/tool/src/cli.ts"],
       scratchEnv(newRoot()),
     );
     expect(plist).toContain(
-      "<array>\n    <string>/opt/homebrew/bin/bun</string>\n    <string>/Users/x/code/agent-record/src/cli.ts</string>\n    <string>sync</string>\n  </array>",
+      "<array>\n    <string>/opt/homebrew/bin/bun</string>\n    <string>/Users/x/code/tool/src/cli.ts</string>\n    <string>sync</string>\n  </array>",
     );
     expect(plist).not.toContain("WorkingDirectory");
   });

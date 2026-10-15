@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { codexRolloutLines, scratchEnv, writeCodexRollout } from "./fixtures.test-support";
 import { listSource, SESSION_SOURCES } from "./ingest-sources";
 
-const THREAD = "01a0a651-086e-7150-8650-cef0f4025a58";
+const THREAD = "0199c0de-0000-7000-8000-000000000001";
 const roots: string[] = [];
 
 afterEach(() => {

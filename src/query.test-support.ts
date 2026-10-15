@@ -44,7 +44,7 @@ export const ctx: QueryContext = { arg: "", flags: {}, home: "/home", maxRows: 4
 export function syncedRecord(root: string): string {
   const env = scratchEnv(root);
   writeClaudeTranscript(env, "-Users-x-code-demo", SYNCED_SESSION);
-  writeCodexRollout(env, "sessions", "01a0a651-086e-7150-8650-cef0f4025a58");
+  writeCodexRollout(env, "sessions", "0199c0de-0000-7000-8000-000000000001");
   const path = dbPath(env);
   const db = openDb(path, { heldRecordWaitMs: NO_WAIT_MS });
   sync(db, env);

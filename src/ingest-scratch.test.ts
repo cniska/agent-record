@@ -27,8 +27,8 @@ describe("a scratch tree is not the work", () => {
   });
 
   test("a per-user darwin temp tree counts", () => {
-    expect(isScratchRepo("/private/var/folders/v5/9g9nzrss/T/agent-record-git-abc123", OWN_TEMP)).toBe(true);
-    expect(isScratchRepo("/var/folders/v5/9g9nzrss/T/agent-record-git-abc123", OWN_TEMP)).toBe(true);
+    expect(isScratchRepo("/private/var/folders/ab/abcdefgh/T/agent-record-git-abc123", OWN_TEMP)).toBe(true);
+    expect(isScratchRepo("/var/folders/ab/abcdefgh/T/agent-record-git-abc123", OWN_TEMP)).toBe(true);
   });
 
   test("the temp root itself counts", () => {

@@ -5,7 +5,7 @@ const COMMON = {
   v: 1,
   ts: "2026-10-14T08:51:25Z",
   session: "0b8f2c1e-7d4a-4e2b-9c3f-5a6d7e8f9a0b",
-  agent: "a8ba3569e845a09ca",
+  agent: "a4444444444444444",
   cwd: "/h/code/demo",
 };
 
@@ -17,11 +17,11 @@ const GATE = {
   decision: "deny",
   reason: "changed_since_accept",
   repo: "/h/code/demo",
-  head: "10db26e267c674c34a31784120a85e30fc66bf14",
-  fingerprint: "149c94564ec576ac",
+  head: "1234567890abcdef1234567890abcdef12345678",
+  fingerprint: "0123456789abcdef",
 };
 
-const VERDICT = { event: "verdict", verdict: "return", repo: "/h/code/demo", fingerprint: "073ce55f" };
+const VERDICT = { event: "verdict", verdict: "return", repo: "/h/code/demo", fingerprint: "fedcba98" };
 
 const PROMPT = { event: "permission_prompt", tool: "Bash" };
 
@@ -54,8 +54,8 @@ describe("a hook event log", () => {
         decision: "deny",
         reason: "changed_since_accept",
         repo: "/h/code/demo",
-        head: "10db26e267c674c34a31784120a85e30fc66bf14",
-        fingerprint: "149c94564ec576ac",
+        head: "1234567890abcdef1234567890abcdef12345678",
+        fingerprint: "0123456789abcdef",
       },
       {
         ...PLACE,
@@ -63,7 +63,7 @@ describe("a hook event log", () => {
         event: "verdict",
         verdict: "return",
         repo: "/h/code/demo",
-        fingerprint: "073ce55f",
+        fingerprint: "fedcba98",
         counted: null,
       },
       { ...PLACE, srcLine: 9, event: "permission_prompt", tool: "Bash" },
@@ -126,7 +126,7 @@ describe("a hook event log", () => {
         event: "verdict",
         verdict: "return",
         repo: "/h/code/demo",
-        fingerprint: "073ce55f",
+        fingerprint: "fedcba98",
         counted: { findings, conflicts: 1, rules: ["Clear names", "Clear names"] },
       },
     ]);

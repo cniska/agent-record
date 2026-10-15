@@ -54,7 +54,7 @@ describe("thread", () => {
 
   test("reads a session whose own id holds an at-sign", () => {
     const db = seeded();
-    const id = "a0064e811b74a81cb@79e9c9bc-3a0b-46f6-b935-7a25be925124";
+    const id = "a2222222222222222@22222222-3333-4444-5555-666666666666";
     db.run(
       `INSERT INTO session (id, tool, cwd, project, ts_first, ts_last)
        VALUES (?, 'claude', '/w', '/home/code/demo', '2026-09-01T10:00:00.000Z', '2026-09-01T11:00:00.000Z')`,

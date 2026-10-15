@@ -32,7 +32,7 @@ import { rebuild, sync } from "./ingest-sync";
 import { archiveDir, claudeProjectsDir, codexDir, dbPath } from "./paths";
 
 const SESSION = "11111111-2222-3333-4444-555555555555";
-const THREAD = "01a0a651-086e-7150-8650-cef0f4025a58";
+const THREAD = "0199c0de-0000-7000-8000-000000000001";
 const roots: string[] = [];
 
 function newRoot(): string {
@@ -1422,7 +1422,7 @@ describe("skill loads", () => {
 
   test("stores an agent's preloaded skill as one load at the message that holds its body", () => {
     const env = scratchEnv(newRoot());
-    const cache = "/Users/x/.claude/plugins/cache/m/acme/41c40cc68eb7/skills/plan";
+    const cache = "/Users/x/.claude/plugins/cache/m/acme/abcdef012345/skills/plan";
     const preload = {
       ...base,
       type: "user",
@@ -1455,7 +1455,7 @@ describe("skill loads", () => {
           how: "preload",
           body_chars: 6,
           skill_path: cache,
-          install: "41c40cc68eb7",
+          install: "abcdef012345",
         },
       ]);
       expect(

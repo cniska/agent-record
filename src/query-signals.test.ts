@@ -493,7 +493,7 @@ describe("counting skill loads per task by version", () => {
         at: "2026-10-14T09:01:00.000Z",
         skill: "plan",
         bodySha256: V1,
-        install: "41c40cc68eb7",
+        install: "abcdef012345",
         preloaded: false,
       },
       {
@@ -518,7 +518,7 @@ describe("counting skill loads per task by version", () => {
   test("names each load by its skill, the start of its hash and its install, on its top-level session", () => {
     const kinds = eventsOf("skill-usage", record).map((e) => [e.kind, e.sessionId]);
     expect(kinds).toEqual([
-      ["plan 1a2b3c4d/41c40cc68eb7", "s"],
+      ["plan 1a2b3c4d/abcdef012345", "s"],
       ["plan 9f8e7d6c/-", "s"],
       ["build -/-", "s"],
       ["task", "s"],

@@ -23,7 +23,7 @@ import { SessionId } from "./ingest-ids";
 import { archiveDir, claudeProjectsDir, codexDir, grokSessionsDir, pluginDataDir } from "./paths";
 
 const SESSION = "0b8f2c1e-7d4a-4e2b-9c3f-5a6d7e8f9a0b";
-const THREAD = "01a0a651-086e-7150-8650-cef0f4025a58";
+const THREAD = "0199c0de-0000-7000-8000-000000000001";
 const roots: string[] = [];
 
 afterEach(() => {

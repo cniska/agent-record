@@ -12,7 +12,7 @@ import { parseGrokChunk } from "./ingest-parse-grok";
 import { parsePiChunk } from "./ingest-parse-pi";
 import { ParsedChunk } from "./ingest-session-records";
 
-const THREAD = SessionId.parse("01a0a651-086e-7150-8650-cef0f4025a58");
+const THREAD = SessionId.parse("0199c0de-0000-7000-8000-000000000001");
 const GROK_SESSION = "018f3b2a-7c3e-7b2a-8f1e-6c0b9a2d4e11";
 const AT = 1700000000000;
 

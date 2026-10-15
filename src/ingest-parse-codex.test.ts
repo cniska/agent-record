@@ -3,7 +3,7 @@ import { codexRolloutLines, withoutTimestamp } from "./fixtures.test-support";
 import { SessionId, TurnId } from "./ingest-ids";
 import { parseCodexChunk } from "./ingest-parse-codex";
 
-const THREAD = SessionId.parse("01a0a651-086e-7150-8650-cef0f4025a58");
+const THREAD = SessionId.parse("0199c0de-0000-7000-8000-000000000001");
 const FRESH = { id: THREAD, state: { model: null, turnId: null } };
 const modern = codexRolloutLines(THREAD, { withIds: true }).map((l) => JSON.stringify(l));
 const legacy = codexRolloutLines(THREAD, { withIds: false }).map((l) => JSON.stringify(l));
