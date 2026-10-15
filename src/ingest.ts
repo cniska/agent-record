@@ -124,10 +124,10 @@ export function createIngester(db: Database, home: string) {
   const upsertMessage = db.prepare(
     `INSERT INTO message (id, session_id, ts, role, model, turn_id, prompt_source, origin_kind,
        is_meta, is_skill_body, attribution_skill, slash_command, denial_kind,
-       user_feedback, text, text_chars, src_file, src_line, extra)
+       user_feedback, denial_reason, text, text_chars, src_file, src_line, extra)
      VALUES ($id, $sessionId, $ts, $role, $model, $turnId, $promptSource, $originKind,
        $isMeta, $isSkillBody, $attributionSkill, $slashCommand, $denialKind,
-       $userFeedback, $text, $textChars, $srcFile, $srcLine, $extra)
+       $userFeedback, $denialReason, $text, $textChars, $srcFile, $srcLine, $extra)
      ON CONFLICT(id) DO UPDATE SET
        ts                     = min(message.ts, excluded.ts),
        model                  = coalesce(excluded.model, message.model),
@@ -139,6 +139,7 @@ export function createIngester(db: Database, home: string) {
        attribution_skill      = coalesce(excluded.attribution_skill, message.attribution_skill),
        denial_kind            = coalesce(excluded.denial_kind, message.denial_kind),
        user_feedback          = coalesce(excluded.user_feedback, message.user_feedback),
+       denial_reason          = coalesce(excluded.denial_reason, message.denial_reason),
        slash_command           = coalesce(excluded.slash_command, message.slash_command),
        text                   = ${MERGED_TEXT},
        text_chars             = length(${MERGED_TEXT}),
@@ -447,8 +448,9 @@ export function createIngester(db: Database, home: string) {
         $isSkillBody: m.isSkillBody ? 1 : 0,
         $attributionSkill: m.attributionSkill,
         $slashCommand: m.slashCommand,
-        $denialKind: m.denialKind,
-        $userFeedback: m.userFeedback,
+        $denialKind: m.denial?.kind ?? null,
+        $userFeedback: m.denial?.userFeedback ?? null,
+        $denialReason: m.denial?.reason ?? null,
         $text: m.text,
         $textChars: m.text === null ? null : m.text.length,
         $srcFile: spec.path,

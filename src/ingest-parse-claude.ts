@@ -280,6 +280,13 @@ function resultTexts(content: unknown): string[] {
   return content.flatMap((b) => (typeof b?.text === "string" ? [b.text] : []));
 }
 
+function resultTextOf(content: string | readonly (ClaudeBlock | null)[] | undefined): string | null {
+  if (!Array.isArray(content)) return null;
+  return nonEmpty(
+    content.flatMap((block) => (block?.kind === "tool_result" ? resultTexts(block.content) : [])).join("\n"),
+  );
+}
+
 function exitCodeOf(content: unknown): number | null {
   const code = resultTexts(content)[0]?.match(FAILED_COMMAND_HEAD)?.[1];
   return code === undefined ? null : Number(code);
@@ -376,8 +383,7 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
           isSkillBody: false,
           attributionSkill,
           slashCommand: null,
-          denialKind: null,
-          userFeedback: null,
+          denial: null,
           text: visibleText(textsOf(message.content)),
           srcLine,
           extra: jsonOrNull({
@@ -475,6 +481,7 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
           }
         }
         session.push(sessionFactsOf(line));
+        const denialKind = nonEmpty(line.toolDenialKind);
         const skillBody = line.isMeta === true ? skillBodyOf(texts) : null;
         if (skillBody) {
           const { kind, name, ...fields } = skillBody;
@@ -497,8 +504,14 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
           isSkillBody: skillBody !== null,
           attributionSkill: null,
           slashCommand: text && skillBody === null ? skillFromCommand(text) : null,
-          denialKind: nonEmpty(line.toolDenialKind),
-          userFeedback: feedbackText(line.userFeedback),
+          denial:
+            denialKind === null
+              ? null
+              : {
+                  kind: denialKind,
+                  userFeedback: feedbackText(line.userFeedback),
+                  reason: resultTextOf(content),
+                },
           text: skillBody ? null : text,
           srcLine,
           extra: jsonOrNull({
@@ -529,8 +542,7 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
           isSkillBody: false,
           attributionSkill: null,
           slashCommand: text ? skillFromCommand(text) : null,
-          denialKind: null,
-          userFeedback: null,
+          denial: null,
           text,
           srcLine,
           extra: jsonOrNull({

@@ -53,8 +53,34 @@ describe("parseClaudeChunk", () => {
 
   test("records the ways a user overrode the agent", () => {
     const overridden = parsed.messages.find((m) => m.id === "u-4");
-    expect(overridden).toMatchObject({ denialKind: "user-rejected", userFeedback: "no, not like that" });
+    expect(overridden).toMatchObject({
+      denial: { kind: "user-rejected", userFeedback: "no, not like that", reason: null },
+    });
     expect(JSON.parse(overridden?.extra ?? "{}")).toMatchObject({ interruptedMessageId: "msg-1" });
+  });
+
+  test("keeps the reason a denial returned in place of the tool's result", () => {
+    const hookText = "PreToolUse:Bash hook error: Push blocked: run the made-up check first.";
+    const chunk = parseClaudeChunk(
+      [
+        JSON.stringify({
+          type: "user",
+          uuid: "u-hook",
+          timestamp: "2026-09-16T10:04:00.000Z",
+          toolDenialKind: "permission-rule",
+          toolUseResult: `Error: ${hookText}`,
+          message: {
+            role: "user",
+            content: [{ type: "tool_result", tool_use_id: "tu-hook", is_error: true, content: hookText }],
+          },
+        }),
+      ],
+      1,
+    );
+    expect(chunk.messages).toMatchObject([
+      { id: "u-hook", denial: { kind: "permission-rule", userFeedback: null, reason: hookText } },
+    ]);
+    expect(parsed.messages.find((m) => m.id === "u-1")?.denial).toBeNull();
   });
 
   test("numbers src_line from the file, not the chunk", () => {

@@ -108,6 +108,28 @@ describe("thread", () => {
     db.close();
   });
 
+  test("prints the reason a denial returned when the user gave no words of their own", () => {
+    const db = seeded();
+    db.run(
+      `INSERT INTO message (id, session_id, ts, role, text, src_file, src_line, denial_kind, denial_reason)
+       VALUES ('m-hook', 's1', '2026-09-01T10:34:00.000Z', 'user', NULL, '/f.jsonl', 5, 'permission-rule',
+               'PreToolUse:Bash hook error: Push blocked: run the made-up check first.')`,
+    );
+    db.run(
+      `INSERT INTO message (id, session_id, ts, role, text, src_file, src_line, denial_kind, user_feedback, denial_reason)
+       VALUES ('m-rejected', 's1', '2026-09-01T10:35:00.000Z', 'user', NULL, '/f.jsonl', 6, 'user-rejected',
+               'edit the other file', 'The tool use was rejected. The user said: edit the other file')`,
+    );
+    const denials = column(thread.run(db, { ...ctx, arg: "s1" }), "text").filter((text) =>
+      String(text).startsWith("denied"),
+    );
+    expect(denials).toEqual([
+      "denied (permission-rule): PreToolUse:Bash hook error: Push blocked: run the made-up check first.",
+      "denied (user-rejected): edit the other file",
+    ]);
+    db.close();
+  });
+
   test("puts what was said before the tool calls made at the same moment", () => {
     const db = withActions();
     db.run(

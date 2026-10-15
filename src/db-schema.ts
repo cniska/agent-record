@@ -4,7 +4,7 @@ import { HOWS } from "./ingest-skill-load";
 import { KINDS, TOOLS } from "./ingest-tools";
 
 const sqlList = (values: readonly string[]): string => values.map((value) => `'${value}'`).join(",");
-export const SCHEMA_VERSION = 20;
+export const SCHEMA_VERSION = 21;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS source_file (
@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS message (
   slash_command    TEXT,
   denial_kind     TEXT,
   user_feedback   TEXT,
+  denial_reason   TEXT,
   text            TEXT,
   text_chars      INTEGER,
   src_file        TEXT NOT NULL REFERENCES source_file(path) ON UPDATE CASCADE,

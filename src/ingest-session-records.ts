@@ -32,6 +32,14 @@ export const NO_FACTS: SessionFacts = {
 
 export const MID_TURN_PROMPT = "mid_turn";
 
+const Denial = z
+  .strictObject({
+    kind: z.string(),
+    userFeedback: nullableString,
+    reason: nullableString,
+  })
+  .readonly();
+
 export const MessageRow = z
   .strictObject({
     id: MessageId,
@@ -45,8 +53,7 @@ export const MessageRow = z
     isSkillBody: z.boolean(),
     attributionSkill: nullableString,
     slashCommand: nullableString,
-    denialKind: nullableString,
-    userFeedback: nullableString,
+    denial: Denial.nullable(),
     text: nullableString,
     srcLine: z.number(),
     extra: nullableString,
@@ -76,8 +83,7 @@ export function plainMessage({
     isSkillBody: false,
     attributionSkill: null,
     slashCommand: null,
-    denialKind: null,
-    userFeedback: null,
+    denial: null,
     extra: null,
   };
 }

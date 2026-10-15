@@ -16,7 +16,7 @@ const TIMELINE = `WITH timeline AS (
          m.src_line AS line,
          m.role, coalesce(m.attribution_skill, '') AS skill,
          CASE WHEN m.denial_kind IS NOT NULL
-              THEN 'denied (' || m.denial_kind || ')' || coalesce(': ' || m.user_feedback, '')
+              THEN 'denied (' || m.denial_kind || ')' || coalesce(': ' || coalesce(m.user_feedback, m.denial_reason), '')
               ELSE m.text END AS text
   FROM message m
   WHERE m.session_id = ?1 AND (m.denial_kind IS NOT NULL OR (m.text IS NOT NULL AND ${SAID}))

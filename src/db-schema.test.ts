@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
 import { TOOLS } from "./ingest-tools";
 
-const PINNED = "20 1fa883092720fc5b506c6cf6b2d111e027bfedf47770023ed89db476da2a7ac8";
+const PINNED = "21 e0f348111cd02646da17e992dcf07d3a64470667df7228bc3c6ceacd385afe44";
 
 function schema(): Database {
   const db = new Database(":memory:");
