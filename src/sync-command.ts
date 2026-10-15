@@ -8,7 +8,12 @@ import { type MirrorPass, mirrorArchive } from "./mirror";
 import { dbPath } from "./paths";
 import { stampingOutcome } from "./sync-stamp";
 
-type Rebuilt = { readonly from: number; readonly to: number; readonly unreadCheckouts: readonly string[] };
+type Rebuilt = {
+  readonly from: number;
+  readonly to: number;
+  readonly backup: string;
+  readonly unreadCheckouts: readonly string[];
+};
 
 type RecordSync = SyncReport & { readonly rebuilt: Rebuilt | null };
 
@@ -16,8 +21,8 @@ function syncRecord(runtime: Runtime): RecordSync {
   const { env } = runtime;
   return withDb(dbPath(env), { ...runtime, admits: "older" }, (db, older) => {
     if (older === null) return { ...sync(db, env), rebuilt: null };
-    const { unreadCheckouts, ...report } = rebuild(db, env);
-    return { ...report, rebuilt: { from: older, to: SCHEMA_VERSION, unreadCheckouts } };
+    const { backup, unreadCheckouts, ...report } = rebuild(db, env);
+    return { ...report, rebuilt: { from: older, to: SCHEMA_VERSION, backup, unreadCheckouts } };
   });
 }
 

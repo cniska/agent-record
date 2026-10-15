@@ -50,14 +50,14 @@ The record is what agent workflows improve from. Its first use is search: an age
 
 ### 2.4 Rebuild
 
-- **FR-24** — `rebuild` drops the record and reads it again from the archive, whatever schema version the record had.
+- **FR-24** — `rebuild` drops the record and reads it again from the archive, whatever schema version the record had. It first copies the record beside itself, as `<record>.agent-record-backup` or, when that is taken, the first free `-<n>` after it, and reports the copy as `backup`, so with no agent-record running, removing the record's `-wal` and `-shm` files and moving the copy over the record undoes the rebuild.
 - **FR-25** — After `rebuild`, every session `sync` archived is in the record as the archive last held it, including sessions whose tool files are gone. Git history is not covered (FR-23).
 - **FR-26** — Given the same archive, `rebuild` writes the same session, message, turn, usage, tool-call, git-run, skill-load and hook-event rows that the syncs that built the archive wrote.
 
 ### 2.5 Schema version
 
 - **FR-27** — The record carries one schema version.
-- **FR-28** — `sync` on a record of an older schema version rebuilds it (FR-24) under its lock and reports `rebuilt` with the version it was `from` and the one it is `to`; every other command that reads or writes the record, except `rebuild`, refuses a record of an older schema version, and every command but `rebuild` refuses a record of a newer one.
+- **FR-28** — `sync` on a record of an older schema version rebuilds it (FR-24) under its lock and reports `rebuilt` with the version it was `from`, the one it is `to` and its `backup`; every other command that reads or writes the record, except `rebuild`, refuses a record of an older schema version, and every command but `rebuild` refuses a record of a newer one.
 - **FR-29** — A refusal of an older record names the next `agent-record sync`, which rebuilds it, or `agent-record rebuild` as its fix; a refusal of a newer record names running an agent-record that reads that version.
 
 ### 2.6 Commands and output
@@ -321,7 +321,7 @@ The steps of one task, for an agent to read instead of whole transcripts.
 - **AC-66** — Run `update` against a release whose checksum is wrong, and one whose build prints another version: they are refused with `update_failed` and `build_unrunnable` and nothing staged, and `doctor` warns of each failed check with its fix. (FR-97, FR-102)
 - **AC-67** — In a release whose last update check is two days old, run `sync` and a `doctor` with `AGENT_RECORD_SKIP_UPDATE=1`, then two `doctor`s at once, then another: the first two start no check; the pair stage the newer release with one request to the release server; the last starts none. (FR-99, FR-100)
 - **AC-68** — Stage a release with `update`, roll it back, then run `update` and roll back again: the staged build is removed and its version rejected, `--version` runs the installed build, the next `update` stages nothing and downloads nothing, and the second rollback is refused with `nothing_staged`. (FR-101)
-- **AC-69** — Sync a fixture repo, delete it, and `rebuild` twice; then, in another home, sync a fixture repo, delete it, lower the schema version and sync: the first rebuild names the deleted checkout and the second none, and the sync reports `rebuilt` naming it, keeps every session, and holds no commits. (FR-28, FR-103)
+- **AC-69** — Sync a fixture repo, delete it, and `rebuild` twice; then, in another home, sync a fixture repo, delete it, lower the schema version and sync: the first rebuild names the deleted checkout and the second none, each names its own backup, and with the record's `-wal` and `-shm` removed, the first one's backup moved over the record holds the commits again; the sync reports `rebuilt` naming the checkout and its backup, keeps every session, and holds no commits. (FR-24, FR-28, FR-103)
 
 ## 6. Deliverables
 

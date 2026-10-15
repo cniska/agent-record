@@ -63,7 +63,12 @@ test("AC-10 a record of an older schema version is refused by query and sql nami
   setSchemaVersion(home, current - 1);
 
   expectVersionRefused(home, READERS, "the next agent-record sync rebuilds it, or run agent-record rebuild");
-  expect(sync(home).rebuilt).toEqual({ from: current - 1, to: current, unreadCheckouts: [] });
+  expect(sync(home).rebuilt).toEqual({
+    from: current - 1,
+    to: current,
+    backup: `${home.record}.agent-record-backup`,
+    unreadCheckouts: [],
+  });
   expect(schemaVersion(home)).toBe(current);
   succeeded(runCli(home, ["sql", "select 1 as one"]), "sql", QUERY_RESULT);
   expect(sync(home).rebuilt).toBeNull();

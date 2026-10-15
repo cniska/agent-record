@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { join } from "node:path";
 import { errorRecord, isRefusal, type PathFailure } from "./coded-error";
-import { writeTransaction } from "./db";
+import { backUpRecord, writeTransaction } from "./db";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
 import type { Env } from "./env";
 import { createIngester, type FileSpec, ingestFile, type SourceFile } from "./ingest";
@@ -149,10 +149,11 @@ function recordedCheckouts(db: Database): readonly string[] {
     .map((row) => row.path);
 }
 
-export type RebuildReport = SyncReport & { unreadCheckouts: string[] };
+export type RebuildReport = SyncReport & { backup: string; unreadCheckouts: string[] };
 
 export function rebuild(db: Database, env: Env): RebuildReport {
   const before = recordedCheckouts(db);
+  const backup = backUpRecord(db);
   db.run("PRAGMA foreign_keys = OFF");
   try {
     writeTransaction(db, () => {
@@ -165,5 +166,5 @@ export function rebuild(db: Database, env: Env): RebuildReport {
   const report = sync(db, env);
   writeTransaction(db, () => db.run(`PRAGMA user_version = ${SCHEMA_VERSION}`));
   const read = new Set(recordedCheckouts(db));
-  return { ...report, unreadCheckouts: before.filter((path) => !read.has(path)) };
+  return { ...report, backup, unreadCheckouts: before.filter((path) => !read.has(path)) };
 }

@@ -1,6 +1,6 @@
 import { constants, copyFileSync, lstatSync } from "node:fs";
 
-function nextBackupPath(source: string): string {
+export function nextBackupPath(source: string): string {
   const base = `${source}.agent-record-backup`;
   let path = base;
   let number = 2;

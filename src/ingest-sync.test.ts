@@ -1,4 +1,4 @@
-import type { Database } from "bun:sqlite";
+import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -61,6 +61,23 @@ function columnsOf(db: Database, table: string): string[] {
 }
 
 describe("absorbing a schema change", () => {
+  test("a rebuild first copies the record it drops beside it, commits of removed checkouts included", () => {
+    const { db, env } = scratch();
+    fill(db);
+
+    const { backup } = rebuild(db, env);
+
+    expect(backup).toBe(`${dbPath(env)}.agent-record-backup`);
+    const copy = new Database(backup, { readonly: true });
+    expect(copy.query("SELECT sha, subject FROM repo_commit").all()).toEqual([
+      { sha: "abc", subject: "fix: x" },
+    ]);
+    expect(copy.query("SELECT id FROM session ORDER BY id").all()).toEqual([{ id: "parent" }, { id: "s1" }]);
+    copy.close();
+    expect(db.query("SELECT count(*) AS n FROM repo_commit").get()).toEqual({ n: 0 });
+    db.close();
+  });
+
   test("a column missing from a table rebuild re-reads is back afterwards", () => {
     const { db, env } = scratch();
     fill(db);

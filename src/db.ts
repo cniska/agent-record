@@ -5,6 +5,7 @@ import { invariant, unreachable } from "./assert";
 import { refuseRecord } from "./db-contract";
 import { sqliteCode } from "./db-error";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
+import { nextBackupPath } from "./file-backup";
 
 export function recordVersion(db: Database): number {
   const row = db.query<{ user_version: number }, []>("PRAGMA user_version").get();
@@ -105,6 +106,12 @@ function openRecord(path: string, opts: RecordOpening): OpenedRecord {
 
 export function openDb(path: string, opts: RecordOpening): Database {
   return openRecord(path, opts).db;
+}
+
+export function backUpRecord(db: Database): string {
+  const backup = nextBackupPath(db.filename);
+  db.run("VACUUM INTO ?", [backup]);
+  return backup;
 }
 
 export function writeTransaction<T>(db: Database, fn: () => T): T {

@@ -397,7 +397,7 @@ const SYNC_RESULT = z.strictObject({
   repoFiles: z.strictObject({ repos: COUNT, files: COUNT, unchanged: COUNT }),
 });
 
-const REBUILD_RESULT = SYNC_RESULT.extend({ unreadCheckouts: z.array(z.string()) });
+const REBUILD_RESULT = SYNC_RESULT.extend({ backup: z.string(), unreadCheckouts: z.array(z.string()) });
 
 type RebuildResult = z.infer<typeof REBUILD_RESULT>;
 
@@ -406,7 +406,9 @@ export const SYNC_COMMAND_RESULT = SYNC_RESULT.extend({
     z.strictObject({ state: z.literal("mirrored"), path: z.string(), files: COUNT, bytes: COUNT }),
     z.strictObject({ state: z.literal("unreachable"), path: z.string(), detail: z.string() }),
   ]),
-  rebuilt: z.strictObject({ from: COUNT, to: COUNT, unreadCheckouts: z.array(z.string()) }).nullable(),
+  rebuilt: z
+    .strictObject({ from: COUNT, to: COUNT, backup: z.string(), unreadCheckouts: z.array(z.string()) })
+    .nullable(),
 });
 
 type SyncCommandResult = z.infer<typeof SYNC_COMMAND_RESULT>;

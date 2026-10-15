@@ -414,13 +414,29 @@ test("AC-31 a sync keeps a deleted repo's commits and a rebuild has none", () =>
   expect(rowsOf(home, subjects)).toEqual([]);
 });
 
-test("AC-69 a rebuild, and a sync that rebuilds an older record, name each checkout whose history they could not read", () => {
+function restored(home: Home, backup: string): Home {
+  for (const suffix of ["-wal", "-shm"]) rmSync(`${home.record}${suffix}`, { force: true });
+  renameSync(backup, home.record);
+  return home;
+}
+
+test("AC-69 a rebuild, and a sync that rebuilds an older record, name each checkout whose history they could not read, and back up the record first", () => {
   const removed = homeWithRepo();
   sync(removed.home);
+  const commits = rowsOf(removed.home, "select count(*) from repo_commit");
+  expect(commits).not.toEqual([[0]]);
   const checkout = realpathSync(removed.repo);
   rmSync(removed.repo, { recursive: true });
-  expect(rebuild(removed.home).unreadCheckouts).toEqual([checkout]);
-  expect(rebuild(removed.home).unreadCheckouts).toEqual([]);
+  const first = rebuild(removed.home);
+  expect(first).toMatchObject({
+    backup: `${removed.home.record}.agent-record-backup`,
+    unreadCheckouts: [checkout],
+  });
+  expect(rebuild(removed.home)).toMatchObject({
+    backup: `${removed.home.record}.agent-record-backup-2`,
+    unreadCheckouts: [],
+  });
+  expect(rowsOf(restored(removed.home, first.backup), "select count(*) from repo_commit")).toEqual(commits);
 
   const older = homeWithRepo();
   sync(older.home);
@@ -432,6 +448,7 @@ test("AC-69 a rebuild, and a sync that rebuilds an older record, name each check
   expect(sync(older.home).rebuilt).toEqual({
     from: current - 1,
     to: current,
+    backup: `${older.home.record}.agent-record-backup`,
     unreadCheckouts: [olderCheckout],
   });
   expect(rowsOf(older.home, "select id from session order by id")).toEqual(sessions);
