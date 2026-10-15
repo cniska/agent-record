@@ -58,7 +58,7 @@ Each command prints one JSON line.
 | `agent-record query search "<words>"` | Find messages by keyword |
 | `agent-record query thread <id-prefix> [--at <ts>]` | Read the exchange around a hit |
 | `agent-record query tasks <id-prefix>` | List a session's tasks, from one task prompt to the next, by id, latest last |
-| `agent-record query trace <id-prefix> [--task <id-prefix>]` | Trace a session's latest task, or the one named, or a subagent and every subagent under it, step by step, one JSON line per row, for an agent to read instead of transcripts |
+| `agent-record query trace <id-prefix> [--task <id-prefix>]` | Trace a session's latest task, or the one named, or a subagent and every subagent under it, step by step, one JSON line per row, for an agent to read instead of transcripts; [`docs/trace.md`](docs/trace.md) says what it shows and cannot |
 | `agent-record query prior-art "<path fragment>"` | Find where a file shape already exists on disk |
 | `agent-record query signal <name> [--by <week\|repo\|version\|rule\|tag key>] [--skill <name>]` | Count one friction signal per week, over every task or the tasks that loaded a skill: `owner-interrupts`, `time-to-land`, `stranded-work`, `review-findings`, `false-stops`, `review-returns`, `blocks`, `skill-usage`, `lost-context`, `escaped-defects`, `step-cost` or `second-read-asks` |
 | `agent-record query signal-events <name>` | List what a signal counted, to check it by hand |
