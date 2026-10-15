@@ -203,11 +203,22 @@ function homeEnv(home: Home): RunEnv {
   };
 }
 
+function cliEnv(home: Home, env: RunEnv): RunEnv {
+  return { PATH: `${home.bin}:${process.env.PATH}`, ...homeEnv(home), ...env };
+}
+
 export function runCli(home: Home, args: readonly string[], env: RunEnv = {}): Ran {
-  const ran = Bun.spawnSync([process.execPath, CLI, ...args], {
-    env: { PATH: `${home.bin}:${process.env.PATH}`, ...homeEnv(home), ...env },
-  });
-  return ranOf(ran);
+  return ranOf(Bun.spawnSync([process.execPath, CLI, ...args], { env: cliEnv(home, env) }));
+}
+
+const NETWORK_DENIED = "(version 1)(allow default)(deny network*)";
+
+export function runCliOffline(home: Home, args: readonly string[]): Ran {
+  return ranOf(
+    Bun.spawnSync(["/usr/bin/sandbox-exec", "-p", NETWORK_DENIED, process.execPath, CLI, ...args], {
+      env: cliEnv(home, {}),
+    }),
+  );
 }
 
 const EXIT_STATUS = z.coerce.number().int().nonnegative();

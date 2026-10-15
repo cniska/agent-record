@@ -29,12 +29,15 @@ import {
   removeScratch,
   rowsOf,
   runCli,
+  runCliOffline,
+  SYNC_COMMAND_RESULT,
   schemaVersion,
   scratchDirOutsideTemp,
   scratchHome,
   scratchRepo,
   scratchTempDir,
   setSchemaVersion,
+  succeeded,
   sync,
   withFixtures,
   withICloudDrive,
@@ -486,7 +489,25 @@ test("AC-22 a second sync is refused naming the lock holder, and a lock from an 
   expect(rowsOf(home, "select id from session")).toEqual([["claude-session"]]);
   expect(existsSync(lock)).toBe(false);
 });
-test.todo("AC-26 a sync succeeds with the network unavailable", () => {});
+test("AC-26 a sync with the network denied succeeds, recording every tool's sessions, a repo's commits and the mirror", () => {
+  const { home } = homeWithRepo();
+  withFixtures(withICloudDrive(home), EVERY_TOOL);
+
+  const result = succeeded(runCliOffline(home, ["sync"]), "sync", SYNC_COMMAND_RESULT);
+  expect(result).toMatchObject({
+    failures: [],
+    git: { repos: 1, commits: 2 },
+    mirror: { state: "mirrored", path: home.mirror },
+  });
+  expect(rowsOf(home, "select id from session order by id")).toEqual([
+    [CODEX_THREAD],
+    ["claude-session"],
+    ["grok-session"],
+    ["omp-session"],
+    ["pi-session"],
+    ["repo-session"],
+  ]);
+});
 test.todo("AC-28 a sync whose record write fails after archiving leaves the record unchanged, and the next records the file once", () => {});
 test("AC-30 a fresh archive copy of a large file takes far less free space than its size", () => {
   const home = scratchHome();
