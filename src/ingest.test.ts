@@ -949,7 +949,7 @@ describe("the archive", () => {
       const before = snapshot(db, root);
       rmSync(claudeProjectsDir(env), { recursive: true });
       rmSync(codexDir(env), { recursive: true });
-      expect(rebuild(db, env).failures).toEqual([]);
+      expect(rebuild(db, env, "archive alone").failures).toEqual([]);
       expect(snapshot(db, root)).toEqual(before);
       expect(before.sessions.map((s) => s.id)).toEqual([THREAD, SESSION].sort());
     } finally {
@@ -964,7 +964,7 @@ describe("the archive", () => {
       db.run(
         "INSERT INTO checkout (path, repo, head, index_stat) VALUES ('/code/gone', '/code/gone', 'abc', '1:1')",
       );
-      expect(rebuild(db, env).failures).toEqual([]);
+      expect(rebuild(db, env, "archive alone").failures).toEqual([]);
       expect(db.query("SELECT path FROM checkout").all()).toEqual([]);
     } finally {
       db.close();

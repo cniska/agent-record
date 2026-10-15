@@ -82,7 +82,7 @@ describe("absorbing a schema change", () => {
     const { db, env } = scratch();
     fill(db);
 
-    const { backup } = rebuild(db, env);
+    const { backup } = rebuild(db, env, "archive alone");
 
     expect(backup).toBe(`${dbPath(env)}.agent-record-backup`);
     const copy = new Database(backup, { readonly: true });
@@ -101,7 +101,7 @@ describe("absorbing a schema change", () => {
     db.run("ALTER TABLE tool_call DROP COLUMN duration_ms");
     expect(columnsOf(db, "tool_call")).not.toContain("duration_ms");
 
-    rebuild(db, env);
+    rebuild(db, env, "archive alone");
 
     expect(columnsOf(db, "tool_call")).toContain("duration_ms");
     db.close();
@@ -117,7 +117,7 @@ describe("absorbing a schema change", () => {
     db.close();
 
     const reopened = openDb(dbPath(env), { admits: "any", heldRecordWaitMs: NO_WAIT_MS });
-    rebuild(reopened, env);
+    rebuild(reopened, env, "archive alone");
 
     expect(columnsOf(reopened, "tool_call")).toContain("file_path");
     expect(tablesOf(reopened)).toContain("repo_file");
@@ -129,7 +129,7 @@ describe("absorbing a schema change", () => {
     const { db, env } = scratch();
     fill(db);
 
-    rebuild(db, env);
+    rebuild(db, env, "archive alone");
 
     expect(db.query("PRAGMA foreign_key_check").all()).toEqual([]);
     db.close();
@@ -148,7 +148,7 @@ describe("absorbing a schema change", () => {
     })();
 
     const started = performance.now();
-    rebuild(db, env);
+    rebuild(db, env, "archive alone");
 
     expect(performance.now() - started).toBeLessThan(3000);
     expect(tablesOf(db)).not.toContain("old_parent");
@@ -164,7 +164,7 @@ describe("absorbing a schema change", () => {
     writeFileSync(join(archiveDir(broken), "claude"), "");
     const backup = `${dbPath(env)}.agent-record-backup`;
 
-    expect(() => rebuild(db, broken)).toThrow(
+    expect(() => rebuild(db, broken, "archive alone")).toThrow(
       expect.objectContaining({
         kind: "fault",
         code: "rebuild_faulted",
@@ -174,7 +174,7 @@ describe("absorbing a schema change", () => {
     expect(recordVersion(db)).toBe(SCHEMA_VERSION - 1);
     expect(commitsIn(backup)).toEqual([{ sha: "abc" }]);
 
-    rebuild(db, env);
+    rebuild(db, env, "archive alone");
     expect(recordVersion(db)).toBe(SCHEMA_VERSION);
     db.close();
   });
@@ -189,8 +189,8 @@ describe("absorbing a schema change", () => {
     for (const path of [`${record}.agent-record-backup`, `${record}.agent-record-backup-3`, ...others])
       writeFileSync(path, "older");
 
-    const first = rebuild(db, env).backup;
-    const second = rebuild(db, env).backup;
+    const first = rebuild(db, env, "archive alone").backup;
+    const second = rebuild(db, env, "archive alone").backup;
 
     expect([first, second]).toEqual([`${record}.agent-record-backup-2`, `${record}.agent-record-backup`]);
     expect(
@@ -217,7 +217,7 @@ describe("absorbing a schema change", () => {
     const db = openDb(record, { heldRecordWaitMs: NO_WAIT_MS });
     writeFileSync(`${record}.agent-record-backup`, "older");
 
-    expect(rebuild(db, env).backup).toBe(`${record}.agent-record-backup-2`);
+    expect(rebuild(db, env, "archive alone").backup).toBe(`${record}.agent-record-backup-2`);
     expect(readdirSync(target).filter((name) => name.includes("agent-record-backup"))).toEqual([
       "sessions.db.agent-record-backup-2",
     ]);
@@ -233,7 +233,9 @@ describe("absorbing a schema change", () => {
     mkdirSync(archiveDir(broken), { recursive: true });
     writeFileSync(join(archiveDir(broken), "claude"), "");
 
-    expect(() => rebuild(db, broken)).toThrow(expect.objectContaining({ code: "rebuild_faulted" }));
+    expect(() => rebuild(db, broken, "archive alone")).toThrow(
+      expect.objectContaining({ code: "rebuild_faulted" }),
+    );
     expect(readFileSync(older, "utf8")).toBe("older");
     expect(commitsIn(`${older}-2`)).toEqual([{ sha: "abc" }]);
     db.close();
@@ -247,7 +249,7 @@ describe("absorbing a schema change", () => {
     const backup = `${dbPath(env)}.agent-record-backup`;
 
     try {
-      expect(() => rebuild(db, env)).toThrow(
+      expect(() => rebuild(db, env, "archive alone")).toThrow(
         expect.objectContaining({
           kind: "refusal",
           code: "rebuild_failed",
@@ -271,7 +273,7 @@ describe("rebuilding a database an older schema wrote", () => {
     const { db, env } = scratch();
     db.run("CREATE TABLE retired (id INTEGER PRIMARY KEY)");
 
-    rebuild(db, env);
+    rebuild(db, env, "archive alone");
 
     expect(tablesOf(db)).not.toContain("retired");
     expect(tablesOf(db)).toContain("message_fts");
@@ -318,7 +320,7 @@ describe("a sync", () => {
       const synced = events();
       expect(synced).toEqual([{ src_file: copy, src_line: 1, event: "permission_prompt", tool: "Bash" }]);
       rmSync(live);
-      rebuild(db, env);
+      rebuild(db, env, "archive alone");
       expect(events()).toEqual(synced);
     } finally {
       db.close();
@@ -347,7 +349,7 @@ describe("a sync", () => {
     try {
       sync(db, env);
       const synced = loads();
-      rebuild(db, { ...env, home: empty });
+      rebuild(db, { ...env, home: empty }, "archive alone");
       expect(loads()).toEqual(synced);
     } finally {
       db.close();

@@ -16,7 +16,7 @@ export const rebuildCommand: Command = {
     const { env } = runtime;
     const report = withLock(env, () =>
       stampingOutcome(runtime, () =>
-        withDb(dbPath(env), { ...runtime, admits: "any" }, (db) => rebuild(db, env)),
+        withDb(dbPath(env), { ...runtime, admits: "any" }, (db) => rebuild(db, env, "archive alone")),
       ),
     );
     return { value: report, exitCode: 0 };

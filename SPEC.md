@@ -21,7 +21,7 @@ The record is what agent workflows improve from. Its first use is search: an age
 - **FR-1** — `sync` copies every session file of Claude Code, Codex, Grok, pi and omp it finds under each tool's home into the archive, at the same path relative to the tool's root.
 - **FR-2** — A session file that grew since the last sync has its new bytes added to its archive copy.
 - **FR-3** — A session file that a tool deleted keeps its archive copy, and the record keeps the sessions read from it.
-- **FR-4** — A session file that a tool shrank or rewrote, in a way the archive detects, replaces its archive copy, and the record's rows for that session are replaced by what the new copy holds.
+- **FR-4** — A session file that a tool shrank or rewrote replaces its archive copy, and the record's rows for that session are replaced by what the new copy holds. `sync` finds a changed file by its size and its change time (ctime), which every write moves, so a rewrite that keeps the file's size and modification time is found too; a file whose change time moved with its bytes unchanged is read once to compare and is not copied.
 - **FR-5** — A Codex rollout that Codex moved, such as into `archived_sessions`, is moved in the archive too, and is recorded once, not twice.
 - **FR-6** — The files a tool keeps beside its transcripts that the record reads (Claude subagent metadata, Grok session summaries, Codex thread titles) are archived with them.
 
@@ -50,14 +50,14 @@ The record is what agent workflows improve from. Its first use is search: an age
 
 ### 2.4 Rebuild
 
-- **FR-24** — `rebuild` drops the record and reads it again from the archive, whatever schema version the record had. It first copies the record beside itself, as `<record>.agent-record-backup` or, when that is taken, the first free `-<n>` after it, and reports the copy as `backup`, so with no agent-record running, removing the record's `-wal` and `-shm` files and moving the copy over the record undoes the rebuild. A rebuild that fails after the copy names the copy as `backup` and those steps, as the refusal `rebuild_failed` carrying its cause's fix when the cause is a refusal, or as the fault `rebuild_faulted` when it is a fault. A rebuild that succeeds then removes every other copy of the record so named, so only its own stays; one that fails removes none.
+- **FR-24** — `rebuild` drops the record and reads it again from the archive, whatever schema version the record had, archiving no tool file. It first copies the record beside itself, as `<record>.agent-record-backup` or, when that is taken, the first free `-<n>` after it, and reports the copy as `backup`, so with no agent-record running, removing the record's `-wal` and `-shm` files and moving the copy over the record undoes the rebuild. A rebuild that fails after the copy names the copy as `backup` and those steps, as the refusal `rebuild_failed` carrying its cause's fix when the cause is a refusal, or as the fault `rebuild_faulted` when it is a fault. A rebuild that succeeds then removes every other copy of the record so named, so only its own stays; one that fails removes none.
 - **FR-25** — After `rebuild`, every session `sync` archived is in the record as the archive last held it, including sessions whose tool files are gone. Git history is not covered (FR-23).
 - **FR-26** — Given the same archive, `rebuild` writes the same session, message, turn, usage, tool-call, git-run, skill-load and hook-event rows that the syncs that built the archive wrote.
 
 ### 2.5 Schema version
 
 - **FR-27** — The record carries one schema version.
-- **FR-28** — `sync` on a record of an older schema version rebuilds it (FR-24) under its lock and reports `rebuilt` with the version it was `from`, the one it is `to` and its `backup`; every other command that reads or writes the record, except `rebuild`, refuses a record of an older schema version, and every command but `rebuild` refuses a record of a newer one.
+- **FR-28** — `sync` on a record of an older schema version archives the tool files as every `sync` does, then rebuilds the record (FR-24) under its lock and reports `rebuilt` with the version it was `from`, the one it is `to` and its `backup`; every other command that reads or writes the record, except `rebuild`, refuses a record of an older schema version, and every command but `rebuild` refuses a record of a newer one.
 - **FR-29** — A refusal of an older record names the next `agent-record sync`, which rebuilds it, or `agent-record rebuild` as its fix; a refusal of a newer record names running an agent-record that reads that version.
 
 ### 2.6 Commands and output
@@ -256,13 +256,13 @@ The steps of one task, for an agent to read instead of whole transcripts.
 - **AC-1** — Run `sync` over fixture homes for all five tools: each session is in the archive and the record, with its facts, messages, turns, token counts, tool calls with their git runs and the directory each ran in, and skill loads. (FR-1, FR-6, FR-7, FR-13, FR-14, FR-15, FR-16, FR-17, FR-18)
 - **AC-2** — Append lines to a fixture transcript, one without a trailing newline, and sync again: only the complete new lines are added. (FR-2, FR-8, FR-9)
 - **AC-3** — Delete a tool's fixture file and sync: the session stays in the record. Then `rebuild`: it is still there. (FR-3, FR-24, FR-25)
-- **AC-4** — Rewrite a fixture transcript shorter and sync: the session holds only the new content. (FR-4)
+- **AC-4** — Rewrite a fixture transcript shorter and sync, and rewrite another keeping its size and modification time and sync: each session holds only the new content. (FR-4)
 - **AC-5** — Move a Codex rollout into `archived_sessions` and sync: one copy in the archive, one session in the record. (FR-5)
 - **AC-6** — Change a tool's fixture file after archiving it, then `rebuild` from the archive alone: the record matches the archive, not the tool's file. (FR-7)
 - **AC-7** — Sync a fixture of each tool holding a malformed line, with an unreadable file and an orphan subagent: the sync finishes, and its report names each malformed line, the failure with its fix, and the orphan. (FR-10, FR-11, FR-12)
 - **AC-8** — Sync with a fixture session in a fixture git repo with an origin remote, and in a repo under a temp directory: the first repo's commits with their types, its label and its files are recorded, the temp repo's are not; a second sync with no change reads neither. (FR-19, FR-20, FR-21, FR-22)
 - **AC-9** — Sync fixtures, then `rebuild`: the session, message, turn, usage, tool-call, git-run and skill-load rows are identical. (FR-26)
-- **AC-10** — Set the record's schema version lower: `query` and `sql` each refuse, naming the next sync or `agent-record rebuild`, `sync` rebuilds it and reports `rebuilt` from the lower version to the current one, and `rebuild` succeeds on it too. Set it higher: `sync`, `query` and `sql` each refuse, naming a newer agent-record. (FR-24, FR-27, FR-28, FR-29)
+- **AC-10** — Set the record's schema version lower: `query` and `sql` each refuse, naming the next sync or `agent-record rebuild`, `sync` with a new fixture file rebuilds it, holding that file's session, and reports `rebuilt` from the lower version to the current one, and `rebuild` succeeds on it too. Set it higher: `sync`, `query` and `sql` each refuse, naming a newer agent-record. (FR-24, FR-27, FR-28, FR-29)
 - **AC-11** — Run each command once successfully and once with bad input, and `doctor` with a failing check: the successful runs and `doctor` print `ok: true` on stdout, `doctor` exiting 1; the bad input prints `ok: false` on stderr with exit 1, and the error carries kind, code, message, meta and resolve. (FR-30, FR-31)
 - **AC-12** — Run `agent-record` alone, an unknown command, and each malformed argument form: the listing and each refusal with its usage. (FR-32, FR-33)
 - **AC-13** — `query list`, an unknown query, `--rows 0`, and a query with more rows than the default: listing, refusals, and the `more` note. (FR-34, FR-35, FR-36)
@@ -365,7 +365,3 @@ The steps of one task, for an agent to read instead of whole transcripts.
 Each requirement still needs the owner's confirmation before it is contract.
 
 Every criterion is proven: each has a passing test in the acceptance suite, which drives only the CLI. `src/spec.test.ts` ties the suite to this spec. The unit tests stay unit tests and cite no ID.
-
-Known gaps, where the code does not yet meet a requirement:
-
-- **FR-4.** A rewrite that keeps a file's size and modification time is not detected.

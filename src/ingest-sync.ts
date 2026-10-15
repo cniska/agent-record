@@ -33,7 +33,15 @@ export type SyncReport = {
   repoFiles: RepoFileReport;
 };
 
+export type ReadFrom = "tool files" | "archive alone";
+
+const NOTHING_ARCHIVED: ArchiveReport = { files: 0, bytes: 0 };
+
 export function sync(db: Database, env: Env): SyncReport {
+  return ingestFrom(db, env, "tool files");
+}
+
+function ingestFrom(db: Database, env: Env, from: ReadFrom): SyncReport {
   const ingester = createIngester(db, env.home);
   const eventIngester = createEventIngester(db);
   const sessionExists = db.prepare<{ one: number }, [string]>("SELECT 1 AS one FROM session WHERE id = ?");
@@ -42,7 +50,7 @@ export function sync(db: Database, env: Env): SyncReport {
   );
 
   const report: SyncReport = {
-    archive: { files: 0, bytes: 0 },
+    archive: NOTHING_ARCHIVED,
     sources: [],
     eventLogs: 0,
     filesRead: 0,
@@ -84,10 +92,16 @@ export function sync(db: Database, env: Env): SyncReport {
     }
   };
 
-  report.archive = archiveSources(env, fail, {
-    markSession: (copy) => ingester.markReplaced(copy),
-    markLog: (copy) => eventIngester.markReplaced(copy),
-  });
+  switch (from) {
+    case "tool files":
+      report.archive = archiveSources(env, fail, {
+        markSession: (copy) => ingester.markReplaced(copy),
+        markLog: (copy) => eventIngester.markReplaced(copy),
+      });
+      break;
+    case "archive alone":
+      break;
+  }
 
   for (const tool of TOOLS) {
     const source = SESSION_SOURCES[tool];
@@ -158,10 +172,10 @@ function recordedCheckouts(db: Database): readonly string[] {
 
 export type RebuildReport = SyncReport & { backup: string; unreadCheckouts: string[] };
 
-export function rebuild(db: Database, env: Env): RebuildReport {
+export function rebuild(db: Database, env: Env, from: ReadFrom): RebuildReport {
   const before = recordedCheckouts(db);
   const backup = backUpRecord(db);
-  const report = readAgainNamingBackup(db, env, before, backup);
+  const report = readAgainNamingBackup(db, env, from, before, backup);
   removeBackupsBut(db.filename, backup);
   return report;
 }
@@ -169,11 +183,12 @@ export function rebuild(db: Database, env: Env): RebuildReport {
 function readAgainNamingBackup(
   db: Database,
   env: Env,
+  from: ReadFrom,
   before: readonly string[],
   backup: string,
 ): RebuildReport {
   try {
-    return { ...refusingBusy(db.filename, () => readAgain(db, env, before)), backup };
+    return { ...refusingBusy(db.filename, () => readAgain(db, env, from, before)), backup };
   } catch (error) {
     throw rebuildFailure(codedOf(error), db.filename, backup);
   }
@@ -189,6 +204,7 @@ function rebuildFailure(cause: CodedError, record: string, backup: string): Code
 function readAgain(
   db: Database,
   env: Env,
+  from: ReadFrom,
   before: readonly string[],
 ): SyncReport & { unreadCheckouts: string[] } {
   db.run("PRAGMA foreign_keys = OFF");
@@ -200,7 +216,7 @@ function readAgain(
   } finally {
     db.run("PRAGMA foreign_keys = ON");
   }
-  const report = sync(db, env);
+  const report = ingestFrom(db, env, from);
   writeTransaction(db, () => db.run(`PRAGMA user_version = ${SCHEMA_VERSION}`));
   const read = new Set(recordedCheckouts(db));
   return { ...report, unreadCheckouts: before.filter((path) => !read.has(path)) };

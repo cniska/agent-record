@@ -96,7 +96,7 @@ export function mirrorArchive(env: Env, now: Date): MirrorPass {
     const to = join(mirrorArchiveDir(env), relative(archive, from));
     const unwritable = (detail: string) => refuseMirror("mirror_unwritable", { path: to, detail });
     attempt(to, unwritable, () => {
-      const copied = copyIfChanged(from, to, setAsideCopyIfItShrinks);
+      const copied = copyIfChanged(from, to, "modified", setAsideCopyIfItShrinks);
       if (copied === null) return;
       files += 1;
       bytes += copied;

@@ -8,10 +8,10 @@ import {
   type Home,
   holdingRecord,
   okLine,
-  QUERY_RESULT,
   rebuild,
   refused,
   removeScratch,
+  rowsOf,
   runCli,
   schemaVersion,
   scratchHome,
@@ -20,7 +20,9 @@ import {
   sync,
   syncedHome,
   USAGE_ENTRY,
+  withFixtures,
 } from "./cli";
+import { CLAUDE } from "./fixture-names";
 
 afterEach(removeScratch);
 
@@ -63,6 +65,7 @@ test("AC-10 a record of an older schema version is refused by query and sql nami
   setSchemaVersion(home, current - 1);
 
   expectVersionRefused(home, READERS, "the next agent-record sync rebuilds it, or run agent-record rebuild");
+  withFixtures(home, [CLAUDE]);
   expect(sync(home).rebuilt).toEqual({
     from: current - 1,
     to: current,
@@ -70,7 +73,7 @@ test("AC-10 a record of an older schema version is refused by query and sql nami
     unreadCheckouts: [],
   });
   expect(schemaVersion(home)).toBe(current);
-  succeeded(runCli(home, ["sql", "select 1 as one"]), "sql", QUERY_RESULT);
+  expect(rowsOf(home, "select id from session")).toEqual([["claude-session"]]);
   expect(sync(home).rebuilt).toBeNull();
 
   setSchemaVersion(home, current - 1);

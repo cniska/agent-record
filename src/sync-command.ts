@@ -21,7 +21,7 @@ function syncRecord(runtime: Runtime): RecordSync {
   const { env } = runtime;
   return withDb(dbPath(env), { ...runtime, admits: "older" }, (db, older) => {
     if (older === null) return { ...sync(db, env), rebuilt: null };
-    const { backup, unreadCheckouts, ...report } = rebuild(db, env);
+    const { backup, unreadCheckouts, ...report } = rebuild(db, env, "tool files");
     return { ...report, rebuilt: { from: older, to: SCHEMA_VERSION, backup, unreadCheckouts } };
   });
 }

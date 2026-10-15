@@ -262,6 +262,26 @@ test("AC-4 a transcript rewritten shorter holds only its new content after sync"
   ]);
 });
 
+test("AC-4 a transcript rewritten keeping its size and modification time holds only its new content after sync", () => {
+  const home = withFixtures(scratchHome(), [CLAUDE]);
+  const live = livePath(home, CLAUDE);
+  const modified = new Date("2026-09-16T12:00:00.000Z");
+  utimesSync(live, modified, modified);
+  sync(home);
+  const { size } = statSync(live);
+  writeFileSync(live, readFileSync(live, "utf8").replace('"add the parser"', '"add the PARSER"'));
+  utimesSync(live, modified, modified);
+  expect({ size: statSync(live).size, mtimeMs: statSync(live).mtimeMs }).toEqual({
+    size,
+    mtimeMs: modified.getTime(),
+  });
+
+  sync(home);
+  expect(rowsOf(home, "select text from message where id = 'claude-session-u1'")).toEqual([
+    ["add the PARSER"],
+  ]);
+});
+
 test("AC-5 a Codex rollout moved into archived_sessions stays one archive copy and one session", () => {
   const home = withFixtures(scratchHome(), [CODEX]);
   sync(home);
@@ -280,9 +300,7 @@ test("AC-6 a rebuild reads the archive, not a tool file changed since it was arc
   const home = withFixtures(scratchHome(), [CLAUDE]);
   sync(home);
   const live = livePath(home, CLAUDE);
-  const archivedStamp = statSync(live);
   writeFileSync(live, readFileSync(live, "utf8").replace('"add the parser"', '"add the PARSER"'));
-  utimesSync(live, archivedStamp.atime, archivedStamp.mtime);
 
   rebuild(home);
   expect(rowsOf(home, "select text from message where id = 'claude-session-u1'")).toEqual([

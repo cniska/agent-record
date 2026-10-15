@@ -12,7 +12,7 @@ import { dirname, join, relative, sep } from "node:path";
 import { invariant } from "./assert";
 import type { Env } from "./env";
 import { isEnvironmentError } from "./error-read";
-import { copyIfChanged, copyWhole, sameStamp, stampLike } from "./file-copy";
+import { copyIfChanged, copyWhole, type SourceTime, sameStamp, stampLike } from "./file-copy";
 import { type Failure, refuseIngest } from "./ingest-contract";
 import { EVENT_LOGS, eventArchiveRoot, segmentOf } from "./ingest-event-source";
 import { readAt } from "./ingest-read-at";
@@ -29,6 +29,8 @@ export type ArchiveReport = { readonly files: number; readonly bytes: number };
 type Archiver = (live: string, copy: string) => number;
 
 const UNTOUCHED = 0;
+
+const LIVE_CHANGE: SourceTime = "changed";
 
 export function archiveRootOf(tool: Tool, env: Env): string {
   return join(archiveDir(env), tool);
@@ -62,7 +64,7 @@ function sameBytes(live: string, copy: string, size: number): boolean {
 function appendTail(live: string, copy: string, copySize: number, liveStat: Stats): number {
   const tail = readAt(live, copySize, liveStat.size - copySize);
   appendFileSync(copy, tail);
-  stampLike(copy, liveStat);
+  stampLike(copy, liveStat, LIVE_CHANGE);
   return tail.length;
 }
 
@@ -70,16 +72,16 @@ function archiveGrowing(onRewritten: (copy: string) => void): Archiver {
   return (live, copy) => {
     const liveStat = statSync(live);
     const copyStat = statSync(copy, { throwIfNoEntry: false });
-    if (!copyStat) return copyWhole(live, copy, liveStat);
-    if (sameStamp(copyStat, liveStat)) return UNTOUCHED;
+    if (!copyStat) return copyWhole(live, copy, liveStat, LIVE_CHANGE);
+    if (sameStamp(copyStat, liveStat, LIVE_CHANGE)) return UNTOUCHED;
     if (copyStat.size === liveStat.size && sameBytes(live, copy, liveStat.size)) {
-      stampLike(copy, liveStat);
+      stampLike(copy, liveStat, LIVE_CHANGE);
       return UNTOUCHED;
     }
     if (copyStat.size < liveStat.size && startsWithCopy(live, copy, copyStat.size)) {
       return appendTail(live, copy, copyStat.size, liveStat);
     }
-    return copyWhole(live, copy, liveStat, () => onRewritten(copy));
+    return copyWhole(live, copy, liveStat, LIVE_CHANGE, () => onRewritten(copy));
   };
 }
 
@@ -90,7 +92,7 @@ export type ReplacedCopyMarks = {
   readonly markLog: (copy: string) => void;
 };
 
-const archiveWhole: Archiver = (live, copy) => copyIfChanged(live, copy) ?? UNTOUCHED;
+const archiveWhole: Archiver = (live, copy) => copyIfChanged(live, copy, LIVE_CHANGE) ?? UNTOUCHED;
 
 function followMoves(
   source: SessionSource,
