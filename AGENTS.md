@@ -12,5 +12,5 @@ A local record of coding-agent sessions and the queries over it. [`SPEC.md`](SPE
 - A bug fix lands with a test watched failing first.
 - No test waits real time: a wait or a clock is passed in, as `now` is.
 - Code carries no comments. `.githooks/pre-commit.d/no-comments` refuses a comment a commit adds, other than a directive a tool reads. A why goes into a name, a test, or this file.
-- Commit directly to `main`. `.githooks/commit-msg` judges the message: one Conventional Commit subject, ASCII, at most 50 characters, and no body.
-- Push each commit to `main` once `bun run check` passes and a fresh reviewer accepts it; that accept is the owner's standing sign-off, so no push waits on them.
+- Work each task on a topic branch in its own worktree. Commit each slice there once `bun run check` passes and a fresh reviewer accepts it, and push the branch after each. `.githooks/commit-msg` judges the message: one Conventional Commit subject, ASCII, at most 50 characters, and no body.
+- Land a task as a whole, with no pull request: once a fresh reviewer, given the branch's whole diff against `main`, accepts it (for a one-commit branch, that commit's accept), fast-forward `main` to the branch, push `main` and delete the branch on origin. That accept is the owner's standing sign-off, so no landing waits on them. A release is not a task: its commit and tag stay on `main`, as `scripts/release.sh` makes them.
