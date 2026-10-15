@@ -23,7 +23,13 @@ import {
   type TurnRow,
   type UsageRow,
 } from "./ingest-session-records";
-import { bareSkillName, type SkillLoadRow, skillBodyOf, skillFromCommand } from "./ingest-skill-load";
+import {
+  bareSkillName,
+  type SkillLoadRow,
+  skillBodyOf,
+  skillFromCommand,
+  skillFromFileRead,
+} from "./ingest-skill-load";
 import { Timestamp, timestampMinus } from "./timestamp";
 
 const ClaudeToolUse = z
@@ -389,6 +395,20 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
                 model,
                 skillName: bareSkillName(chosen),
                 how: "model",
+              });
+            }
+            const readSkill =
+              block.name === "Read" && typeof input.file_path === "string"
+                ? skillFromFileRead(input.file_path)
+                : null;
+            if (readSkill !== null) {
+              skillLoads.push({
+                kind: "called",
+                toolCallId: block.id,
+                ts,
+                model,
+                skillName: readSkill,
+                how: "read",
               });
             }
             toolCalls.push({

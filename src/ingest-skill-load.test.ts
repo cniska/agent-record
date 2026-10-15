@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { bareSkillName, type SkillBody, skillBodyOf } from "./ingest-skill-load";
+import { bareSkillName, type SkillBody, skillBodyOf, skillFromFileRead } from "./ingest-skill-load";
 
 const SKILL_FILE_BODY = "# Deploy\n\nRun the work.\n\n## Red flags\n\n- A stalled agent";
 
@@ -80,5 +80,17 @@ describe("reading an agent's preloaded skill", () => {
     expect(skillBodyOf([body])?.kind).toBe("injected");
     expect(skillBodyOf([command])).toBeNull();
     expect(skillBodyOf([command, "# Plan"])).toBeNull();
+  });
+});
+
+describe("skillFromFileRead", () => {
+  test("names the skill by the folder holding SKILL.md, however deep its folder of skills nests it", () => {
+    expect(
+      [
+        "cat skills/plan/SKILL.md",
+        "sed -n 1,80p /x/kit/skills/team/plan/SKILL.md",
+        "cat /x/notes/SKILL.md",
+      ].map(skillFromFileRead),
+    ).toEqual(["plan", "plan", null]);
   });
 });

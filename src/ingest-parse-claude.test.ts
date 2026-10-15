@@ -278,6 +278,44 @@ describe("parseClaudeChunk", () => {
     expect(chunk.toolCalls).toMatchObject([{ id: "tu-h", toolName: "SubagentHandback" }, { id: "tu-b" }]);
   });
 
+  test("ties a skill file the Read tool read to that call, a skill nested in a folder of skills too", () => {
+    const read = (id: string, path: string) => ({
+      type: "tool_use",
+      id,
+      name: "Read",
+      input: { file_path: path },
+    });
+    const chunk = parseClaudeChunk(
+      [
+        JSON.stringify({
+          type: "assistant",
+          uuid: "a-r",
+          timestamp: "2026-09-16T10:03:00.000Z",
+          message: {
+            id: "msg-r",
+            model: "claude-opus-5",
+            content: [
+              read("tu-1", "/x/kit/skills/team/review/SKILL.md"),
+              read("tu-2", "/x/kit/skills/review/references/rules.md"),
+              read("tu-3", "/x/notes/SKILL.md"),
+            ],
+          },
+        }),
+      ],
+      1,
+    );
+    expect(chunk.skillLoads).toEqual<object[]>([
+      {
+        kind: "called",
+        toolCallId: "tu-1",
+        ts: "2026-09-16T10:03:00.000Z",
+        model: "claude-opus-5",
+        skillName: "review",
+        how: "read",
+      },
+    ]);
+  });
+
   test("reads a failed command's exit code from the result Claude Code writes for it", () => {
     const result = (id: string, content: unknown, isError: boolean) =>
       JSON.stringify({

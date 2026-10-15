@@ -41,7 +41,7 @@ export type SkillLoadRow = z.infer<typeof SkillLoadRow>;
 
 const BODY_PREFIX = "Base directory for this skill:";
 const COMMAND_NAME = /<command-name>\/?([a-z0-9][a-z0-9-]*(?::[a-z0-9][a-z0-9-]*)?)<\/command-name>/i;
-const SKILL_FILE = /(?:^|[\s"'/])skills\/([a-z0-9][a-z0-9-]*)\/SKILL\.md/i;
+const SKILL_FILE = /(?:^|[\s"'/])skills\/(?:[^\s"'/]+\/)*([a-z0-9][a-z0-9-]*)\/SKILL\.md/i;
 
 const PLUGIN_INSTALL = /\/plugins\/cache\/[^/]+\/[^/]+\/([^/]+)\/skills\/[^/]+\/?$/;
 const QUALIFIER = ":";
@@ -90,6 +90,6 @@ export function skillFromCommand(text: string): string | null {
   return COMMAND_NAME.exec(text)?.[1] ?? null;
 }
 
-export function skillFromFileRead(command: string): string | null {
-  return SKILL_FILE.exec(command)?.[1] ?? null;
+export function skillFromFileRead(text: string): string | null {
+  return SKILL_FILE.exec(text)?.[1] ?? null;
 }
