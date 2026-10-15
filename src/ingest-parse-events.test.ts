@@ -132,6 +132,15 @@ describe("a hook event log", () => {
     ]);
   });
 
+  test("reads a verdict whose counts are all null as one that counted none", () => {
+    const { events } = parseEventChunk(
+      [line({ ...VERDICT, findings: null, conflicts: null, rules: null })],
+      1,
+    );
+
+    expect(events.map((event) => (event.event === "verdict" ? event.counted : undefined))).toEqual([null]);
+  });
+
   test("reports a verdict whose counts are malformed or only partly there", () => {
     const findings = { critical: 0, major: 1, minor: 2, fix: 1, consider: 0, unrated: 0 };
     const { events, dropped } = parseEventChunk(
@@ -142,11 +151,14 @@ describe("a hook event log", () => {
         line({ ...VERDICT, findings, conflicts: 0, rules: [""] }),
         line({ ...VERDICT, conflicts: 3 }),
         line({ ...VERDICT, findings, conflicts: 0 }),
+        line({ ...VERDICT, findings: { ...findings, minor: 1_000_000_000 }, conflicts: 0, rules: [] }),
+        line({ ...VERDICT, findings, conflicts: 1_000_000_000, rules: [] }),
+        line({ ...VERDICT, findings, conflicts: null, rules: [] }),
       ],
       1,
     );
 
-    expect(dropped).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(dropped).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     expect(events).toEqual([]);
   });
 

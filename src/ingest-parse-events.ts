@@ -44,12 +44,14 @@ const CountedVerdictLine = z
     counted: { findings, conflicts, rules },
   }));
 
+const uncounted = z.null().optional();
+
 const UncountedVerdictLine = z
   .object({
     ...verdict,
-    findings: z.never().optional(),
-    conflicts: z.never().optional(),
-    rules: z.never().optional(),
+    findings: uncounted,
+    conflicts: uncounted,
+    rules: uncounted,
   })
   .transform(({ findings, conflicts, rules, ...rest }) => ({ ...rest, counted: null }));
 

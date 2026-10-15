@@ -18,7 +18,9 @@ export type Decision = (typeof DECISIONS)[number];
 
 export type Verdict = (typeof VERDICTS)[number];
 
-const count = z.number().int().nonnegative();
+const MOST_COUNTED = 1000;
+
+const count = z.number().int().nonnegative().max(MOST_COUNTED);
 
 export const Counted = z.object({
   findings: z.record(z.enum(FINDING_KINDS), count),

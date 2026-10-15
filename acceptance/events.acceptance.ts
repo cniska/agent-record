@@ -238,6 +238,7 @@ test("AC-47 false-stops counts a stop false only when the work got past the gate
     gate(at(15), { decision: "deny", reason: "missing_repo", agent: "r3", gate: "verdict" }),
     verdict(at(16), { verdict: "return", repo: REPO, agent: "r3" }),
     gate(at(17), { decision: "deny", reason: "multiple_commits", agent: "b4" }),
+    { ts: at(18), event: "tag", agent: "b4", key: "route", value: "feature" },
   ]);
 
   const weekly = query(home, ["signal", "false-stops"]);

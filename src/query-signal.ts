@@ -45,11 +45,9 @@ const DATE_CHARS = 10;
 function groupingOf(by: string | undefined, tagKeys: readonly string[]): Grouped {
   if (by === undefined) return BUILT_IN.week;
   if (isBuiltIn(by)) return BUILT_IN[by];
-  if (tagKeys.includes(by)) return taggedBy(by);
-  throw refuseQuery("unknown_grouping", {
-    by,
-    groupings: [...BUILT_INS, ...tagKeys.filter((key) => !isBuiltIn(key))],
-  });
+  const tagGroupings = tagKeys.filter((key) => !isBuiltIn(key) && !RATE_COLUMNS.includes(key));
+  if (tagGroupings.includes(by)) return taggedBy(by);
+  throw refuseQuery("unknown_grouping", { by, groupings: [...BUILT_INS, ...tagGroupings] });
 }
 
 function weekOf(at: string): string {
