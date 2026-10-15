@@ -16,6 +16,8 @@ type Columns = {
   readonly $tool: string | null;
   readonly $toolUse: string | null;
   readonly $rule: string | null;
+  readonly $tagKey: string | null;
+  readonly $tagValue: string | null;
 };
 
 const NO_COLUMNS: Columns = {
@@ -29,6 +31,8 @@ const NO_COLUMNS: Columns = {
   $tool: null,
   $toolUse: null,
   $rule: null,
+  $tagKey: null,
+  $tagValue: null,
 };
 
 function columnsOf(row: HookEventRow): Columns {
@@ -49,6 +53,8 @@ function columnsOf(row: HookEventRow): Columns {
       return { ...NO_COLUMNS, $tool: row.tool };
     case "permission_denied":
       return { ...NO_COLUMNS, $tool: row.tool, $toolUse: row.toolUse, $reason: row.reason, $rule: row.rule };
+    case "tag":
+      return { ...NO_COLUMNS, $tagKey: row.key, $tagValue: row.value };
     default:
       return unreachable(row);
   }
@@ -65,9 +71,9 @@ export function createEventIngester(db: Database) {
   const deleteEvents = db.prepare<void, [string]>("DELETE FROM hook_event WHERE src_file = ?");
   const insertEvent = db.prepare(
     `INSERT INTO hook_event (src_file, src_line, ts, event, session, agent, cwd, gate, decision, reason,
-       repo, head, fingerprint, verdict, tool, tool_use, rule)
+       repo, head, fingerprint, verdict, tool, tool_use, rule, tag_key, tag_value)
      VALUES ($srcFile, $srcLine, $ts, $event, $session, $agent, $cwd, $gate, $decision, $reason,
-       $repo, $head, $fingerprint, $verdict, $tool, $toolUse, $rule)`,
+       $repo, $head, $fingerprint, $verdict, $tool, $toolUse, $rule, $tagKey, $tagValue)`,
   );
 
   const rewindCursor = db.prepare<void, [string]>(

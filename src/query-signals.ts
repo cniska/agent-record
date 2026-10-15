@@ -100,7 +100,7 @@ function event<Kind extends string>(
     task: placed.task,
     sessionId: placed.sessionId,
     repo: placed.repo,
-    route: placed.route,
+    tags: placed.tags,
     kind,
     minutes,
     text,

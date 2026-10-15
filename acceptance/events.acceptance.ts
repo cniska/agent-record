@@ -49,6 +49,8 @@ test("AC-46 a sync archives and reads the event log of every plugin, reports its
     { ts: "2026-10-14T08:04:00Z", event: "gate", gate: "commit", decision: "maybe", reason: "accepted" },
     { ts: "2026-10-14T08:05:00Z", event: "permission_prompt", tool: "Bash", v: 2 },
     { ts: "2026-10-14T08:06:00Z", event: "push", ref: "main" },
+    { ts: "2026-10-14T08:07:00Z", event: "tag", key: "route", value: "feature" },
+    { ts: "2026-10-14T08:08:00Z", event: "tag", key: "route" },
   ]);
   withEventLog(
     home,
@@ -61,7 +63,7 @@ test("AC-46 a sync archives and reads the event log of every plugin, reports its
 
   const synced = sync(home);
   expect(synced.eventLogs).toBe(2);
-  expect(synced.dropped).toEqual([{ path: archivedEventLog(home), lines: [5, 6] }]);
+  expect(synced.dropped).toEqual([{ path: archivedEventLog(home), lines: [5, 6, 9] }]);
   for (const install of [undefined, OTHER_PLUGIN]) {
     const copy = archivedEventLog(home, install);
     expect(readFileSync(copy, "utf8")).toBe(readFileSync(eventLogPath(home, install), "utf8"));
@@ -144,6 +146,23 @@ test("AC-46 a sync archives and reads the event log of every plugin, reports its
       "no-force-push",
     ],
     [
+      8,
+      "2026-10-14T08:07:00.000Z",
+      "tag",
+      SESSION,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+    ],
+    [
       1,
       "2026-10-14T09:00:00.000Z",
       "permission_prompt",
@@ -162,10 +181,14 @@ test("AC-46 a sync archives and reads the event log of every plugin, reports its
     ],
   ]);
 
+  expect(rowsOf(home, "select src_line, tag_key, tag_value from hook_event where event = 'tag'")).toEqual([
+    [8, "route", "feature"],
+  ]);
+
   withEventLog(home, SESSION, [{ ts: "2026-10-14T10:00:00Z", event: "permission_prompt", tool: "Write" }]);
   expect(sync(home)).toMatchObject({ filesRead: 1, dropped: [] });
   const grown = rowsOf(home, HOOK_EVENTS);
-  expect(grown).toHaveLength(6);
+  expect(grown).toHaveLength(7);
 
   rmSync(eventLogPath(home));
   rmSync(eventLogPath(home, OTHER_PLUGIN));
@@ -175,7 +198,7 @@ test("AC-46 a sync archives and reads the event log of every plugin, reports its
   withEventLog(home, SESSION, [{ ts: "2026-10-14T11:00:00Z", event: "permission_prompt", tool: "Read" }]);
   sync(home);
   const kept = rowsOf(home, HOOK_EVENTS);
-  expect(kept).toHaveLength(7);
+  expect(kept).toHaveLength(8);
   expect(kept).toEqual(expect.arrayContaining(grown));
 });
 

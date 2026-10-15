@@ -30,7 +30,7 @@ const recordOf = (more: Partial<SignalRecord>): SignalRecord => ({
   ownerMessages: [],
   rejections: [],
   gitRuns: [],
-  routeReads: [],
+  tags: [],
   compactions: [],
   compactedSessionReads: [],
   commits: [],
@@ -177,21 +177,26 @@ describe("timing a task from its prompt to its last commit run on origin", () =>
     expect(eventsOf("time-to-land", record)).toEqual([]);
   });
 
-  test("names the route by the first route file the task read", () => {
+  test("tags a task with the first value of each key written in it, a subagent's line too", () => {
     const record = recordOf({
-      sessions: [session("a", "2026-10-14T09:00:00.000Z"), session("b", "2026-10-14T09:00:00.000Z")],
+      sessions: [
+        session("a", "2026-10-14T09:00:00.000Z"),
+        session("w", "2026-10-14T09:00:30.000Z", { parentId: "a" }),
+        session("b", "2026-10-14T09:00:00.000Z"),
+      ],
       gitRuns: [
         run("a", "2026-10-14T09:10:00.000Z", "commit"),
         run("b", "2026-10-14T09:10:00.000Z", "commit"),
       ],
-      routeReads: [
-        { sessionId: "a", at: "2026-10-14T09:01:00.000Z", path: "/p/skills/task/references/feature.md" },
-        { sessionId: "a", at: "2026-10-14T09:02:00.000Z", path: "/p/skills/task/references/review.md" },
+      tags: [
+        { sessionId: "w", at: "2026-10-14T09:01:00.000Z", key: "route", value: "feature" },
+        { sessionId: "a", at: "2026-10-14T09:02:00.000Z", key: "route", value: "review" },
+        { sessionId: "a", at: "2026-10-14T09:02:00.000Z", key: "size", value: "small" },
       ],
     });
-    expect(eventsOf("time-to-land", record).map((e) => [e.sessionId, e.route])).toEqual([
-      ["a", "feature"],
-      ["b", "none"],
+    expect(eventsOf("time-to-land", record).map((e) => [e.sessionId, Object.fromEntries(e.tags)])).toEqual([
+      ["a", { route: "feature", size: "small" }],
+      ["b", {}],
     ]);
   });
 });

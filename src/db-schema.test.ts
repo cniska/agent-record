@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
 import { TOOLS } from "./ingest-tools";
 
-const PINNED = "15 769eabdf3e9cc7bcb84bffcdb59279777fb10c949357aa676baa1417af008ff5";
+const PINNED = "16 5b0b2b5bc4cb713085ec356e2362f877f98051dfe7395c68173c2b48be71ca4f";
 
 function schema(): Database {
   const db = new Database(":memory:");
@@ -198,8 +198,10 @@ test("a hook event holds the fields its kind requires", () => {
     expect(() => insert("verdict", { verdict: "accept", repo: "/r" })).toThrow(/CHECK constraint failed/);
     expect(() => insert("permission_prompt", {})).toThrow(/CHECK constraint failed/);
     expect(() => insert("permission_denied", { tool: "Bash" })).toThrow(/CHECK constraint failed/);
+    expect(() => insert("tag", { tag_key: "route" })).toThrow(/CHECK constraint failed/);
     expect(() => insert("gate", { gate: "commit", decision: "deny", reason: "repo_unclear" })).not.toThrow();
     expect(() => insert("verdict", { verdict: "accept", repo: "/r", fingerprint: "f" })).not.toThrow();
+    expect(() => insert("tag", { tag_key: "route", tag_value: "feature" })).not.toThrow();
     expect(() => insert("permission_prompt", { tool: "Bash" })).not.toThrow();
     expect(() => insert("permission_denied", { tool: "Bash", reason: "rule" })).not.toThrow();
   } finally {

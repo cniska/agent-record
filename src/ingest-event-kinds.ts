@@ -1,4 +1,4 @@
-export const HOOK_EVENTS = ["gate", "verdict", "permission_prompt", "permission_denied"] as const;
+export const HOOK_EVENTS = ["gate", "verdict", "permission_prompt", "permission_denied", "tag"] as const;
 
 export const GATES = ["commit", "verdict"] as const;
 

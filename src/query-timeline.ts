@@ -1,4 +1,3 @@
-import { basename, extname } from "node:path";
 import { z } from "zod";
 import { unreachable } from "./assert";
 import { type Escape, escapesOf, type Gated, gateCommits, isAccepted } from "./query-escaped-defects";
@@ -18,8 +17,6 @@ import type { CheckoutRow, GitRunRow, HookRow, SessionRow, SignalRecord } from "
 import { namedKind, type Stretch, stepStretches } from "./query-step-cost";
 import { EpochMs } from "./timestamp";
 
-const NO_ROUTE = "none";
-
 const TaskKey = z.string().brand<"TaskKey">();
 
 export type TaskKey = z.infer<typeof TaskKey>;
@@ -29,8 +26,10 @@ export type Placed = {
   readonly task: TaskKey;
   readonly sessionId: string;
   readonly repo: string | null;
-  readonly route: string;
+  readonly tags: Tags;
 };
+
+type Tags = ReadonlyMap<string, string>;
 
 type Interrupt = Placed & { readonly cause: Cause; readonly text: string | null };
 
@@ -81,6 +80,7 @@ export type Timeline = {
   readonly compactions: readonly Compaction[];
   readonly acceptedCommits: readonly AcceptedCommit[];
   readonly escapes: readonly Escaped[];
+  readonly tagKeys: readonly string[];
   readonly newest: string | null;
 };
 
@@ -186,15 +186,18 @@ export function timelineOf(record: SignalRecord): Timeline {
   const keyOf = (root: string, index: number): TaskKey => TaskKey.parse(`${root}#${index}`);
   const taskKey = (root: string, at: number): TaskKey => keyOf(root, taskIndex(prompts.get(root) ?? [], at));
 
-  const routes = new Map<TaskKey, string>();
-  for (const read of record.routeReads) {
-    const key = taskKey(rootOf(read.sessionId), ms(read.at));
-    if (!routes.has(key)) routes.set(key, basename(read.path, extname(read.path)));
+  const tagged = new Map<TaskKey, Map<string, string>>();
+  for (const tag of record.tags) {
+    const key = taskKey(rootOf(tag.sessionId), ms(tag.at));
+    const tags = tagged.get(key) ?? new Map<string, string>();
+    if (!tags.has(tag.key)) tags.set(tag.key, tag.value);
+    tagged.set(key, tags);
   }
-  const routeOf = (key: TaskKey): string => routes.get(key) ?? NO_ROUTE;
-  const inTask = (root: string, at: number): { readonly task: TaskKey; readonly route: string } => {
+  const untagged: Tags = new Map();
+  const tagsOf = (key: TaskKey): Tags => tagged.get(key) ?? untagged;
+  const inTask = (root: string, at: number): { readonly task: TaskKey; readonly tags: Tags } => {
     const task = taskKey(root, at);
-    return { task, route: routeOf(task) };
+    return { task, tags: tagsOf(task) };
   };
 
   const runs: Run[] = record.gitRuns
@@ -244,7 +247,7 @@ export function timelineOf(record: SignalRecord): Timeline {
         sessionId: root,
         repo: last === null ? repoOfRoot(root) : last.repo,
         task: key,
-        route: routeOf(key),
+        tags: tagsOf(key),
         ownerTyped: ownerTyped.has(root),
         hookLogged: hookLogged(root, prompt.at),
         lastCommitRun: last === null ? null : last.at,
@@ -353,6 +356,7 @@ export function timelineOf(record: SignalRecord): Timeline {
     compactions,
     acceptedCommits,
     escapes,
+    tagKeys: [...new Set(record.tags.map((tag) => tag.key))].sort(),
     newest: record.newest,
   };
 }

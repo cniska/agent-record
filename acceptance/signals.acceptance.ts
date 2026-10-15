@@ -85,7 +85,7 @@ test("AC-40 owner-interrupts counts one interrupt of each cause over two tasks, 
   ]);
 
   const events = query(home, ["signal-events", "owner-interrupts"]);
-  expect(events.columns).toEqual(["at", "kind", "repo", "route", "minutes", "session", "text"]);
+  expect(events.columns).toEqual(["at", "kind", "repo", "tags", "minutes", "session", "text"]);
   expect(events.rows.map(([at, kind, , , , session, text]) => [at, kind, session, text])).toEqual([
     ["2026-09-16T09:11:00.000Z", "task", "ask", null],
     ["2026-09-16T09:09:00.000Z", "permission", "ask", null],
@@ -200,15 +200,12 @@ test("AC-43 review-loops gives two reviewer runs per commit run", () => {
   ]);
 });
 
-const ROUTE = "/Users/x/.claude/plugins/cache/m/acme/aaa/skills/task/references/feature.md";
-
 const twoWeeks = (repo: string): readonly ClaudeSession[] => [
   {
     id: "first",
     cwd: repo,
     steps: [
       { owner: "add the parser", at: "2026-09-16T09:00:00Z" },
-      { read: ROUTE, at: "2026-09-16T09:01:00Z" },
       ran("git commit -m a && git push", "2026-09-16T09:30:00Z", "2026-09-16T09:30:00Z"),
     ],
   },
@@ -231,9 +228,13 @@ const twoWeeks = (repo: string): readonly ClaudeSession[] => [
   },
 ];
 
-test("AC-44 signal splits each week by repo or route, newest first, and refuses an unknown name or --by", () => {
+test("AC-44 signal splits each week by repo or a tag's key, newest first, and refuses an unknown name or --by", () => {
   const repo = appRepo();
-  const home = synced(twoWeeks(repo));
+  const home = withEventLog(withClaudeSessions(scratchHome(), twoWeeks(repo)), "first", [
+    { ts: "2026-09-16T09:01:00Z", event: "tag", key: "route", value: "feature" },
+    { ts: "2026-09-16T09:02:00Z", event: "tag", key: "route", value: "review" },
+  ]);
+  sync(home);
 
   expect(query(home, ["signal", "stranded-work"]).rows).toEqual([
     ["2026-09-21", 0.5, 1, 2, "pushed 1, stranded 1"],
@@ -245,13 +246,9 @@ test("AC-44 signal splits each week by repo or route, newest first, and refuses 
     ["2026-09-21", repo, "acme/app"],
     ["2026-09-14", repo, "acme/app"],
   ]);
-  expect(
-    query(home, ["signal", "time-to-land", "--by", "route"]).rows.map(([week, route, value]) => [
-      week,
-      route,
-      value,
-    ]),
-  ).toEqual([
+  const byRoute = query(home, ["signal", "time-to-land", "--by", "route"]);
+  expect(byRoute.columns).toEqual(["week", "route", "value", "count", "of", "kinds"]);
+  expect(byRoute.rows.map(([week, route, value]) => [week, route, value])).toEqual([
     ["2026-09-21", "none", 1470],
     ["2026-09-14", "feature", 30],
   ]);
@@ -266,7 +263,7 @@ test("AC-44 signal splits each week by repo or route, newest first, and refuses 
   const grouping = refused(runCli(home, ["query", "signal", "stranded-work", "--by", "day"]), "query");
   expect({ code: grouping.code, resolve: grouping.resolve }).toEqual({
     code: "unknown_grouping",
-    resolve: "--by <week|repo|route|version>",
+    resolve: "--by <week|repo|version|route>",
   });
 });
 

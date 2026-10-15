@@ -53,9 +53,13 @@ export type LoadRow = TimedRow & {
 
 export type ResponseRow = TimedRow & { readonly output: number; readonly input: number };
 
+type TagRow = TimedRow & { readonly key: string; readonly value: string };
+
+const TAG = "tag" satisfies HookEvent;
+
 type HookColumns = {
   readonly at: string;
-  readonly event: HookEvent;
+  readonly event: Exclude<HookEvent, typeof TAG>;
   readonly sessionId: string;
   readonly agent: string | null;
   readonly gate: Gate | null;
@@ -120,10 +124,10 @@ export type SignalRecord = {
   readonly ownerMessages: readonly OwnerMessageRow[];
   readonly rejections: readonly TimedRow[];
   readonly gitRuns: readonly GitRunRow[];
-  readonly routeReads: readonly ReadRow[];
   readonly compactions: readonly TimedRow[];
   readonly compactedSessionReads: readonly ReadRow[];
   readonly hookEvents: readonly HookRow[];
+  readonly tags: readonly TagRow[];
   readonly skillLoads: readonly LoadRow[];
   readonly responses: readonly ResponseRow[];
   readonly subagentReturns: readonly TimedRow[];
@@ -133,8 +137,6 @@ export type SignalRecord = {
   readonly labels: ReadonlyMap<string, string>;
   readonly newest: string | null;
 };
-
-const ROUTES_DIR = "/skills/task/references/";
 
 const READ_TOOL = "Read";
 
@@ -188,12 +190,6 @@ export function readSignalRecord(db: Database): SignalRecord {
        ORDER BY c.ts_result`,
     )
     .all();
-  const routeReads = db
-    .query<ReadRow, [string, string]>(
-      `SELECT session_id AS sessionId, ts_call AS at, file_path AS path FROM tool_call
-       WHERE tool_name = ? AND instr(file_path, ?) > 0 AND ts_call IS NOT NULL ORDER BY ts_call`,
-    )
-    .all(READ_TOOL, ROUTES_DIR);
   const compactions = db
     .query<TimedRow, []>("SELECT session_id AS sessionId, ts AS at FROM compaction ORDER BY ts")
     .all();
@@ -206,12 +202,18 @@ export function readSignalRecord(db: Database): SignalRecord {
     )
     .all(READ_TOOL);
   const hookEvents = db
-    .query<HookColumns, []>(
+    .query<HookColumns, [string]>(
       `SELECT ts AS at, event, session AS sessionId, agent, gate, decision, reason, repo, head, fingerprint, verdict
-       FROM hook_event ORDER BY ts, src_file, src_line`,
+       FROM hook_event WHERE event <> ? ORDER BY ts, src_file, src_line`,
     )
-    .all()
+    .all(TAG)
     .map(hookRowOf);
+  const tags = db
+    .query<TagRow, [string]>(
+      `SELECT session AS sessionId, ts AS at, tag_key AS key, tag_value AS value
+       FROM hook_event WHERE event = ? ORDER BY ts, src_file, src_line`,
+    )
+    .all(TAG);
   const skillLoads = db
     .query<Omit<LoadRow, "preloaded"> & { readonly preloaded: number }, [string]>(
       `SELECT session_id AS sessionId, ts AS at, skill_name AS skill, body_sha256 AS bodySha256, install,
@@ -261,10 +263,10 @@ export function readSignalRecord(db: Database): SignalRecord {
     ownerMessages,
     rejections,
     gitRuns,
-    routeReads,
     compactions,
     compactedSessionReads,
     hookEvents,
+    tags,
     skillLoads,
     responses,
     subagentReturns,

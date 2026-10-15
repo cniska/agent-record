@@ -7,7 +7,7 @@ type Grouped = {
   readonly key: (event: SignalEvent, labels: ReadonlyMap<string, string>, home: string) => readonly Cell[];
 };
 
-const GROUPED_BY = {
+const BUILT_IN = {
   week: { columns: ["week"], key: (event) => [weekOf(event.at)] },
   repo: {
     columns: ["week", "repo", "label"],
@@ -17,15 +17,21 @@ const GROUPED_BY = {
       event.repo === null ? null : (labels.get(event.repo) ?? null),
     ],
   },
-  route: { columns: ["week", "route"], key: (event) => [weekOf(event.at), event.route] },
   version: { columns: ["week", "version"], key: (event) => [weekOf(event.at), event.version] },
 } as const satisfies Readonly<Record<string, Grouped>>;
 
-type Grouping = keyof typeof GROUPED_BY;
+type BuiltIn = keyof typeof BUILT_IN;
 
-const GROUPINGS = Object.keys(GROUPED_BY);
+const BUILT_INS = Object.keys(BUILT_IN);
 
-const isGrouping = (by: string): by is Grouping => Object.hasOwn(GROUPED_BY, by);
+const isBuiltIn = (by: string): by is BuiltIn => Object.hasOwn(BUILT_IN, by);
+
+const UNTAGGED = "none";
+
+const taggedBy = (tag: string): Grouped => ({
+  columns: ["week", tag],
+  key: (event) => [weekOf(event.at), event.tags.get(tag) ?? UNTAGGED],
+});
 
 const RATE_COLUMNS = ["value", "count", "of", "kinds"];
 
@@ -35,10 +41,14 @@ const DAYS_IN_WEEK = 7;
 
 const DATE_CHARS = 10;
 
-function groupingOf(by: string | undefined): Grouping {
-  if (by === undefined) return "week";
-  if (!isGrouping(by)) throw refuseQuery("unknown_grouping", { by, groupings: GROUPINGS });
-  return by;
+function groupingOf(by: string | undefined, tagKeys: readonly string[]): Grouped {
+  if (by === undefined) return BUILT_IN.week;
+  if (isBuiltIn(by)) return BUILT_IN[by];
+  if (tagKeys.includes(by)) return taggedBy(by);
+  throw refuseQuery("unknown_grouping", {
+    by,
+    groupings: [...BUILT_INS, ...tagKeys.filter((key) => !isBuiltIn(key))],
+  });
 }
 
 function weekOf(at: string): string {
@@ -59,19 +69,19 @@ function kindsOf(signal: Signal, events: readonly SignalEvent[]): string {
 export const signal: Query<"by" | "skill"> = {
   name: "signal",
   summary:
-    "count one friction signal per week, or per week and repo, route or version, or in the tasks that loaded a skill",
-  usage: "agent-record query signal <name> [--by <week|repo|route|version>] [--skill <name>] [--rows <n>]",
+    "count one friction signal per week, or per week and repo, version or tag, or in the tasks that loaded a skill",
+  usage: "agent-record query signal <name> [--by <week|repo|version|tag key>] [--skill <name>] [--rows <n>]",
   flags: ["by", "skill"],
   run: (db, ctx) => {
     const chosen = signalNamed(ctx.arg);
-    const by = groupingOf(ctx.flags.by);
     const { timeline, labels } = viewRecord(db);
+    const grouping = groupingOf(ctx.flags.by, timeline.tagKeys);
     const scope = skillScope(timeline, ctx.flags.skill);
     const measured = chosen.measure(timeline);
     const events = scoped(scope, measured.events);
     const groups = new Map<string, { readonly key: readonly Cell[]; readonly events: SignalEvent[] }>();
     for (const event of events) {
-      const key = GROUPED_BY[by].key(event, labels, ctx.home);
+      const key = grouping.key(event, labels, ctx.home);
       const id = JSON.stringify(key);
       const group = groups.get(id);
       if (group === undefined) groups.set(id, { key, events: [event] });
@@ -89,7 +99,7 @@ export const signal: Query<"by" | "skill"> = {
       .map(({ key, rate, kinds }) => [...key, rate.value, rate.count, rate.of, kinds]);
     const weeks = new Set(events.map((event) => weekOf(event.at))).size;
     return {
-      columns: [...GROUPED_BY[by].columns, ...RATE_COLUMNS],
+      columns: [...grouping.columns, ...RATE_COLUMNS],
       rows,
       denominator:
         `${described(chosen)}; ${events.length} events over ${weeks} weeks (Monday, UTC)` +

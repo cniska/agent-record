@@ -4,6 +4,9 @@ import { type SignalEvent, signalNamed } from "./query-signals";
 
 const TEXT_CHARS = 160;
 
+const tagsShown = (tags: ReadonlyMap<string, string>): string | null =>
+  tags.size === 0 ? null : [...tags].map(([key, value]) => `${key}=${value}`).join(", ");
+
 const newestFirst = (events: readonly SignalEvent[]): readonly SignalEvent[] =>
   [...events].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
 
@@ -19,12 +22,12 @@ export const signalEvents: Query = {
     const chosen = signalNamed(ctx.arg);
     const events = newestFirst(chosen.measure(viewRecord(db).timeline).events);
     return {
-      columns: ["at", "kind", "repo", "route", "minutes", "session", "text"],
+      columns: ["at", "kind", "repo", "tags", "minutes", "session", "text"],
       rows: events.map((event) => [
         event.at,
         event.kind,
         repoShown(event.repo, ctx.home),
-        event.route,
+        tagsShown(event.tags),
         event.minutes,
         event.sessionId,
         cut(event.text),

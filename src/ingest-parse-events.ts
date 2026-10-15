@@ -50,6 +50,8 @@ const DeniedLine = z
   })
   .transform(({ tool_use, ...rest }) => ({ ...rest, toolUse: tool_use }));
 
+const TagLine = z.object({ ...placed, event: z.literal("tag"), key: known, value: known });
+
 const Unkept = z.looseObject({ v: z.literal(FORMAT_VERSION) }).transform(() => null);
 
 const KEPT = {
@@ -57,6 +59,7 @@ const KEPT = {
   verdict: VerdictLine,
   permission_prompt: PromptLine,
   permission_denied: DeniedLine,
+  tag: TagLine,
 } satisfies Readonly<Record<HookEvent, z.ZodType>>;
 
 const EventLine = byKind((value) => textAt(value, "event"), KEPT, Unkept);
