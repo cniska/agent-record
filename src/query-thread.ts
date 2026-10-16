@@ -1,5 +1,7 @@
 import type { Database } from "bun:sqlite";
+import { z } from "zod";
 import { invariant } from "./assert";
+import { readRows } from "./db";
 import { callFailureSql, SAID, select, sessionByPrefix, timeFlag } from "./query";
 import type { Query } from "./query-contract";
 import { rowsToRead } from "./query-row-cap";
@@ -32,28 +34,29 @@ const IN_ORDER = "ORDER BY ts, rank, line";
 const SHOWN = `SELECT ts AS at, role, skill,
                       replace(substr(text, 1, ${TRANSCRIPT_READING_CHARS}), char(10), ' ') AS text`;
 
-type Counts = {
-  readonly said: number;
-  readonly denied: number;
-  readonly tool: number;
-  readonly untimed: number;
-  readonly upTo: number;
-  readonly after: number;
-};
+const Counts = z.strictObject({
+  said: z.number(),
+  denied: z.number(),
+  tool: z.number(),
+  untimed: z.number(),
+  upTo: z.number(),
+  after: z.number(),
+});
+
+type Counts = Readonly<z.infer<typeof Counts>>;
 
 function countsOf(db: Database, id: string, at: string | null): Counts {
-  const counts = db
-    .query<Counts, [string, string | null]>(
-      `${TIMELINE} SELECT
-         count(*) FILTER (WHERE kind = 'said') AS said,
-         count(*) FILTER (WHERE kind = 'denied') AS denied,
-         count(*) FILTER (WHERE kind = 'tool' AND ts IS NOT NULL) AS tool,
-         count(*) FILTER (WHERE kind = 'tool' AND ts IS NULL) AS untimed,
-         count(*) FILTER (WHERE ts <= ?2) AS upTo,
-         count(*) FILTER (WHERE ts > ?2) AS after
-       FROM timeline`,
-    )
-    .get(id, at);
+  const counts = readRows<[string, string | null]>(
+    db,
+    `${TIMELINE} SELECT
+       count(*) FILTER (WHERE kind = 'said') AS said,
+       count(*) FILTER (WHERE kind = 'denied') AS denied,
+       count(*) FILTER (WHERE kind = 'tool' AND ts IS NOT NULL) AS tool,
+       count(*) FILTER (WHERE kind = 'tool' AND ts IS NULL) AS untimed,
+       count(*) FILTER (WHERE ts <= ?2) AS upTo,
+       count(*) FILTER (WHERE ts > ?2) AS after
+     FROM timeline`,
+  ).get(Counts, id, at);
   invariant(counts !== null, "a count returns one row");
   return counts;
 }

@@ -3,11 +3,12 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { invariant } from "./assert";
+import { readRows } from "./db";
 import { SCHEMA_SQL } from "./db-schema";
 import { ROLES } from "./ingest-session-records";
 import { SAID } from "./query";
 import { type Ranked, RecallCase } from "./query-recall.test-support";
-import { type Call, openedHits } from "./query-recall-pairs.test-support";
+import { openedHits } from "./query-recall-pairs.test-support";
 import { docOf, gramOf, textOf, withTokenizer } from "./query-recall-scrub.test-support";
 import { termsOf } from "./query-search";
 
@@ -47,17 +48,21 @@ export function writeFixture(fixture: Fixture): void {
   );
 }
 
-type LiveMessage = { readonly id: string; readonly at: string; readonly role: string; readonly text: string };
+const CallRow = z.strictObject({ session: z.string(), at: z.string(), command: z.string() });
+
+const IdRow = z.strictObject({ id: z.string() });
+
+const LiveMessage = z.strictObject({ id: z.string(), at: z.string(), role: z.string(), text: z.string() });
 
 export function liveCases(db: Database): readonly RecallCase[] {
-  const calls = db
-    .query<Call, []>(
-      `SELECT session_id AS session, ts_call AS at, command FROM tool_call
-       WHERE ts_call IS NOT NULL AND (command LIKE '%query search%' OR command LIKE '%query thread%')
-       ORDER BY session_id, ts_call, src_line_call`,
-    )
-    .all();
-  const expectedOf = db.query<{ id: string }, [string, string, string, string]>(
+  const calls = readRows(
+    db,
+    `SELECT session_id AS session, ts_call AS at, command FROM tool_call
+     WHERE ts_call IS NOT NULL AND (command LIKE '%query search%' OR command LIKE '%query thread%')
+     ORDER BY session_id, ts_call, src_line_call`,
+  ).all(CallRow);
+  const expectedOf = readRows<[string, string, string, string]>(
+    db,
     `SELECT m.id FROM message m
      WHERE m.session_id LIKE ?1 || '%' AND substr(m.ts, 1, length(?2)) = ?2 AND m.ts < ?3
        AND m.text IS NOT NULL AND ${SAID}
@@ -70,7 +75,7 @@ export function liveCases(db: Database): readonly RecallCase[] {
       .terms.map((term) => term.quoted)
       .join(" OR ");
     if (match === "") continue;
-    const expected = expectedOf.all(hit.prefix, hit.at, hit.searchedAt, match).map(({ id }) => id);
+    const expected = expectedOf.all(IdRow, hit.prefix, hit.at, hit.searchedAt, match).map(({ id }) => id);
     const key = [hit.searchedAt, hit.words, ...expected].join("\n");
     if (expected.length > 0 && !unique.has(key))
       unique.set(key, { searchedAt: hit.searchedAt, words: hit.words, expected });
@@ -79,7 +84,8 @@ export function liveCases(db: Database): readonly RecallCase[] {
 }
 
 export function fixtureOf(db: Database, cases: readonly RecallCase[], ranked: readonly Ranked[]): Fixture {
-  const messageOf = db.query<LiveMessage, [string]>(
+  const messageOf = readRows<[string]>(
+    db,
     "SELECT id, ts AS at, role, text FROM message WHERE id = ? AND text IS NOT NULL",
   );
   const order = new Map<string, string>();
@@ -104,7 +110,7 @@ export function fixtureOf(db: Database, cases: readonly RecallCase[], ranked: re
     );
     const grams = [...new Set(words.flat())].filter((gram) => gram !== NO_TOKEN);
     const messages = [...order].map(([liveId, id]) => {
-      const live = messageOf.get(liveId);
+      const live = messageOf.get(LiveMessage, liveId);
       invariant(live !== null, `a ranked message is in the record: ${liveId}`);
       const doc = docOf(
         tokens(live.text).map((token) => codes.get(token) ?? null),

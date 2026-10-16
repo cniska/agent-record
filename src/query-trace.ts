@@ -1,8 +1,16 @@
 import type { Database } from "bun:sqlite";
+import { z } from "zod";
 import { invariant, unreachable } from "./assert";
-import type { Decision, Gate, Verdict } from "./ingest-event-kinds";
+import { readRows } from "./db";
+import {
+  DECISIONS,
+  GATES as GATE_KINDS,
+  type Gate,
+  VERDICTS as VERDICT_KINDS,
+  type Verdict,
+} from "./ingest-event-kinds";
 import { subagentSessionIdSql } from "./ingest-ids";
-import type { HOWS } from "./ingest-skill-load";
+import { HOWS } from "./ingest-skill-load";
 import { callFailureSql, sessionByPrefix } from "./query";
 import { type Query, refuseQuery } from "./query-contract";
 import {
@@ -24,12 +32,18 @@ type Step<Start, Result = Readonly<Record<never, never>>> = {
   readonly result: Fields<Result>;
 };
 
-type Tokens = {
-  readonly inputTokens: number;
-  readonly cacheReadTokens: number;
-  readonly cacheWriteTokens: number;
-  readonly outputTokens: number;
+const text = z.string();
+const maybeText = z.string().nullable();
+
+const tokens = {
+  inputTokens: z.number(),
+  cacheReadTokens: z.number(),
+  cacheWriteTokens: z.number(),
+  outputTokens: z.number(),
 };
+
+const Tokens = z.strictObject(tokens);
+type Tokens = Readonly<z.infer<typeof Tokens>>;
 
 type Called = { readonly call: string; readonly name: string | null };
 
@@ -88,15 +102,17 @@ const TREE = `WITH RECURSIVE tree(id) AS (
   SELECT ?1 UNION SELECT s.id FROM session s JOIN tree ON s.parent_id = tree.id
 )`;
 
-type SessionRow = {
-  readonly id: string;
-  readonly parent: string | null;
-  readonly agentType: string | null;
-  readonly first: string;
-  readonly last: string;
-  readonly model: string | null;
-  readonly spawnFailure: string | null;
-} & Tokens;
+const SessionRow = z.strictObject({
+  id: text,
+  parent: maybeText,
+  agentType: maybeText,
+  first: text,
+  last: text,
+  model: maybeText,
+  spawnFailure: maybeText,
+  ...tokens,
+});
+type SessionRow = Readonly<z.infer<typeof SessionRow>>;
 
 const SESSIONS = `${TREE}
 SELECT s.id, s.parent_id AS parent, s.agent_type AS agentType, s.ts_first AS first, s.ts_last AS last,
@@ -110,18 +126,19 @@ FROM tree JOIN session s ON s.id = tree.id
 LEFT JOIN tool_call spawn ON spawn.id = s.spawn_call AND spawn.session_id = s.parent_id
 WHERE s.ts_first IS NOT NULL AND s.ts_last IS NOT NULL`;
 
-type CallRow = {
-  readonly id: string;
-  readonly session: string;
-  readonly name: string | null;
-  readonly target: string | null;
-  readonly git: string | null;
-  readonly called: string;
-  readonly returned: string | null;
-  readonly denial: string | null;
-  readonly hostRefused: number | null;
-  readonly failure: string | null;
-};
+const CallRow = z.strictObject({
+  id: text,
+  session: text,
+  name: maybeText,
+  target: maybeText,
+  git: maybeText,
+  called: text,
+  returned: maybeText,
+  denial: maybeText,
+  hostRefused: z.number().nullable(),
+  failure: maybeText,
+});
+type CallRow = Readonly<z.infer<typeof CallRow>>;
 
 const CALL_OUTCOME = `c.id, c.session_id AS session, c.ts_call AS called, c.ts_result AS returned,
   coalesce(c.skill_name, c.file_path) AS target,
@@ -138,38 +155,31 @@ SELECT ${CALL_OUTCOME}, c.tool_name AS name,
 FROM tree JOIN tool_call c ON c.session_id = tree.id
 WHERE c.ts_call IS NOT NULL`;
 
-type SkillRow = {
-  readonly session: string;
-  readonly at: string;
-  readonly name: string;
-  readonly how: How;
-  readonly call: string | null;
-};
+const SkillRow = z.strictObject({ session: text, at: text, name: text, how: z.enum(HOWS), call: maybeText });
+type SkillRow = Readonly<z.infer<typeof SkillRow>>;
 
 const SKILLS = `${TREE}
 SELECT l.session_id AS session, l.ts AS at, l.skill_name AS name, l.how, l.tool_call_id AS call
 FROM tree JOIN skill_load l ON l.session_id = tree.id`;
 
-type CompactionRow = { readonly session: string; readonly at: string };
+const CompactionRow = z.strictObject({ session: text, at: text });
+type CompactionRow = Readonly<z.infer<typeof CompactionRow>>;
 
 const COMPACTIONS = `${TREE}
 SELECT c.session_id AS session, c.ts AS at FROM tree JOIN compaction c ON c.session_id = tree.id`;
 
-type VerdictRow = {
-  readonly session: string;
-  readonly at: string;
-  readonly repo: string;
-  readonly verdict: Verdict;
-};
+const VerdictRow = z.strictObject({ session: text, at: text, repo: text, verdict: z.enum(VERDICT_KINDS) });
+type VerdictRow = Readonly<z.infer<typeof VerdictRow>>;
 
-type GateRow = {
-  readonly session: string;
-  readonly at: string;
-  readonly gate: Gate;
-  readonly decision: Decision;
-  readonly reason: string;
-  readonly repo: string | null;
-};
+const GateRow = z.strictObject({
+  session: text,
+  at: text,
+  gate: z.enum(GATE_KINDS),
+  decision: z.enum(DECISIONS),
+  reason: text,
+  repo: maybeText,
+});
+type GateRow = Readonly<z.infer<typeof GateRow>>;
 
 const ACTOR = `CASE WHEN h.agent IS NULL THEN h.session ELSE ${subagentSessionIdSql("h.agent", "h.session")} END`;
 
@@ -317,7 +327,9 @@ type Picked =
   | { readonly kind: "task"; readonly root: string; readonly task: TaskId; readonly window: Window }
   | { readonly kind: "subagent"; readonly root: string; readonly task: TaskId };
 
-type UsageRow = { readonly at: string; readonly model: string | null } & Tokens;
+const UsageRow = z.strictObject({ at: text, model: maybeText, ...tokens });
+
+const LineRow = z.strictObject({ at: text });
 
 const ROOT_USAGE = `SELECT ts AS at, model, input_tokens AS inputTokens, cache_read_tokens AS cacheReadTokens,
   cache_write_tokens AS cacheWriteTokens, output_tokens AS outputTokens
@@ -380,13 +392,11 @@ function topChildOf(sessions: ReadonlyMap<string, SessionRow>, root: string): (i
 
 function rootInTask(db: Database, root: SessionRow, window: Window, waiting: boolean): Taken {
   const inTask = within(window);
-  const usage = db
-    .query<UsageRow, [string]>(ROOT_USAGE)
-    .all(root.id)
+  const usage = readRows<[string]>(db, ROOT_USAGE)
+    .all(UsageRow, root.id)
     .filter((row) => inTask(row.at));
-  const lines = db
-    .query<{ readonly at: string }, [string]>(ROOT_LINES)
-    .all(root.id)
+  const lines = readRows<[string]>(db, ROOT_LINES)
+    .all(LineRow, root.id)
     .filter((row) => inTask(row.at));
   const sum = (field: keyof Tokens) => usage.reduce((total, row) => total + row[field], 0);
   const last = window.to === null ? root.last : (lines.at(-1)?.at ?? window.from.at);
@@ -418,7 +428,7 @@ function stepsUnder(
   readonly taken: readonly Taken[];
   readonly sessions: ReadonlyMap<string, SessionRow>;
 } {
-  const rows = db.query<SessionRow, [string]>(SESSIONS).all(traced);
+  const rows = readRows<[string]>(db, SESSIONS).all(SessionRow, traced);
   const all = new Map(rows.map((row) => [row.id, row]));
   const topChild = topChildOf(all, traced);
   const inTask = within(window);
@@ -431,7 +441,7 @@ function stepsUnder(
     rows.filter((row) => row.id === traced || startedInTask(row)).map((row) => [row.id, row]),
   );
   const keeps = (t: Taken) => (t.session === traced ? inTask(t.at) : sessions.has(t.session));
-  const calls = db.query<CallRow, [string]>(CALLS).all(traced).map(callStep).filter(keeps);
+  const calls = readRows<[string]>(db, CALLS).all(CallRow, traced).map(callStep).filter(keeps);
   const waiting = new Set(calls.filter((c) => c.ended === null).map((c) => c.session));
   const agents = [...sessions.values()].map((row) =>
     row.id === traced && window !== null
@@ -439,10 +449,10 @@ function stepsUnder(
       : agentStep(row, waiting),
   );
   const others = [
-    ...db.query<SkillRow, [string]>(SKILLS).all(traced).map(skillStep),
-    ...db.query<CompactionRow, [string]>(COMPACTIONS).all(traced).map(compactStep),
-    ...db.query<VerdictRow, [string]>(VERDICTS).all(traced).map(verdictStep),
-    ...db.query<GateRow, [string]>(GATES).all(traced).map(gateStep),
+    ...readRows<[string]>(db, SKILLS).all(SkillRow, traced).map(skillStep),
+    ...readRows<[string]>(db, COMPACTIONS).all(CompactionRow, traced).map(compactStep),
+    ...readRows<[string]>(db, VERDICTS).all(VerdictRow, traced).map(verdictStep),
+    ...readRows<[string]>(db, GATES).all(GateRow, traced).map(gateStep),
   ].filter(keeps);
   return { taken: [...agents, ...calls, ...others], sessions };
 }

@@ -11,7 +11,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { openDb, recordVersion } from "./db";
+import { z } from "zod";
+import { openDb, readRows, recordVersion } from "./db";
 import { NO_WAIT_MS } from "./db-read.test-support";
 import { SCHEMA_VERSION } from "./db-schema";
 import type { Env } from "./env";
@@ -55,16 +56,14 @@ function fill(db: Database): void {
 }
 
 function tablesOf(db: Database): string[] {
-  return db
-    .query<{ name: string }, []>("SELECT name FROM sqlite_master WHERE type = 'table'")
-    .all()
+  return readRows(db, "SELECT name FROM sqlite_master WHERE type = 'table'")
+    .all(z.strictObject({ name: z.string() }))
     .map((row) => row.name);
 }
 
 function columnsOf(db: Database, table: string): string[] {
-  return db
-    .query<{ name: string }, []>(`PRAGMA table_info(${table})`)
-    .all()
+  return readRows<[string]>(db, "SELECT name FROM pragma_table_info(?)")
+    .all(z.strictObject({ name: z.string() }), table)
     .map((row) => row.name);
 }
 

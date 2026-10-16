@@ -1,7 +1,8 @@
 import type { Database } from "bun:sqlite";
+import { z } from "zod";
 import type { Command, CommandResult } from "./cli-contract";
 import { parseArg } from "./cli-flags";
-import type { HeldRecordWait } from "./db";
+import { AnyRow, type HeldRecordWait, readRows } from "./db";
 import { sqliteCode, sqliteMissingColumn } from "./db-error";
 import { readingRecord } from "./db-read";
 import { errorDetail } from "./error-read";
@@ -13,13 +14,14 @@ import { refuseSql } from "./sql-contract";
 
 const SQL_DENOMINATOR = "the rows the statement returned, in the order SQLite returned them";
 
+const NameRow = z.strictObject({ name: z.string() });
+
 const WORD = /[A-Za-z_][A-Za-z0-9_]*/g;
 
 function namedTables(db: Database, statement: string): readonly string[] {
   const schemaNames = new Map(
-    db
-      .query<{ name: string }, []>("SELECT name FROM sqlite_schema WHERE type IN ('table', 'view')")
-      .all()
+    readRows(db, "SELECT name FROM sqlite_schema WHERE type IN ('table', 'view')")
+      .all(NameRow)
       .map(({ name }) => [name.toLowerCase(), name]),
   );
   const named = (statement.match(WORD) ?? []).map((word) => schemaNames.get(word.toLowerCase()));
@@ -27,10 +29,13 @@ function namedTables(db: Database, statement: string): readonly string[] {
 }
 
 function columnsOf(db: Database, tables: readonly string[]): Record<string, readonly string[]> {
-  const query = db.query<{ name: string }, [string]>(
+  const query = readRows<[string]>(
+    db,
     "SELECT name FROM pragma_table_xinfo(?) WHERE hidden <> 1 ORDER BY cid",
   );
-  return Object.fromEntries(tables.map((table) => [table, query.all(table).map(({ name }) => name)]));
+  return Object.fromEntries(
+    tables.map((table) => [table, query.all(NameRow, table).map(({ name }) => name)]),
+  );
 }
 
 function refusalOf(db: Database, error: unknown, statement: string): unknown {
@@ -52,15 +57,15 @@ function sqlCellOf(statement: string, column: string, value: unknown): Cell {
   return cellOf(value);
 }
 
-function readRows(db: Database, statement: string, maxRows: number): Rows {
+function readStatement(db: Database, statement: string, maxRows: number): Rows {
   try {
-    const prepared = db.query<Record<string, unknown>, []>(statement);
-    const columns = prepared.columnNames;
+    const read = readRows(db, statement);
+    const { columns } = read;
     const repeated = columns.find((column, at) => columns.indexOf(column) !== at);
     if (repeated !== undefined) throw refuseSql("sql_columns_repeated", { statement, column: repeated });
     const toRead = rowsToRead(maxRows);
     const rows: Cell[][] = [];
-    for (const row of prepared.iterate()) {
+    for (const row of read.iterate(AnyRow)) {
       rows.push(columns.map((column) => sqlCellOf(statement, column, row[column])));
       if (rows.length === toRead) break;
     }
@@ -72,7 +77,7 @@ function readRows(db: Database, statement: string, maxRows: number): Rows {
 
 function answer(path: string, wait: HeldRecordWait, statement: string, maxRows: number): CommandResult {
   return readingRecord(path, wait, (db) => {
-    const { columns, rows } = readRows(db, statement, maxRows);
+    const { columns, rows } = readStatement(db, statement, maxRows);
     const result = {
       denominator: SQL_DENOMINATOR,
       columns,

@@ -12,7 +12,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import { openDb } from "./db";
+import { z } from "zod";
+import { AnyRow, Count, openDb, readRows } from "./db";
 import { NO_WAIT_MS } from "./db-read.test-support";
 import type { Env } from "./env";
 import {
@@ -58,32 +59,28 @@ function snapshot(db: Database, root: string) {
       src_file: typeof r.src_file === "string" ? r.src_file.replace(root, "") : r.src_file,
     }));
   return {
-    sessions: db
-      .prepare<Record<string, unknown>, []>(
-        `SELECT id, tool, parent_id, agent_type, cwd, project, git_branch, cli_version, entrypoint,
+    sessions: readRows(
+      db,
+      `SELECT id, tool, parent_id, agent_type, cwd, project, git_branch, cli_version, entrypoint,
                 ts_first, ts_last, title FROM session ORDER BY id`,
-      )
-      .all(),
+    ).all(AnyRow),
     messages: strip(
-      db
-        .prepare<Record<string, unknown>, []>(
-          `SELECT id, session_id, role, model, ts, text, text_chars, src_file, src_line,
+      readRows(
+        db,
+        `SELECT id, session_id, role, model, ts, text, text_chars, src_file, src_line,
                   is_meta, is_skill_body, denial_kind, user_feedback, denial_reason FROM message ORDER BY id`,
-        )
-        .all(),
+      ).all(AnyRow),
     ),
-    usage: db
-      .prepare<Record<string, unknown>, []>(
-        `SELECT response_id, session_id, message_id, model, input_tokens, cache_read_tokens,
+    usage: readRows(
+      db,
+      `SELECT response_id, session_id, message_id, model, input_tokens, cache_read_tokens,
                 cache_write_tokens, output_tokens FROM usage ORDER BY response_id`,
-      )
-      .all(),
-    turns: db
-      .prepare<Record<string, unknown>, []>(
-        `SELECT session_id, turn_id, ts_start, ts_end, duration_ms, message_count, status, model,
+    ).all(AnyRow),
+    turns: readRows(
+      db,
+      `SELECT session_id, turn_id, ts_start, ts_end, duration_ms, message_count, status, model,
                 time_to_first_token_ms FROM turn ORDER BY session_id, turn_id`,
-      )
-      .all(),
+    ).all(AnyRow),
   };
 }
 
@@ -107,7 +104,9 @@ describe("ingest", () => {
     writeClaudeTranscript(env, "-Users-x-code-demo", SESSION);
     const db = run(env);
     try {
-      const row = db.prepare<{ text: string }, []>("SELECT text FROM message WHERE id = 'msg-1'").get();
+      const row = readRows(db, "SELECT text FROM message WHERE id = 'msg-1'").get(
+        z.strictObject({ text: z.string() }),
+      );
       expect(row?.text).toBe("First half.\nSecond half.");
     } finally {
       db.close();
@@ -120,11 +119,10 @@ describe("ingest", () => {
     writeClaudeTranscript(env, "-Users-x-code-demo", SESSION);
     const db = run(env);
     try {
-      const denials = db
-        .prepare<Record<string, unknown>, []>(
-          "SELECT id, denial_kind, user_feedback, denial_reason FROM message WHERE denial_kind IS NOT NULL ORDER BY id",
-        )
-        .all();
+      const denials = readRows(
+        db,
+        "SELECT id, denial_kind, user_feedback, denial_reason FROM message WHERE denial_kind IS NOT NULL ORDER BY id",
+      ).all(AnyRow);
       expect(denials).toEqual([
         { id: "u-4", denial_kind: "user-rejected", user_feedback: "no, not like that", denial_reason: null },
         {
@@ -191,9 +189,9 @@ describe("ingest", () => {
     writeCodexRollout(env, "sessions", THREAD);
     const db = run(env);
     try {
-      const dump = db
-        .prepare<{ t: string }, []>("SELECT group_concat(coalesce(text,'')) AS t FROM message")
-        .get();
+      const dump = readRows(db, "SELECT group_concat(coalesce(text,'')) AS t FROM message").get(
+        z.strictObject({ t: z.string() }),
+      );
       expect(JSON.stringify(snapshot(db, root))).not.toContain("SECRET AGENT MESSAGE");
       expect(dump?.t).not.toContain("SECRET AGENT MESSAGE");
     } finally {
@@ -232,7 +230,7 @@ describe("ingest", () => {
     writeClaudeTranscript(env, "-Users-x-code-demo", SESSION);
     const db = run(env);
     try {
-      const dump = JSON.stringify(db.prepare<Record<string, unknown>, []>("SELECT * FROM tool_call").all());
+      const dump = JSON.stringify(readRows(db, "SELECT * FROM tool_call").all(AnyRow));
       expect(dump).not.toContain("SECRET FILE CONTENTS");
       expect(
         db.prepare("SELECT result_bytes, src_line_result FROM tool_call WHERE id = 'toolu-1'").get(),
@@ -329,7 +327,8 @@ describe("ingest", () => {
     writePrefix(path, lines, cut);
     const incDb = run(incEnv);
     expect(
-      incDb.prepare<{ text: string }, []>("SELECT text FROM message WHERE id = 'msg-1'").get()?.text,
+      readRows(incDb, "SELECT text FROM message WHERE id = 'msg-1'").get(z.strictObject({ text: z.string() }))
+        ?.text,
     ).toBe("First half.");
     writePrefix(path, lines, fullBytes(lines));
     sync(incDb, incEnv);
@@ -476,7 +475,9 @@ describe("ingest", () => {
       const after = snapshot(db, root);
       expect(after.messages.map((m) => m.text)).toEqual(before.messages.map((m) => m.text));
       expect(db.prepare("SELECT count(*) AS n FROM source_file").get()).toEqual({ n: 1 });
-      const src = db.prepare<{ src_file: string }, []>("SELECT src_file FROM message LIMIT 1").get();
+      const src = readRows(db, "SELECT src_file FROM message LIMIT 1").get(
+        z.strictObject({ src_file: z.string() }),
+      );
       expect(src?.src_file).toContain("archived_sessions");
     } finally {
       db.close();
@@ -495,11 +496,10 @@ describe("ingest", () => {
       expect(report.failures).toEqual([]);
       expect(report.filesRead).toBe(1);
       expect(
-        db
-          .prepare<{ bytes_ingested: number }, [string]>(
-            "SELECT bytes_ingested FROM source_file WHERE path = ?",
-          )
-          .get(archivedPath("codex", to, env)),
+        readRows<[string]>(db, "SELECT bytes_ingested FROM source_file WHERE path = ?").get(
+          z.strictObject({ bytes_ingested: z.number() }),
+          archivedPath("codex", to, env),
+        ),
       ).toEqual({ bytes_ingested: fullBytes(codexRolloutLines(THREAD, { withIds: true })) });
     } finally {
       db.close();
@@ -602,11 +602,44 @@ describe("ingest", () => {
             code: "titles_unreadable",
             message: `cannot read Codex thread titles from ${statePath}: no such column: title; its sessions are recorded untitled`,
             meta: { path: statePath, detail: "no such column: title" },
-            resolve: `if ${statePath} is unreadable, make it readable and run agent-record sync; if the detail names a missing table or column, Codex changed its thread store: hand this to the owner to update agent-record, and leave the file in place`,
+            resolve: `if ${statePath} is unreadable, make it readable and run agent-record sync; if the detail names a missing table or column, or a column of another type, Codex changed its thread store: hand this to the owner to update agent-record, and leave the file in place`,
           },
         },
       ]);
       expect(db.prepare("SELECT count(*) AS n FROM session WHERE id = ?").get(THREAD)).toEqual({ n: 1 });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("names a Codex thread store whose title is not text as a failure and still reads the rollouts", () => {
+    const root = newRoot();
+    const env = scratchEnv(root);
+    writeCodexRollout(env, "sessions", THREAD);
+    const livePath = join(codexDir(env), "state_5.sqlite");
+    const statePath = archivedPath("codex", livePath, env);
+    const state = new Database(livePath);
+    state.run("CREATE TABLE threads (id TEXT, title INTEGER)");
+    state.run("INSERT INTO threads VALUES (?, ?)", [THREAD, 7]);
+    state.close();
+
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
+    try {
+      const detail =
+        "a row of SELECT id, title FROM threads does not match its schema: 0.title: Invalid input: expected string, received number";
+      expect(sync(db, env).failures).toEqual([
+        {
+          path: statePath,
+          error: {
+            kind: "refusal",
+            code: "titles_unreadable",
+            message: `cannot read Codex thread titles from ${statePath}: ${detail}; its sessions are recorded untitled`,
+            meta: { path: statePath, detail },
+            resolve: `if ${statePath} is unreadable, make it readable and run agent-record sync; if the detail names a missing table or column, or a column of another type, Codex changed its thread store: hand this to the owner to update agent-record, and leave the file in place`,
+          },
+        },
+      ]);
+      expect(db.prepare("SELECT title FROM session WHERE id = ?").get(THREAD)).toEqual({ title: null });
     } finally {
       db.close();
     }
@@ -798,9 +831,10 @@ describe("ingest", () => {
     try {
       expect(sync(db, env).failures).toEqual([]);
       expect(sync(db, env).failures).toEqual([]);
-      const reread = db
-        .prepare<{ n: number }, [string]>("SELECT count(*) AS n FROM message WHERE session_id = ?")
-        .get(SESSION)?.n;
+      const reread = readRows<[string]>(db, "SELECT count(*) AS n FROM message WHERE session_id = ?").get(
+        Count,
+        SESSION,
+      )?.n;
       const fresh = openDb(join(root, "fresh.db"), { heldRecordWaitMs: NO_WAIT_MS });
       const expected = (() => {
         const other = scratchEnv(join(root, "fresh"));
@@ -809,9 +843,10 @@ describe("ingest", () => {
           `${kept.map((l) => JSON.stringify(l)).join("\n")}\n`,
         );
         sync(fresh, other);
-        return fresh
-          .prepare<{ n: number }, [string]>("SELECT count(*) AS n FROM message WHERE session_id = ?")
-          .get(SESSION)?.n;
+        return readRows<[string]>(fresh, "SELECT count(*) AS n FROM message WHERE session_id = ?").get(
+          Count,
+          SESSION,
+        )?.n;
       })();
       fresh.close();
       expect(reread).toBe(expected);
@@ -841,11 +876,9 @@ describe("ingest", () => {
     const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
     try {
       expect(sync(db, env).dropped).toEqual([]);
-      const rows = db
-        .prepare<{ id: string; parent_id: string }, []>(
-          "SELECT id, parent_id FROM session WHERE id LIKE 'shared@%' ORDER BY id",
-        )
-        .all();
+      const rows = readRows(db, "SELECT id, parent_id FROM session WHERE id LIKE 'shared@%' ORDER BY id").all(
+        z.strictObject({ id: z.string(), parent_id: z.string() }),
+      );
       expect(rows).toEqual([
         { id: `shared@${SESSION}`, parent_id: SESSION },
         { id: `shared@${other}`, parent_id: other },
@@ -972,9 +1005,8 @@ describe("the archive", () => {
   }
 
   function sourcePaths(db: Database): string[] {
-    return db
-      .prepare<{ path: string }, []>("SELECT path FROM source_file ORDER BY path")
-      .all()
+    return readRows(db, "SELECT path FROM source_file ORDER BY path")
+      .all(z.strictObject({ path: z.string() }))
       .map((row) => row.path);
   }
 

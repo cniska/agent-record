@@ -1,87 +1,109 @@
 import type { Database } from "bun:sqlite";
+import { z } from "zod";
 import { invariant, unreachable } from "./assert";
-import { Counted, type Decision, type Gate, type HookEvent, type Verdict } from "./ingest-event-kinds";
+import { readRows, SqlFlag } from "./db";
+import {
+  Counted,
+  DECISIONS,
+  type Decision,
+  GATES,
+  type Gate,
+  HOOK_EVENTS,
+  VERDICTS,
+  type Verdict,
+} from "./ingest-event-kinds";
 import { MID_TURN_PROMPT } from "./ingest-session-records";
 import type { HOWS } from "./ingest-skill-load";
-import type { Tool } from "./ingest-tools";
+import { TOOLS } from "./ingest-tools";
 import { callFailureSql } from "./query";
 import { ESCAPE_REACH_DAYS } from "./query-escaped-defects";
 import { AGENT_TAIL_CHARS, INTERRUPTED } from "./query-interrupt";
 
-export type SessionRow = {
-  readonly id: string;
-  readonly parentId: string | null;
-  readonly tool: Tool;
-  readonly project: string | null;
-  readonly start: string | null;
-  readonly end: string | null;
-  readonly agentType: string | null;
-};
+const text = z.string();
+const maybeText = z.string().nullable();
 
-export type OpeningRow = {
-  readonly id: string;
-  readonly turnId: string | null;
-  readonly sessionId: string;
-  readonly text: string;
-};
+const SessionRow = z.strictObject({
+  id: text,
+  parentId: maybeText,
+  tool: z.enum(TOOLS),
+  project: maybeText,
+  start: maybeText,
+  end: maybeText,
+  agentType: maybeText,
+});
+export type SessionRow = Readonly<z.infer<typeof SessionRow>>;
 
-export type OwnerMessageRow = OpeningRow & {
-  readonly at: string;
-  readonly agentBefore: string | null;
-  readonly midTurn: boolean;
-};
+const opening = { id: text, turnId: maybeText, sessionId: text, text };
 
-export type TimedRow = { readonly sessionId: string; readonly at: string };
+const OpeningRow = z.strictObject(opening);
+export type OpeningRow = Readonly<z.infer<typeof OpeningRow>>;
 
-export type GitRunRow = TimedRow & {
-  readonly subcommand: "commit" | "push";
-  readonly dir: string;
-  readonly callAt: string | null;
-  readonly commitsInCall: number;
-  readonly command: string;
-};
+const OwnerMessageRow = z.strictObject({ ...opening, at: text, agentBefore: maybeText, midTurn: SqlFlag });
+export type OwnerMessageRow = Readonly<z.infer<typeof OwnerMessageRow>>;
 
-export type ReadRow = TimedRow & { readonly path: string };
+const timed = { sessionId: text, at: text };
 
-export type CheckoutRow = { readonly path: string; readonly repo: string };
+const TimedRow = z.strictObject(timed);
+export type TimedRow = Readonly<z.infer<typeof TimedRow>>;
 
-export type CommitRow = {
-  readonly sha: string;
-  readonly repo: string;
-  readonly at: string;
-  readonly subject: string;
-  readonly kind: string | null;
-};
+const GitRunRow = z.strictObject({
+  ...timed,
+  subcommand: z.enum(["commit", "push"]),
+  dir: text,
+  callAt: maybeText,
+  commitsInCall: z.number(),
+  command: text,
+});
+export type GitRunRow = Readonly<z.infer<typeof GitRunRow>>;
 
-export type CommitFileRow = { readonly sha: string; readonly path: string };
+const ReadRow = z.strictObject({ ...timed, path: text });
+export type ReadRow = Readonly<z.infer<typeof ReadRow>>;
 
-export type LoadRow = TimedRow & {
-  readonly skill: string;
-  readonly bodySha256: string | null;
-  readonly install: string | null;
-  readonly preloaded: boolean;
-};
+const CheckoutRow = z.strictObject({ path: text, repo: text });
+export type CheckoutRow = Readonly<z.infer<typeof CheckoutRow>>;
 
-export type ResponseRow = TimedRow & { readonly output: number; readonly input: number };
+const CommitRow = z.strictObject({ sha: text, repo: text, at: text, subject: text, kind: maybeText });
+export type CommitRow = Readonly<z.infer<typeof CommitRow>>;
 
-type TagRow = TimedRow & { readonly key: string; readonly value: string };
+const CommitFileRow = z.strictObject({ sha: text, path: text });
+export type CommitFileRow = Readonly<z.infer<typeof CommitFileRow>>;
 
-const TAG = "tag" satisfies HookEvent;
+const LoadRow = z.strictObject({
+  ...timed,
+  skill: text,
+  bodySha256: maybeText,
+  install: maybeText,
+  preloaded: SqlFlag,
+});
+export type LoadRow = Readonly<z.infer<typeof LoadRow>>;
 
-type HookColumns = {
-  readonly at: string;
-  readonly event: Exclude<HookEvent, typeof TAG>;
-  readonly sessionId: string;
-  readonly agent: string | null;
-  readonly gate: Gate | null;
-  readonly decision: Decision | null;
-  readonly reason: string | null;
-  readonly repo: string | null;
-  readonly head: string | null;
-  readonly fingerprint: string | null;
-  readonly verdict: Verdict | null;
-  readonly counted: string | null;
-};
+const ResponseRow = z.strictObject({ ...timed, output: z.number(), input: z.number() });
+export type ResponseRow = Readonly<z.infer<typeof ResponseRow>>;
+
+const TagRow = z.strictObject({ ...timed, key: text, value: text });
+type TagRow = Readonly<z.infer<typeof TagRow>>;
+
+const TAG = "tag";
+
+const HookColumns = z.strictObject({
+  at: text,
+  event: z.enum(HOOK_EVENTS).exclude([TAG]),
+  sessionId: text,
+  agent: maybeText,
+  gate: z.enum(GATES).nullable(),
+  decision: z.enum(DECISIONS).nullable(),
+  reason: maybeText,
+  repo: maybeText,
+  head: maybeText,
+  fingerprint: maybeText,
+  verdict: z.enum(VERDICTS).nullable(),
+  counted: maybeText,
+});
+type HookColumns = Readonly<z.infer<typeof HookColumns>>;
+
+const LabelRow = z.strictObject({ repo: text, label: text });
+
+const NewestRow = z.strictObject({ ts: maybeText });
 
 type HookActor = { readonly at: string; readonly sessionId: string; readonly agent: string | null };
 
@@ -189,15 +211,13 @@ function readOwnerMessages(
   where: string,
   params: readonly string[],
 ): readonly OwnerMessageRow[] {
-  return db
-    .query<Omit<OwnerMessageRow, "midTurn"> & { readonly midTurn: number }, string[]>(
-      `SELECT m.id, m.turn_id AS turnId, m.session_id AS sessionId, m.ts AS at, m.text,
-              ${AGENT_BEFORE} AS agentBefore, m.prompt_source IS ? AS midTurn
-       FROM message m JOIN session s ON s.id = m.session_id
-       WHERE ${where} ORDER BY m.ts`,
-    )
-    .all(MID_TURN_PROMPT, ...params)
-    .map((message) => ({ ...message, midTurn: message.midTurn === 1 }));
+  return readRows<string[]>(
+    db,
+    `SELECT m.id, m.turn_id AS turnId, m.session_id AS sessionId, m.ts AS at, m.text,
+            ${AGENT_BEFORE} AS agentBefore, m.prompt_source IS ? AS midTurn
+     FROM message m JOIN session s ON s.id = m.session_id
+     WHERE ${where} ORDER BY m.ts`,
+  ).all(OwnerMessageRow, MID_TURN_PROMPT, ...params);
 }
 
 const FIRST_USER = (where: string) => `SELECT sessionId, id, turnId, text FROM (
@@ -209,104 +229,93 @@ const FIRST_USER = (where: string) => `SELECT sessionId, id, turnId, text FROM (
 ) WHERE n = 1`;
 
 export const openingOf = (db: Database, sessionId: string): OpeningRow | null =>
-  db.query<OpeningRow, [string]>(FIRST_USER("m.session_id = ?1")).get(sessionId);
+  readRows<[string]>(db, FIRST_USER("m.session_id = ?1")).get(OpeningRow, sessionId);
 
 export const ownerMessagesOf = (db: Database, sessionId: string): readonly OwnerMessageRow[] =>
   readOwnerMessages(db, `${OWNER} AND m.session_id = ?`, [sessionId]);
 
 export function readSignalRecord(db: Database): SignalRecord {
-  const sessions = db
-    .query<SessionRow, []>(
-      `SELECT id, parent_id AS parentId, tool, project, ts_first AS start, ts_last AS end, agent_type AS agentType
+  const sessions = readRows(
+    db,
+    `SELECT id, parent_id AS parentId, tool, project, ts_first AS start, ts_last AS end, agent_type AS agentType
        FROM session`,
-    )
-    .all();
+  ).all(SessionRow);
   const ownerMessages = readOwnerMessages(db, OWNER, []);
-  const openings = db.query<OpeningRow, []>(FIRST_USER("1")).all();
-  const rejections = db
-    .query<TimedRow, []>(
-      `SELECT session_id AS sessionId, ts AS at FROM message WHERE denial_kind = 'user-rejected' ORDER BY ts`,
-    )
-    .all();
-  const gitRuns = db
-    .query<GitRunRow, []>(
-      `SELECT c.session_id AS sessionId, c.ts_result AS at, g.subcommand, g.dir,
+  const openings = readRows(db, FIRST_USER("1")).all(OpeningRow);
+  const rejections = readRows(
+    db,
+    `SELECT session_id AS sessionId, ts AS at FROM message WHERE denial_kind = 'user-rejected' ORDER BY ts`,
+  ).all(TimedRow);
+  const gitRuns = readRows(
+    db,
+    `SELECT c.session_id AS sessionId, c.ts_result AS at, g.subcommand, g.dir,
               c.ts_call AS callAt, c.command,
               (SELECT count(*) FROM git_command x WHERE x.tool_call_id = c.id AND x.subcommand = 'commit')
                 AS commitsInCall
        FROM git_command g JOIN tool_call c ON c.id = g.tool_call_id
        WHERE g.subcommand IN ('commit', 'push') AND g.dir IS NOT NULL AND ${SUCCEEDED}
        ORDER BY c.ts_result`,
-    )
-    .all();
-  const compactions = db
-    .query<TimedRow, []>("SELECT session_id AS sessionId, ts AS at FROM compaction ORDER BY ts")
-    .all();
-  const compactedSessionReads = db
-    .query<ReadRow, [string]>(
-      `SELECT session_id AS sessionId, ts_call AS at, file_path AS path FROM tool_call
+  ).all(GitRunRow);
+  const compactions = readRows(
+    db,
+    "SELECT session_id AS sessionId, ts AS at FROM compaction ORDER BY ts",
+  ).all(TimedRow);
+  const compactedSessionReads = readRows<[string]>(
+    db,
+    `SELECT session_id AS sessionId, ts_call AS at, file_path AS path FROM tool_call
        WHERE tool_name = ? AND file_path IS NOT NULL AND ts_call IS NOT NULL
          AND session_id IN (SELECT session_id FROM compaction)
        ORDER BY ts_call`,
-    )
-    .all(READ_TOOL);
-  const hookEvents = db
-    .query<HookColumns, [string]>(
-      `SELECT ts AS at, event, session AS sessionId, agent, gate, decision, reason, repo, head, fingerprint, verdict, counted
+  ).all(ReadRow, READ_TOOL);
+  const hookEvents = readRows<[string]>(
+    db,
+    `SELECT ts AS at, event, session AS sessionId, agent, gate, decision, reason, repo, head, fingerprint, verdict, counted
        FROM hook_event WHERE event <> ? ORDER BY ts, src_file, src_line`,
-    )
-    .all(TAG)
+  )
+    .all(HookColumns, TAG)
     .map(hookRowOf);
-  const tags = db
-    .query<TagRow, [string]>(
-      `SELECT session AS sessionId, ts AS at, tag_key AS key, tag_value AS value
+  const tags = readRows<[string]>(
+    db,
+    `SELECT session AS sessionId, ts AS at, tag_key AS key, tag_value AS value
        FROM hook_event WHERE event = ? ORDER BY ts, src_file, src_line`,
-    )
-    .all(TAG);
-  const skillLoads = db
-    .query<Omit<LoadRow, "preloaded"> & { readonly preloaded: number }, [string]>(
-      `SELECT session_id AS sessionId, ts AS at, skill_name AS skill, body_sha256 AS bodySha256, install,
-              how = ? AS preloaded
-       FROM skill_load ORDER BY ts`,
-    )
-    .all(PRELOAD)
-    .map((load) => ({ ...load, preloaded: load.preloaded === 1 }));
-  const responses = db
-    .query<ResponseRow, []>(
-      `SELECT session_id AS sessionId, ts AS at, output_tokens AS output,
+  ).all(TagRow, TAG);
+  const skillLoads = readRows<[string]>(
+    db,
+    `SELECT session_id AS sessionId, ts AS at, skill_name AS skill, body_sha256 AS bodySha256, install,
+            how = ? AS preloaded
+     FROM skill_load ORDER BY ts`,
+  ).all(LoadRow, PRELOAD);
+  const responses = readRows(
+    db,
+    `SELECT session_id AS sessionId, ts AS at, output_tokens AS output,
               input_tokens + cache_read_tokens + cache_write_tokens AS input
        FROM usage ORDER BY session_id, ts, response_id`,
-    )
-    .all();
-  const subagentReturns = db
-    .query<TimedRow, [string]>(
-      `SELECT session_id AS sessionId, ts_result AS at FROM tool_call
+  ).all(ResponseRow);
+  const subagentReturns = readRows<[string]>(
+    db,
+    `SELECT session_id AS sessionId, ts_result AS at FROM tool_call
        WHERE tool_name = ? AND ts_result IS NOT NULL ORDER BY ts_result`,
-    )
-    .all(SUBAGENT_TOOL);
-  const checkouts = db.query<CheckoutRow, []>("SELECT path, repo FROM checkout").all();
-  const commits = db
-    .query<CommitRow, []>("SELECT sha, repo, ts AS at, subject, kind FROM repo_commit ORDER BY ts, sha")
-    .all();
+  ).all(TimedRow, SUBAGENT_TOOL);
+  const checkouts = readRows(db, "SELECT path, repo FROM checkout").all(CheckoutRow);
+  const commits = readRows(
+    db,
+    "SELECT sha, repo, ts AS at, subject, kind FROM repo_commit ORDER BY ts, sha",
+  ).all(CommitRow);
   const firstHook = hookEvents[0]?.at ?? null;
   const commitFiles =
     firstHook === null
       ? []
-      : db
-          .query<CommitFileRow, [string]>(
-            `SELECT f.sha, f.path FROM commit_file f JOIN repo_commit c ON c.sha = f.sha
+      : readRows<[string]>(
+          db,
+          `SELECT f.sha, f.path FROM commit_file f JOIN repo_commit c ON c.sha = f.sha
              WHERE c.ts >= strftime('%Y-%m-%dT%H:%M:%fZ', ?, '-${ESCAPE_REACH_DAYS} days')`,
-          )
-          .all(firstHook);
+        ).all(CommitFileRow, firstHook);
   const labels = new Map(
-    db
-      .query<{ repo: string; label: string }, []>(
-        "SELECT repo, max(label) AS label FROM repo_commit WHERE label IS NOT NULL GROUP BY repo",
-      )
-      .all()
+    readRows(db, "SELECT repo, max(label) AS label FROM repo_commit WHERE label IS NOT NULL GROUP BY repo")
+      .all(LabelRow)
       .map(({ repo, label }) => [repo, label]),
   );
-  const newest = db.query<{ ts: string | null }, []>("SELECT max(ts) AS ts FROM message").get()?.ts ?? null;
+  const newest = readRows(db, "SELECT max(ts) AS ts FROM message").get(NewestRow)?.ts ?? null;
   return {
     sessions,
     ownerMessages,

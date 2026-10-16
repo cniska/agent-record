@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { z } from "zod";
+import { readRows } from "./db";
 import { SCHEMA_SQL } from "./db-schema";
 import { errorCode } from "./error-read";
 import { runFixtureGit } from "./git-fixtures.test-support";
@@ -35,9 +37,8 @@ const fail = (path: string, error: unknown) => failures.push({ path, code: error
 const index = (db: Database, repo: string) => indexRepoFiles(db, [probeCheckout(repo)], fail);
 
 const pathsIn = (db: Database, repo: string): string[] =>
-  db
-    .prepare<{ path: string }, []>("SELECT path FROM repo_file ORDER BY path")
-    .all()
+  readRows(db, "SELECT path FROM repo_file ORDER BY path")
+    .all(z.strictObject({ path: z.string() }))
     .map((r) => r.path.replace(`${repo}/`, ""));
 
 describe("indexing what a repo tracks", () => {

@@ -1,4 +1,13 @@
-import { refuser } from "./coded-error";
+import { BUG, faulter, refuser } from "./coded-error";
+
+export const faultRecord = faulter<{
+  readonly row_mismatch: { readonly sql: string; readonly detail: string };
+}>({
+  row_mismatch: {
+    message: ({ sql, detail }) => `a row of ${sql} does not match its schema: ${detail}`,
+    resolve: () => BUG,
+  },
+});
 
 const UPGRADE =
   "upgrade agent-record the way it was installed: brew upgrade agent-record, npm update -g @cniska/agent-record, or curl -fsSL https://github.com/cniska/agent-record/releases/latest/download/install.sh | sh";

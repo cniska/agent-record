@@ -18,7 +18,7 @@ The rest are named by the step they take (`ingest-parse-claude.ts`, `ingest-arch
 | `ingest` | Copy session files into the archive, and read them from there and git history into the record |
 | `sync`, `rebuild` | The commands that run ingest, and the stamp a sync leaves |
 | `agent` | Install the launchd agent that syncs on a schedule, and read whether it is loaded |
-| `db` | Open, lock and read the SQLite record, and its schema |
+| `db` | Open, lock and read the SQLite record, and its schema; every row read is parsed through a schema |
 | `doctor` | Judge the record's readability and freshness, name the backup a rebuild left, and judge the launchd agent and the mirror |
 | `mirror` | Copy the archive into the mirror folder, and read when it last held the whole archive |
 | `query`, `sql` | The named queries over the record, and raw read-only SQL |
@@ -26,7 +26,7 @@ The rest are named by the step they take (`ingest-parse-claude.ts`, `ingest-arch
 | `plugin` | Tests for the Claude Code plugin's hook in `plugin/`, kept here so the plugin ships no tests |
 | `spec` | Tie the IDs in `SPEC.md` to the acceptance suite's test names |
 | `modules` | Hold each module to the files it publishes |
-| `casts` | Hold `src/` to building every object schema strict or loose, never a bare `z.object` |
+| `casts` | Hold `src/` to building every object schema strict or loose, never a bare `z.object`, and to claiming no row type on a statement |
 | `cli` | Dispatch a command and print its result or error (a refusal or a fault) as one JSON line; `cli.ts` starts it from a checkout and `cli-release.ts` from a compiled release, each naming how the launchd agent runs `sync` |
 | `coded-error`, `error`, `assert`, `env`, `paths`, `file`, `timestamp` | Coded errors, refusals and faults; reading a code, a message or an errno off a thrown value; `unreachable` and `invariant`; the environment, parsed once by `cli.ts`; where every file lives; copying a file aside before it is replaced, listing those copies and removing all but one, and copying one over a stale copy; parsing a time into its canonical UTC text |
 

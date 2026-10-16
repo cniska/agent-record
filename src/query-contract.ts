@@ -1,8 +1,10 @@
 import type { Database } from "bun:sqlite";
+import { z } from "zod";
 import type { Flags } from "./cli-flags";
 import { refuser } from "./coded-error";
 
-export type Cell = string | number | null;
+export const Cell = z.union([z.string(), z.number(), z.null()]);
+export type Cell = z.infer<typeof Cell>;
 
 export type Rows = { readonly columns: readonly string[]; readonly rows: readonly (readonly Cell[])[] };
 

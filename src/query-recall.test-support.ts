@@ -1,10 +1,13 @@
 import type { Database } from "bun:sqlite";
 import { z } from "zod";
 import { invariant } from "./assert";
+import { readRows } from "./db";
 import { SAID } from "./query";
 import { search } from "./query-search";
 
 const RECALL_DEPTH = 5;
+
+const IdRow = z.strictObject({ id: z.string() });
 
 const RANKED_ROWS = 2000;
 
@@ -31,7 +34,8 @@ function rankedBefore(db: Database, words: string, before: string): Ranked {
     return index;
   };
   const [session, at, role] = [column("session"), column("at"), column("role")];
-  const idsAt = db.query<{ id: string }, [string, string, string]>(
+  const idsAt = readRows<[string, string, string]>(
+    db,
     `SELECT m.id FROM message m WHERE m.session_id = ? AND m.ts = ? AND m.role = ? AND m.text IS NOT NULL AND ${SAID}
      ORDER BY m.id`,
   );
@@ -42,7 +46,7 @@ function rankedBefore(db: Database, words: string, before: string): Ranked {
     const key = `${hit.session}\n${hit.at}\n${hit.role}`;
     if (hit.at >= before || seen.has(key)) continue;
     seen.add(key);
-    ranked.push(idsAt.all(hit.session, hit.at, hit.role).map(({ id }) => id));
+    ranked.push(idsAt.all(IdRow, hit.session, hit.at, hit.role).map(({ id }) => id));
   }
   return ranked;
 }

@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { SqlFlag } from "./db";
 import type { Chunk } from "./ingest-chunk";
 
 export type Position = {
@@ -6,15 +8,14 @@ export type Position = {
   readonly state: string | null;
 };
 
-export type ReadCursor = Position & { readonly copyReplaced: boolean };
+export const ReadCursorRow = z.strictObject({
+  bytes: z.number(),
+  lines: z.number(),
+  state: z.string().nullable(),
+  copyReplaced: SqlFlag,
+});
 
-export type ReadCursorRow = Position & { readonly copyReplaced: number };
-
-export function readCursorOf<Row extends ReadCursorRow>(
-  row: Row,
-): Omit<Row, "copyReplaced"> & { readonly copyReplaced: boolean } {
-  return { ...row, copyReplaced: row.copyReplaced === 1 };
-}
+export type ReadCursor = Readonly<z.infer<typeof ReadCursorRow>>;
 
 type ReadPlan = { readonly reset: boolean; readonly from: Position | null };
 

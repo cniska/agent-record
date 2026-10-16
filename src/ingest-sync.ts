@@ -1,7 +1,8 @@
 import type { Database } from "bun:sqlite";
 import { dirname, join } from "node:path";
+import { z } from "zod";
 import { type CodedError, codedOf, errorRecord, isRefusal, type PathFailure } from "./coded-error";
-import { backUpRecord, refusingBusy, writeTransaction } from "./db";
+import { backUpRecord, Exists, readRows, refusingBusy, writeTransaction } from "./db";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
 import type { Env } from "./env";
 import { removeBackupsBut } from "./file-backup";
@@ -45,7 +46,7 @@ export function sync(db: Database, env: Env): SyncReport {
 function ingestFrom(db: Database, env: Env, from: ReadFrom): SyncReport {
   const ingester = createIngester(db, env.home);
   const eventIngester = createEventIngester(db);
-  const sessionExists = db.prepare<{ one: number }, [string]>("SELECT 1 AS one FROM session WHERE id = ?");
+  const sessionExists = readRows<[string]>(db, "SELECT 1 AS one FROM session WHERE id = ?");
   const setTitle = db.prepare<void, [string, string]>(
     "UPDATE session SET title = ? WHERE id = ? AND title IS NULL",
   );
@@ -116,7 +117,7 @@ function ingestFrom(db: Database, env: Env, from: ReadFrom): SyncReport {
       return reset;
     };
     const link = (listed: SourceFile): SourceFile => {
-      const orphan = listed.parentId !== null && !sessionExists.get(listed.parentId);
+      const orphan = listed.parentId !== null && !sessionExists.get(Exists, listed.parentId);
       if (!orphan) return listed;
       report.orphanSubagents.push(listed.sessionId);
       return { ...listed, parentId: null };
@@ -146,12 +147,14 @@ function ingestFrom(db: Database, env: Env, from: ReadFrom): SyncReport {
   return report;
 }
 
+const NameRow = z.strictObject({ name: z.string() });
+
 function tablesWhere(db: Database, condition: string): readonly string[] {
-  return db
-    .query<{ name: string }, []>(
-      `SELECT name FROM main.sqlite_master WHERE type = 'table' AND name NOT GLOB 'sqlite_*' AND ${condition}`,
-    )
-    .all()
+  return readRows(
+    db,
+    `SELECT name FROM main.sqlite_master WHERE type = 'table' AND name NOT GLOB 'sqlite_*' AND ${condition}`,
+  )
+    .all(NameRow)
     .map((row) => row.name);
 }
 
@@ -160,14 +163,15 @@ function dropEveryTable(db: Database): void {
   for (const name of tablesWhere(db, "1")) db.run(`DROP TABLE "${name}"`);
 }
 
+const PathRow = z.strictObject({ path: z.string() });
+
 function recordedCheckouts(db: Database): readonly string[] {
-  const hasPath = db
-    .query<{ one: number }, []>("SELECT 1 AS one FROM pragma_table_info('checkout') WHERE name = 'path'")
-    .get();
+  const hasPath = readRows(db, "SELECT 1 AS one FROM pragma_table_info('checkout') WHERE name = 'path'").get(
+    Exists,
+  );
   if (hasPath === null) return [];
-  return db
-    .query<{ path: string }, []>("SELECT path FROM checkout ORDER BY path")
-    .all()
+  return readRows(db, "SELECT path FROM checkout ORDER BY path")
+    .all(PathRow)
     .map((row) => row.path);
 }
 

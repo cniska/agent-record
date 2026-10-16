@@ -3,7 +3,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { appendFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDb } from "./db";
+import { z } from "zod";
+import { openDb, readRows } from "./db";
 import { NO_WAIT_MS } from "./db-read.test-support";
 import { createEventIngester, ingestEventLog } from "./ingest-events";
 
@@ -27,9 +28,8 @@ const prompt = (ts: string): string =>
   `${JSON.stringify({ v: 1, ts, event: "permission_prompt", session: "s1", agent: null, cwd: "/w", tool: "Bash" })}\n`;
 
 const rows = (db: Database) =>
-  db
-    .query<{ src_line: number; ts: string }, []>("SELECT src_line, ts FROM hook_event ORDER BY src_line")
-    .all()
+  readRows(db, "SELECT src_line, ts FROM hook_event ORDER BY src_line")
+    .all(z.strictObject({ src_line: z.number(), ts: z.string() }))
     .map(({ src_line, ts }) => [src_line, ts]);
 
 describe("reading a hook event log", () => {

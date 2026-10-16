@@ -1,5 +1,7 @@
 import { Database } from "bun:sqlite";
 import { afterAll, expect, test } from "bun:test";
+import { z } from "zod";
+import { readRows } from "./db";
 import {
   SessionId,
   sessionIdOf,
@@ -15,7 +17,7 @@ const TOP = SessionId.parse("33333333-4444-5555-6666-777777777777");
 const SUBAGENT = subagentSessionId("a3333333333333333", TOP);
 
 const asked = (sql: string, id: string) =>
-  db.query<{ v: unknown }, [string]>(`SELECT ${sql} AS v`).get(id)?.v;
+  readRows<[string]>(db, `SELECT ${sql} AS v`).get(z.strictObject({ v: z.unknown() }), id)?.v;
 
 test("a subagent's session id is its agent id at its top-level session's", () => {
   expect(SUBAGENT).toBe(SessionId.parse("a3333333333333333@33333333-4444-5555-6666-777777777777"));

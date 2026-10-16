@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "node:fs";
 import type { z } from "zod";
-import { isEnvironmentError } from "./error-read";
+import { isEnvironmentError, issuesOf } from "./error-read";
 import { type Failure, refuseIngest } from "./ingest-contract";
 
 export function readingSource<T>(
@@ -14,10 +14,6 @@ export function readingSource<T>(
     if (!isEnvironmentError(error)) throw error;
     throw refuseIngest(code, { path, detail: error.message });
   }
-}
-
-function issuesOf(error: z.ZodError): string {
-  return error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ");
 }
 
 type JsonRead<T> =

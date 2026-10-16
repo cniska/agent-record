@@ -1,5 +1,7 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
+import { z } from "zod";
+import { readRows } from "./db";
 import { projectOf, withoutWorktree, worktreeOf } from "./worktree";
 
 describe("naming the worktree a path sits in", () => {
@@ -23,7 +25,10 @@ describe("naming the worktree a path sits in", () => {
     try {
       const expr = withoutWorktree("p");
       const one = (p: string) =>
-        db.query<{ out: string }, [string]>(`SELECT ${expr} AS out FROM (SELECT ? AS p)`).get(p)?.out;
+        readRows<[string]>(db, `SELECT ${expr} AS out FROM (SELECT ? AS p)`).get(
+          z.strictObject({ out: z.string() }),
+          p,
+        )?.out;
 
       expect(one("/h/code/one/.claude/worktrees/side/docs/x.md")).toBe("/h/code/one/docs/x.md");
       expect(one("/h/code/one/docs/x.md")).toBe("/h/code/one/docs/x.md");

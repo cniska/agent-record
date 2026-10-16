@@ -3,7 +3,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDb, recordVersion, withDb } from "./db";
+import { z } from "zod";
+import { CodedError, errorRecord } from "./coded-error";
+import { openDb, readRows, recordVersion, SqlFlag, withDb } from "./db";
 import { refuseRecord } from "./db-contract";
 import { NO_WAIT_MS } from "./db-read.test-support";
 import { SCHEMA_VERSION } from "./db-schema";
@@ -69,9 +71,8 @@ async function exited(writer: Writer): Promise<{ code: number; stderr: string }>
 function committed(path: string): string[] {
   const reader = new Database(path, { readonly: true });
   try {
-    return reader
-      .query<{ who: string }, []>("SELECT who FROM probe ORDER BY who")
-      .all()
+    return readRows(reader, "SELECT who FROM probe ORDER BY who")
+      .all(z.strictObject({ who: z.string() }))
       .map((row) => row.who);
   } finally {
     reader.close();
@@ -298,5 +299,44 @@ describe("opening a database an older schema wrote", () => {
     expect(() => openDb(path, { heldRecordWaitMs: NO_WAIT_MS })).toThrow(
       expect.objectContaining({ code: "record_version" }),
     );
+  });
+});
+
+describe("reading rows through a schema", () => {
+  const read = (use: (db: Database) => unknown): unknown => {
+    const db = new Database(":memory:");
+    try {
+      return use(db);
+    } finally {
+      db.close();
+    }
+  };
+
+  test("gives back each row as its schema parses it", () => {
+    const Row = z.strictObject({ n: z.number(), flag: SqlFlag });
+    expect(read((db) => readRows<[number]>(db, "SELECT ? AS n, 1 AS flag").all(Row, 7))).toEqual([
+      { n: 7, flag: true },
+    ]);
+  });
+
+  test("refuses a row its schema does not take, naming the statement, as a bug", () => {
+    let thrown: unknown;
+    try {
+      read((db) => readRows(db, "SELECT 'seven' AS n").get(z.strictObject({ n: z.number() })));
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown instanceof CodedError ? errorRecord(thrown) : thrown).toEqual({
+      kind: "fault",
+      code: "row_mismatch",
+      message:
+        "a row of SELECT 'seven' AS n does not match its schema: n: Invalid input: expected number, received string",
+      meta: {
+        sql: "SELECT 'seven' AS n",
+        detail: "n: Invalid input: expected number, received string",
+      },
+      resolve:
+        "stop and hand this error to the owner as a bug in agent-record; no command you run resolves it",
+    });
   });
 });

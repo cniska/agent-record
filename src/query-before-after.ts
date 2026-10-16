@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { readRows } from "./db";
 import { countFlag, timeFlag } from "./query";
 import { type Query, refuseQuery } from "./query-contract";
 import { scoped, skillScope, viewRecord } from "./query-signal-view";
@@ -8,7 +10,7 @@ import { DAY_MS, EpochMs } from "./timestamp";
 
 const DEFAULT_DAYS = 14;
 
-type Found = { readonly sha: string; readonly ts: string };
+const Found = z.strictObject({ sha: z.string(), ts: z.string() });
 
 const within = <Item extends Placed>(items: readonly Item[], from: number, until: number): readonly Item[] =>
   items.filter((item) => {
@@ -46,9 +48,10 @@ export const beforeAfter: Query<"days" | "from" | "skill"> = {
     const prefix = ctx.arg.toLowerCase();
     const days = ctx.flags.days === undefined ? DEFAULT_DAYS : countFlag("days", ctx.flags.days);
     const from = ctx.flags.from === undefined ? null : timeFlag("from", ctx.flags.from);
-    const found = db
-      .query<Found, [string]>("SELECT sha, ts FROM repo_commit WHERE instr(sha, ?) = 1 ORDER BY sha LIMIT 2")
-      .all(prefix);
+    const found = readRows<[string]>(
+      db,
+      "SELECT sha, ts FROM repo_commit WHERE instr(sha, ?) = 1 ORDER BY sha LIMIT 2",
+    ).all(Found, prefix);
     const [commit, other] = found;
     if (commit === undefined) throw refuseQuery("unknown_commit", { prefix: ctx.arg });
     if (other !== undefined) {

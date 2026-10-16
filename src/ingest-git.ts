@@ -1,7 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { existsSync, realpathSync } from "node:fs";
-import { invariant } from "./assert";
-import { writeTransaction } from "./db";
+import { z } from "zod";
+import { Exists, readRows, writeTransaction } from "./db";
 import type { Env } from "./env";
 import { checkoutRoot } from "./git-checkout";
 import { type Checkout, probeCheckout } from "./git-probe";
@@ -16,13 +16,16 @@ export type GitReport = { repos: number; commits: number; files: number; unchang
 
 const OVERLAP_DAYS = 7;
 
+const CwdRow = z.strictObject({ cwd: z.string() });
+
+const NewestRow = z.strictObject({ ts: Timestamp.nullable() });
+
 export function repoRoots(db: Database, env: Env): readonly string[] {
-  const cwds = db
-    .query<{ cwd: string }, []>(
-      `SELECT cwd FROM session WHERE cwd IS NOT NULL
-       UNION SELECT repo FROM hook_event WHERE repo IS NOT NULL ORDER BY cwd`,
-    )
-    .all();
+  const cwds = readRows(
+    db,
+    `SELECT cwd FROM session WHERE cwd IS NOT NULL
+     UNION SELECT repo FROM hook_event WHERE repo IS NOT NULL ORDER BY cwd`,
+  ).all(CwdRow);
   const roots = new Set<string>();
   for (const { cwd } of cwds) {
     if (!existsSync(cwd) || isScratchRepo(cwd, env)) continue;
@@ -58,15 +61,10 @@ export function ingestCommits(db: Database, checkouts: readonly Checkout[], fail
   const insertFile = db.prepare(
     "INSERT INTO commit_file (sha, path) VALUES (?, ?) ON CONFLICT(sha, path) DO NOTHING",
   );
-  const newestOf = db.query<{ ts: string | null }, [string]>(
-    "SELECT max(ts) AS ts FROM repo_commit WHERE repo = ?",
-  );
-  const newestCommitTime = (repo: string): Timestamp | null => {
-    const newest = Timestamp.nullable().safeParse(newestOf.get(repo)?.ts ?? null);
-    invariant(newest.success, "a stored commit time parses as a time");
-    return newest.data;
-  };
-  const headUnchanged = db.query<{ one: number }, [string, string | null]>(
+  const newestOf = readRows<[string]>(db, "SELECT max(ts) AS ts FROM repo_commit WHERE repo = ?");
+  const newestCommitTime = (repo: string): Timestamp | null => newestOf.get(NewestRow, repo)?.ts ?? null;
+  const headUnchanged = readRows<[string, string | null]>(
+    db,
     "SELECT 1 AS one FROM checkout WHERE path = ? AND head IS ?",
   );
   const saveHead = db.prepare<void, [string, string, string | null]>(
@@ -98,7 +96,7 @@ export function ingestCommits(db: Database, checkouts: readonly Checkout[], fail
 
   writeTransaction(db, () => {
     for (const { path, repo, head } of checkouts) {
-      if (headUnchanged.get(path, head)) {
+      if (headUnchanged.get(Exists, path, head)) {
         report.unchanged += 1;
         continue;
       }

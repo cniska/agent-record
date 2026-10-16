@@ -1,9 +1,13 @@
+import { z } from "zod";
 import { invariant } from "./assert";
+import { readRows } from "./db";
 import { select } from "./query";
 import type { Query } from "./query-contract";
 import { withoutWorktree } from "./worktree";
 
 const PER_WHERE = 3;
+
+const Counts = z.strictObject({ total: z.number(), checkouts: z.number(), indexed: z.number() });
 
 const MATCHES = "instr(lower(path), lower(?)) > 0";
 
@@ -47,18 +51,17 @@ export const priorArt: Query<never> = {
       [fragment, ctx.home, ctx.home],
     );
 
-    const counts = db
-      .query<{ total: number; checkouts: number; indexed: number }, [string]>(
-        `WITH folded AS (
-           SELECT ${withoutWorktree("path")} AS path, ${withoutWorktree("checkout")} AS checkout, ${MATCHES} AS hit
-           FROM repo_file
-         )
-         SELECT count(DISTINCT path) FILTER (WHERE hit) AS total,
-                count(DISTINCT checkout) FILTER (WHERE hit) AS checkouts,
-                count(DISTINCT checkout) AS indexed
-         FROM folded`,
-      )
-      .get(fragment);
+    const counts = readRows<[string]>(
+      db,
+      `WITH folded AS (
+         SELECT ${withoutWorktree("path")} AS path, ${withoutWorktree("checkout")} AS checkout, ${MATCHES} AS hit
+         FROM repo_file
+       )
+       SELECT count(DISTINCT path) FILTER (WHERE hit) AS total,
+              count(DISTINCT checkout) FILTER (WHERE hit) AS checkouts,
+              count(DISTINCT checkout) AS indexed
+       FROM folded`,
+    ).get(Counts, fragment);
     invariant(counts !== null, "a count returns one row");
     const { total, checkouts, indexed } = counts;
     return {

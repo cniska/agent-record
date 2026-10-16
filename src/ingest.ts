@@ -1,19 +1,14 @@
 import type { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
 import { basename } from "node:path";
+import { z } from "zod";
 import { unreachable } from "./assert";
-import { writeTransaction } from "./db";
+import { readRows, writeTransaction } from "./db";
 import { gitRuns } from "./git-operations";
 import type { SessionId, ToolCallId } from "./ingest-ids";
 import { maskedChunk } from "./ingest-mask";
 import { type ReadResult, readNewLines } from "./ingest-read-new";
-import {
-  advance,
-  type Position,
-  type ReadCursor,
-  type ReadCursorRow,
-  readCursorOf,
-} from "./ingest-read-plan";
+import { advance, type Position, ReadCursorRow } from "./ingest-read-plan";
 import type { ChunkParser, ParsedChunk, SessionFacts, ToolCallRow } from "./ingest-session-records";
 import type { SkillLoadRow } from "./ingest-skill-load";
 import type { Kind, Tool } from "./ingest-tools";
@@ -34,9 +29,11 @@ export type SourceFile = {
 
 type FileResult = ReadResult & { readonly reset: boolean };
 
-type Cursor = ReadCursor & { readonly path: string };
+const CursorRow = ReadCursorRow.extend({ path: z.string() });
 
-type CursorRow = ReadCursorRow & { readonly path: string };
+type Cursor = Readonly<z.infer<typeof CursorRow>>;
+
+const SessionCwdRow = z.strictObject({ cwd: z.string().nullable() });
 
 const FROM_ANOTHER_FILE = "message.src_file IS NOT excluded.src_file";
 
@@ -89,10 +86,9 @@ function bitOf(value: boolean | null): number | null {
 }
 
 export function createIngester(db: Database, home: string) {
-  const selectCursor = db.prepare<CursorRow, [string]>(
-    `SELECT ${CURSOR_COLUMNS} FROM source_file WHERE path = ?`,
-  );
-  const selectSessionFiles = db.prepare<CursorRow, [string, string]>(
+  const selectCursor = readRows<[string]>(db, `SELECT ${CURSOR_COLUMNS} FROM source_file WHERE path = ?`);
+  const selectSessionFiles = readRows<[string, string]>(
+    db,
     `SELECT ${CURSOR_COLUMNS} FROM source_file WHERE session_id = ? AND kind = ?`,
   );
   const movePath = db.prepare<void, [string, string]>("UPDATE source_file SET path = ? WHERE path = ?");
@@ -245,9 +241,7 @@ export function createIngester(db: Database, home: string) {
   const insertGitCommand = db.prepare(
     "INSERT INTO git_command (tool_call_id, position, subcommand, dir) VALUES (?, ?, ?, ?)",
   );
-  const selectSessionCwd = db.prepare<{ cwd: string | null }, [string]>(
-    "SELECT cwd FROM session WHERE id = ?",
-  );
+  const selectSessionCwd = readRows<[string]>(db, "SELECT cwd FROM session WHERE id = ?");
 
   const skillLoadConflict = `ON CONFLICT(session_id, anchor_id, skill_name, how) DO UPDATE SET
        body_chars  = coalesce(excluded.body_chars, skill_load.body_chars),
@@ -506,7 +500,7 @@ export function createIngester(db: Database, home: string) {
       });
     }
 
-    const cwd = selectSessionCwd.get(spec.sessionId)?.cwd ?? null;
+    const cwd = selectSessionCwd.get(SessionCwdRow, spec.sessionId)?.cwd ?? null;
     for (const t of parsed.toolCalls) {
       writeToolCall(t, spec);
       if (t.kind !== "result" && t.command) writeGitCommands(t.id, t.command, cwd);
@@ -531,12 +525,9 @@ export function createIngester(db: Database, home: string) {
   }
 
   return {
-    cursorOf: (path: string): Cursor | null => {
-      const row = selectCursor.get(path);
-      return row === null ? null : readCursorOf(row);
-    },
+    cursorOf: (path: string): Cursor | null => selectCursor.get(CursorRow, path),
     sessionFiles: (sessionId: SessionId, kind: Kind): readonly Cursor[] =>
-      selectSessionFiles.all(sessionId, kind).map(readCursorOf),
+      selectSessionFiles.all(CursorRow, sessionId, kind),
     moveCursor: (to: string, from: string) => writeTransaction(db, () => movePath.run(to, from)),
     resetSession: (spec: FileSpec) =>
       writeTransaction(db, () => {

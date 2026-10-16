@@ -29,7 +29,7 @@ export const refuseIngest = refuser<{
     message: ({ path, detail }) =>
       `cannot read Codex thread titles from ${path}: ${detail}; its sessions are recorded untitled`,
     resolve: ({ path }) =>
-      `if ${path} is unreadable, make it readable and run agent-record sync; if the detail names a missing table or column, Codex changed its thread store: hand this to the owner to update agent-record, and leave the file in place`,
+      `if ${path} is unreadable, make it readable and run agent-record sync; if the detail names a missing table or column, or a column of another type, Codex changed its thread store: hand this to the owner to update agent-record, and leave the file in place`,
   },
   sidecar_unreadable: {
     message: ({ path, detail }) => `cannot read ${path}: ${detail}; its session is recorded without it`,

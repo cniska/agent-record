@@ -1,20 +1,61 @@
-import { Database, type DatabaseOptions } from "bun:sqlite";
+import { Database, type DatabaseOptions, type SQLQueryBindings } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
+import { z } from "zod";
 import { invariant, unreachable } from "./assert";
-import { refuseRecord } from "./db-contract";
+import { faultRecord, refuseRecord } from "./db-contract";
 import { sqliteCode } from "./db-error";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
+import { issuesOf } from "./error-read";
 import { nextBackupPath } from "./file-backup";
 
+export type RowRead<Params extends SQLQueryBindings[]> = {
+  readonly columns: readonly string[];
+  readonly get: <Row>(schema: z.ZodType<Row>, ...params: Params) => Row | null;
+  readonly all: <Row>(schema: z.ZodType<Row>, ...params: Params) => Row[];
+  readonly iterate: <Row>(schema: z.ZodType<Row>, ...params: Params) => Generator<Row>;
+  readonly values: <Row>(schema: z.ZodType<Row>, ...params: Params) => Row[];
+};
+
+export const SqlFlag = z.union([z.literal(0), z.literal(1)]).transform((flag) => flag === 1);
+
+export function readRows<Params extends SQLQueryBindings[] = []>(db: Database, sql: string): RowRead<Params> {
+  const statement = db.query<unknown, SQLQueryBindings[]>(sql);
+  const parse = <Row>(schema: z.ZodType<Row>, row: unknown): Row => {
+    const parsed = schema.safeParse(row);
+    if (!parsed.success) throw faultRecord("row_mismatch", { sql, detail: issuesOf(parsed.error) });
+    return parsed.data;
+  };
+  return {
+    columns: statement.columnNames,
+    get: (schema, ...params) => {
+      const row = statement.get(...params);
+      return row === null ? null : parse(schema, row);
+    },
+    all: (schema, ...params) => parse(z.array(schema), statement.all(...params)),
+    iterate: function* (schema, ...params) {
+      for (const row of statement.iterate(...params)) yield parse(schema, row);
+    },
+    values: (schema, ...params) => parse(z.array(schema), statement.values(...params)),
+  };
+}
+
+const UserVersion = z.strictObject({ user_version: z.number() });
+
 export function recordVersion(db: Database): number {
-  const row = db.query<{ user_version: number }, []>("PRAGMA user_version").get();
+  const row = readRows(db, "PRAGMA user_version").get(UserVersion);
   invariant(row !== null, "PRAGMA user_version returns one row");
   return row.user_version;
 }
 
+export const Count = z.strictObject({ n: z.number() });
+
+export const AnyRow = z.record(z.string(), z.unknown());
+
+export const Exists = z.strictObject({ one: z.literal(1) });
+
 function holdsNoTables(db: Database): boolean {
-  return db.query<{ n: number }, []>("SELECT count(*) AS n FROM sqlite_master").get()?.n === 0;
+  return readRows(db, "SELECT count(*) AS n FROM sqlite_master").get(Count)?.n === 0;
 }
 
 export function isFresh(db: Database): boolean {

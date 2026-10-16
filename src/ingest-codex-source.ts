@@ -1,8 +1,11 @@
 import { constants, Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
 import { basename } from "node:path";
+import { z } from "zod";
+import { CodedError } from "./coded-error";
+import { readRows } from "./db";
 import type { SourceFile } from "./ingest";
-import { faultIngest } from "./ingest-contract";
+import { faultIngest, refuseIngest } from "./ingest-contract";
 import { type SessionId, sessionIdOf, TopLevelSessionId } from "./ingest-ids";
 import { CodexState, NO_CODEX_STATE, parseCodexChunk } from "./ingest-parse-codex";
 import { parseJson, readingSource } from "./ingest-source-read";
@@ -48,13 +51,21 @@ export function listCodexRollouts(paths: readonly string[]): SourceFile[] {
   });
 }
 
-function threadRows(statePath: string): { id: string; title: string | null }[] {
+const ThreadRow = z.looseObject({ id: z.string(), title: z.string().nullable() });
+
+type ThreadRow = z.infer<typeof ThreadRow>;
+
+function threadRows(statePath: string): ThreadRow[] {
   const db = new Database(
     `file:${statePath}?immutable=1`,
     constants.SQLITE_OPEN_READONLY | constants.SQLITE_OPEN_URI,
   );
   try {
-    return db.prepare<{ id: string; title: string | null }, []>("SELECT id, title FROM threads").all();
+    return readRows(db, "SELECT id, title FROM threads").all(ThreadRow);
+  } catch (error) {
+    if (error instanceof CodedError && error.code === "row_mismatch")
+      throw refuseIngest("titles_unreadable", { path: statePath, detail: error.message }, error);
+    throw error;
   } finally {
     db.close();
   }

@@ -1,5 +1,7 @@
 import { Database } from "bun:sqlite";
 import { expect, test } from "bun:test";
+import { z } from "zod";
+import { readRows } from "./db";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
 import { TOOLS } from "./ingest-tools";
 
@@ -16,14 +18,14 @@ type QualifiedColumn = { readonly name: string; readonly type: string };
 function qualifiedColumns(): readonly QualifiedColumn[] {
   const db = schema();
   try {
-    return db
-      .query<{ table: string; name: string; type: string }, []>(
-        `SELECT m.name AS "table", c.name AS name, c.type AS type
+    return readRows(
+      db,
+      `SELECT m.name AS "table", c.name AS name, c.type AS type
          FROM sqlite_master m JOIN pragma_table_xinfo(m.name) c
          WHERE m.type = 'table' AND m.name NOT LIKE 'message_fts%'
          ORDER BY m.name, c.cid`,
-      )
-      .all()
+    )
+      .all(z.strictObject({ table: z.string(), name: z.string(), type: z.string() }))
       .map(({ table, name, type }) => ({ name: `${table}.${name}`, type }));
   } finally {
     db.close();
@@ -32,12 +34,14 @@ function qualifiedColumns(): readonly QualifiedColumn[] {
 
 const COLUMNS = qualifiedColumns();
 
-type KeyColumn = {
-  readonly table: string;
-  readonly key: string;
-  readonly seq: number;
-  readonly column: string;
-};
+const KeyColumn = z.strictObject({
+  table: z.string(),
+  key: z.union([z.string(), z.number()]),
+  seq: z.number(),
+  column: z.string(),
+});
+
+type KeyColumn = Readonly<z.infer<typeof KeyColumn>>;
 
 function columnsByKey(rows: readonly KeyColumn[]): ReadonlyMap<string, readonly string[]> {
   const keys = new Map<string, string[]>();
@@ -51,22 +55,20 @@ function columnsByKey(rows: readonly KeyColumn[]): ReadonlyMap<string, readonly 
 test("every foreign key leads an index, so a delete of the rows it references does not scan its table", () => {
   const db = schema();
   const foreignKeys = columnsByKey(
-    db
-      .query<KeyColumn, []>(
-        `SELECT m.name AS "table", f.id AS "key", f.seq AS seq, f."from" AS "column"
-         FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f
-         WHERE m.type = 'table'`,
-      )
-      .all(),
+    readRows(
+      db,
+      `SELECT m.name AS "table", f.id AS "key", f.seq AS seq, f."from" AS "column"
+       FROM sqlite_master m JOIN pragma_foreign_key_list(m.name) f
+       WHERE m.type = 'table'`,
+    ).all(KeyColumn),
   );
   const indexes = columnsByKey(
-    db
-      .query<KeyColumn, []>(
-        `SELECT m.name AS "table", l.name AS "key", i.seqno AS seq, i.name AS "column"
-         FROM sqlite_master m JOIN pragma_index_list(m.name) l JOIN pragma_index_info(l.name) i
-         WHERE m.type = 'table'`,
-      )
-      .all(),
+    readRows(
+      db,
+      `SELECT m.name AS "table", l.name AS "key", i.seqno AS seq, i.name AS "column"
+       FROM sqlite_master m JOIN pragma_index_list(m.name) l JOIN pragma_index_info(l.name) i
+       WHERE m.type = 'table'`,
+    ).all(KeyColumn),
   );
   const tableOf = (id: string) => id.slice(0, id.indexOf(":"));
   const led = (id: string, columns: readonly string[]) =>

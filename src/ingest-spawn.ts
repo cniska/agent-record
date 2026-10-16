@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { invariant } from "./assert";
-import { writeTransaction } from "./db";
+import { Count, readRows, writeTransaction } from "./db";
 import { subagentSessionSql, topLevelSessionSql } from "./ingest-ids";
 
 const SPAWNED_IN_ITS_TASK = `caller.id = child.spawn_call
@@ -17,7 +17,7 @@ const COUNT_UNLINKED = `SELECT count(*) AS n FROM session AS child
 
 export function linkSpawnedSubagents(db: Database): number {
   writeTransaction(db, () => db.run(LINK_TO_SPAWNING_SESSION));
-  const row = db.query<{ n: number }, []>(COUNT_UNLINKED).get();
+  const row = readRows(db, COUNT_UNLINKED).get(Count);
   invariant(row !== null, "a count returns one row");
   return row.n;
 }

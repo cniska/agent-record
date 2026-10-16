@@ -1,6 +1,7 @@
 import type { Database } from "bun:sqlite";
 import { z } from "zod";
 import { invariant } from "./assert";
+import { readRows } from "./db";
 import { refuseQuery } from "./query-contract";
 import { classify, type Said } from "./query-interrupt";
 import { type OpeningRow, type OwnerMessageRow, openingOf, ownerMessagesOf } from "./query-signal-record";
@@ -77,11 +78,12 @@ export function taskByPrefix(starts: readonly TaskStart[], session: string, pref
   return only;
 }
 
-export type RootRow = {
-  readonly id: string;
-  readonly first: string | null;
-  readonly branchFirst: string | null;
-};
+const RootRow = z.strictObject({
+  id: z.string(),
+  first: z.string().nullable(),
+  branchFirst: z.string().nullable(),
+});
+export type RootRow = Readonly<z.infer<typeof RootRow>>;
 
 const ROOT_OF = `WITH RECURSIVE up(id, parent, first) AS (
   SELECT id, parent_id, ts_first FROM session WHERE id = ?1
@@ -92,7 +94,7 @@ FROM up root LEFT JOIN up branch ON branch.parent = root.id
 WHERE root.parent IS NULL`;
 
 export function rootOf(db: Database, session: string): RootRow {
-  const root = db.query<RootRow, [string]>(ROOT_OF).get(session);
+  const root = readRows<[string]>(db, ROOT_OF).get(RootRow, session);
   invariant(root !== null, "every session has a top-level session");
   return root;
 }

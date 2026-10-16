@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { join } from "node:path";
-import { writeTransaction } from "./db";
+import { Exists, readRows, writeTransaction } from "./db";
 import { nulFields, ran } from "./git";
 import type { Checkout } from "./git-probe";
 import { skippingGoneCheckouts } from "./ingest-checkout-failure";
@@ -18,7 +18,8 @@ export function indexRepoFiles(
   failure: Failure,
 ): RepoFileReport {
   const fail = skippingGoneCheckouts(failure);
-  const indexUnchanged = db.query<{ one: number }, [string, string | null]>(
+  const indexUnchanged = readRows<[string, string | null]>(
+    db,
     "SELECT 1 AS one FROM checkout WHERE path = ? AND index_stat IS ?",
   );
   const clear = db.prepare("DELETE FROM repo_file WHERE checkout = ?");
@@ -30,7 +31,7 @@ export function indexRepoFiles(
   const report: RepoFileReport = { repos: 0, files: 0, unchanged: 0 };
   writeTransaction(db, () => {
     for (const { path, repo, indexStat } of checkouts) {
-      if (indexUnchanged.get(path, indexStat)) {
+      if (indexUnchanged.get(Exists, path, indexStat)) {
         report.unchanged += 1;
         continue;
       }

@@ -1,15 +1,9 @@
 import type { Database } from "bun:sqlite";
 import { unreachable } from "./assert";
-import { writeTransaction } from "./db";
+import { readRows, writeTransaction } from "./db";
 import { type HookEventRow, parseEventChunk } from "./ingest-parse-events";
 import { type ReadResult, readNewLines } from "./ingest-read-new";
-import {
-  advance,
-  type Position,
-  type ReadCursor,
-  type ReadCursorRow,
-  readCursorOf,
-} from "./ingest-read-plan";
+import { advance, type Position, type ReadCursor, ReadCursorRow } from "./ingest-read-plan";
 
 type Columns = {
   readonly $gate: string | null;
@@ -75,7 +69,8 @@ function columnsOf(row: HookEventRow): Columns {
 }
 
 export function createEventIngester(db: Database) {
-  const selectCursor = db.prepare<ReadCursorRow, [string]>(
+  const selectCursor = readRows<[string]>(
+    db,
     `SELECT bytes_ingested AS bytes, lines_ingested AS lines, NULL AS state, copy_replaced AS copyReplaced
      FROM event_file WHERE path = ?`,
   );
@@ -104,10 +99,7 @@ export function createEventIngester(db: Database) {
   };
 
   return {
-    cursorOf: (path: string): ReadCursor | null => {
-      const row = selectCursor.get(path);
-      return row === null ? null : readCursorOf(row);
-    },
+    cursorOf: (path: string): ReadCursor | null => selectCursor.get(ReadCursorRow, path),
     markReplaced: (path: string): void =>
       writeTransaction(db, () => {
         setCopyReplaced.run(path);

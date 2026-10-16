@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { z } from "zod";
+import { readRows } from "./db";
 import {
   fingerprint,
   recordWithCommit,
@@ -19,11 +21,9 @@ import { QUERIES } from "./query-registry";
 function recordOf(path: string): unknown {
   const db = new Database(path);
   try {
-    const tables = db
-      .query<{ name: string; sql: string }, []>(
-        "SELECT name, sql FROM sqlite_master WHERE type = 'table' ORDER BY name",
-      )
-      .all();
+    const tables = readRows(db, "SELECT name, sql FROM sqlite_master WHERE type = 'table' ORDER BY name").all(
+      z.strictObject({ name: z.string(), sql: z.string() }),
+    );
     return {
       userVersion: db.query("PRAGMA user_version").get(),
       tables: tables.map(({ name, sql }) => ({ sql, rows: db.query(`SELECT * FROM "${name}"`).all() })),

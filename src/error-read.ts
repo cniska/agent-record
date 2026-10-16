@@ -1,3 +1,9 @@
+import type { z } from "zod";
+
+export function issuesOf(error: z.ZodError): string {
+  return error.issues.map((issue) => `${issue.path.join(".")}: ${issue.message}`).join("; ");
+}
+
 export function errorCode(error: unknown): unknown {
   return error instanceof Error && "code" in error ? error.code : undefined;
 }

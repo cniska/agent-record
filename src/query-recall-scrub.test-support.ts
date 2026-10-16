@@ -1,5 +1,9 @@
 import { Database } from "bun:sqlite";
+import { z } from "zod";
+import { readRows } from "./db";
 import { SCHEMA_SQL } from "./db-schema";
+
+const TermRow = z.strictObject({ term: z.string() });
 
 const FILLER = "x";
 
@@ -20,11 +24,11 @@ export function withTokenizer<T>(use: (tokens: (text: string) => readonly string
       `INSERT INTO message (id, session_id, ts, role, text, src_file, src_line)
        VALUES ('tokenized', 'tokenized', '', 'user', ?, '', 0)`,
     );
-    const read = scratch.query<{ term: string }, []>("SELECT term FROM token ORDER BY offset");
+    const read = readRows(scratch, "SELECT term FROM token ORDER BY offset");
     return use((text) => {
       scratch.run("DELETE FROM message");
       insert.run(text);
-      return read.all().map(({ term }) => term);
+      return read.all(TermRow).map(({ term }) => term);
     });
   } finally {
     scratch.close();
