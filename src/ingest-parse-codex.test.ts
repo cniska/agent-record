@@ -8,6 +8,16 @@ const FRESH = { id: THREAD, state: { model: null, turnId: null } };
 const modern = codexRolloutLines(THREAD, { withIds: true }).map((l) => JSON.stringify(l));
 const legacy = codexRolloutLines(THREAD, { withIds: false }).map((l) => JSON.stringify(l));
 
+const commandItem = (id: string, fields: Record<string, unknown>) =>
+  JSON.stringify({
+    type: "event_msg",
+    timestamp: "2026-09-16T10:00:00.000Z",
+    payload: {
+      type: "item_completed",
+      item: { id, type: "CommandExecution", command: "make", ...fields },
+    },
+  });
+
 describe("parseCodexChunk", () => {
   test("attributes each message to the model of the turn it belongs to", () => {
     const parsed = parseCodexChunk(modern, 1, FRESH);
@@ -247,21 +257,17 @@ describe("parseCodexChunk", () => {
   });
 
   test("keeps a failed command's output as its error text, and none for one that succeeded", () => {
-    const item = (id: string, fields: Record<string, unknown>) =>
-      JSON.stringify({
-        type: "event_msg",
-        timestamp: "2026-09-16T10:00:00.000Z",
-        payload: {
-          type: "item_completed",
-          item: { id, type: "CommandExecution", command: "make", ...fields },
-        },
-      });
     const parsed = parseCodexChunk(
       [
-        item("item-1", { status: "failed", exit_code: 2, stdout: "building", stderr: "make: *** no rule" }),
-        item("item-2", { status: "completed", exit_code: 1, stdout: "", stderr: "boom" }),
-        item("item-3", { status: "declined" }),
-        item("item-4", { status: "completed", exit_code: 0, stdout: "SECRET OUTPUT" }),
+        commandItem("item-1", {
+          status: "failed",
+          exit_code: 2,
+          stdout: "building",
+          stderr: "make: *** no rule",
+        }),
+        commandItem("item-2", { status: "completed", exit_code: 1, stdout: "", stderr: "boom" }),
+        commandItem("item-3", { status: "declined" }),
+        commandItem("item-4", { status: "completed", exit_code: 0, stdout: "SECRET OUTPUT" }),
       ],
       1,
       FRESH,
@@ -273,6 +279,20 @@ describe("parseCodexChunk", () => {
       ["item-2", "boom"],
       ["item-3", null],
       ["item-4", null],
+    ]);
+  });
+
+  test("reports the duration Codex states for a command, and none for one that states none", () => {
+    const parsed = parseCodexChunk(
+      [commandItem("item-1", { duration: { secs: 2, nanos: 500000000 } }), commandItem("item-2", {})],
+      1,
+      FRESH,
+    );
+    expect(
+      parsed.toolCalls.flatMap((call) => (call.kind === "result" ? [[call.id, call.duration]] : [])),
+    ).toEqual<unknown[]>([
+      ["item-1", { kind: "reported", ms: 2500 }],
+      ["item-2", null],
     ]);
   });
 

@@ -941,8 +941,8 @@ test("AC-72 a secret-shaped string in a failed call's result is redacted from it
   ]);
 });
 
-test("AC-73 a call's duration runs from the call to its result where its tool reports none", () => {
-  const home = withClaudeSessions(withFixtures(scratchHome(), [GROK, PI]), [
+test("AC-73 a call's duration is the one its tool reports, or else runs from the call to its result", () => {
+  const home = withClaudeSessions(withFixtures(scratchHome(), [CODEX, GROK, PI]), [
     {
       id: FAILING,
       cwd: "/Users/x/code/demo",
@@ -953,9 +953,30 @@ test("AC-73 a call's duration runs from the call to its result where its tool re
       ],
     },
   ]);
+  appendFileSync(
+    livePath(home, CODEX),
+    `${JSON.stringify({
+      type: "event_msg",
+      timestamp: "2026-09-16T10:07:00.000Z",
+      payload: {
+        type: "item_completed",
+        item: {
+          id: `${CODEX_THREAD}-timed`,
+          type: "CommandExecution",
+          command: "cargo test",
+          status: "completed",
+          exit_code: 0,
+          duration: { secs: 2, nanos: 500000000 },
+        },
+      },
+    })}\n`,
+  );
   const durations = `select id, duration_ms from tool_call
-    where session_id in ('${FAILING}', 'grok-session', 'pi-session') order by id`;
+    where session_id in ('${FAILING}', '${CODEX_THREAD}', 'grok-session', 'pi-session') order by id`;
   const expected = [
+    [`${CODEX_THREAD}-c1`, null],
+    [`${CODEX_THREAD}-c2`, null],
+    [`${CODEX_THREAD}-timed`, 2500],
     [`${FAILING}-1-tool`, 1500],
     [`${FAILING}-2-tool`, null],
     ["g-call-1", 60000],
