@@ -43,6 +43,7 @@ import {
   setSchemaVersion,
   succeeded,
   sync,
+  withCodexTitle,
   withFixtures,
   withICloudDrive,
 } from "./cli";
@@ -945,7 +946,8 @@ test("AC-72 a secret-shaped string in a failed call's result is redacted from it
 test("AC-75 a value given to a name ending in _TOKEN or _SECRET is masked in every table the record holds", () => {
   const token = "CLAUDE_CODE_MESSAGING_TOKEN=0123456789abcdef0123456789abcdef";
   const secret = "NPM_PUBLISH_SECRET=test-secret-value";
-  const home = withClaudeSessions(scratchHome(), [
+  const titled = withCodexTitle(withFixtures(scratchHome(), [CODEX]), CODEX_THREAD, `Set ${secret}`);
+  const home = withClaudeSessions(titled, [
     {
       id: FAILING,
       cwd: "/Users/x/code/demo",
@@ -991,6 +993,9 @@ test("AC-75 a value given to a name ending in _TOKEN or _SECRET is masked in eve
       `select user_feedback from message where session_id = '${FAILING}' and user_feedback is not null`,
     ),
   ).toEqual([["no, it holds NPM_PUBLISH_SECRET=[REDACTED]"]]);
+  expect(rowsOf(home, `select title from session where id = '${CODEX_THREAD}'`)).toEqual([
+    ["Set NPM_PUBLISH_SECRET=[REDACTED]"],
+  ]);
 });
 
 test("AC-73 a call's duration is the one its tool reports, or else runs from the call to its result", () => {

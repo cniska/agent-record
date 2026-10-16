@@ -128,6 +128,17 @@ export function withFixtures(home: Home, fixtures: readonly Fixture[], cwd?: str
 
 type Commit = { readonly subject: string; readonly file: string; readonly at: string };
 
+const CODEX_THREAD_STORE = "state_5.sqlite";
+
+export function withCodexTitle(home: Home, thread: string, title: string): Home {
+  const statePath = join(home.root, ...TOOL_ROOTS.codex, CODEX_THREAD_STORE);
+  mkdirSync(dirname(statePath), { recursive: true });
+  using state = new Database(statePath);
+  state.run("CREATE TABLE IF NOT EXISTS threads (id TEXT, title TEXT)");
+  state.run("INSERT INTO threads VALUES (?, ?)", [thread, title]);
+  return home;
+}
+
 function git(repo: string, args: readonly string[], at?: string): void {
   const ran = Bun.spawnSync(["git", "-C", repo, ...args], {
     env: {
