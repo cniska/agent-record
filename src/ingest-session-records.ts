@@ -174,6 +174,10 @@ const ToolResult = z
 export const ToolCallRow = z.discriminatedUnion("kind", [ToolCall, ToolCallDetail, ToolResult]);
 export type ToolCallRow = z.infer<typeof ToolCallRow>;
 
+export function resultBytesOf(texts: readonly string[]): number | null {
+  return texts.length > 0 ? texts.reduce((n, text) => n + text.length, 0) : null;
+}
+
 export const ParsedChunk = z
   .strictObject({
     session: z.array(SessionFacts).readonly(),

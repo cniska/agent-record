@@ -50,7 +50,7 @@ describe("a Pi or omp session", () => {
         kind: "call",
         id: "call_1",
         ts: "2026-01-01T10:01:05.000Z",
-        messageId: null,
+        messageId: "a1",
         toolName: "read",
         skillName: null,
         filePath: "README.md",
@@ -63,7 +63,7 @@ describe("a Pi or omp session", () => {
         kind: "call",
         id: "call_2",
         ts: "2026-01-01T10:01:05.000Z",
-        messageId: null,
+        messageId: "a1",
         toolName: "bash",
         skillName: null,
         filePath: null,
@@ -121,7 +121,7 @@ describe("a Pi or omp session", () => {
     ]);
   });
 
-  test("names the message a response used tokens for only when that message holds text", () => {
+  test("names the message a response used tokens for, and its calls were made in, only when that message holds text", () => {
     const silent = JSON.stringify({
       type: "message",
       id: "a2",
@@ -134,11 +134,56 @@ describe("a Pi or omp session", () => {
         responseId: "resp_2",
       },
     });
-    const { messages, usage } = parsePiChunk([silent], 1);
+    const { messages, usage, toolCalls } = parsePiChunk([silent], 1);
 
     expect(messages).toEqual([]);
     expect(usage.map(({ responseId, messageId }) => ({ responseId, messageId }))).toEqual<object[]>([
       { responseId: "resp_2", messageId: null },
+    ]);
+    expect(
+      toolCalls.map((row) => ({ id: row.id, messageId: row.kind === "call" ? row.messageId : "not a call" })),
+    ).toEqual<object[]>([{ id: "call_3", messageId: null }]);
+  });
+
+  test("records a read of a skill's SKILL.md as a load of that skill, and no other read or command", () => {
+    const assistant = JSON.stringify({
+      type: "message",
+      id: "a-skills",
+      timestamp: "2026-01-01T10:04:00.000Z",
+      message: {
+        role: "assistant",
+        content: [
+          {
+            type: "toolCall",
+            id: "call_s",
+            name: "read",
+            arguments: { path: "/home/dev/.pi/agent/skills/plan/SKILL.md" },
+          },
+          {
+            type: "toolCall",
+            id: "call_r",
+            name: "read",
+            arguments: { path: "/home/dev/widgets/README.md" },
+          },
+          {
+            type: "toolCall",
+            id: "call_w",
+            name: "write",
+            arguments: { path: "/home/dev/skills/draft/SKILL.md" },
+          },
+        ],
+        model: "model-a",
+      },
+    });
+    expect(parsePiChunk([assistant], 1).skillLoads).toEqual<object[]>([
+      {
+        kind: "called",
+        toolCallId: "call_s",
+        ts: "2026-01-01T10:04:00.000Z",
+        model: "model-a",
+        skillName: "plan",
+        how: "read",
+      },
     ]);
   });
 

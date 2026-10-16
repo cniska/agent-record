@@ -20,6 +20,7 @@ import {
   MID_TURN_PROMPT,
   NO_FACTS,
   type ParsedChunk,
+  resultBytesOf,
   type SessionFacts,
   type ToolCallRow,
   type TurnRow,
@@ -27,10 +28,10 @@ import {
 } from "./ingest-session-records";
 import {
   bareSkillName,
+  readLoadOf,
   type SkillLoadRow,
   skillBodyOf,
   skillFromCommand,
-  skillFromFileRead,
 } from "./ingest-skill-load";
 import { Timestamp, timestampMinus } from "./timestamp";
 
@@ -303,7 +304,7 @@ function resultSize(content: unknown, result: ClaudeToolUseResult | undefined): 
   const parts = resultTexts(content);
   if (typeof result?.stdout === "string") parts.push(result.stdout);
   if (typeof result?.stderr === "string") parts.push(result.stderr);
-  return parts.length > 0 ? parts.reduce((n, p) => n + p.length, 0) : null;
+  return resultBytesOf(parts);
 }
 
 function failureTextOf(content: unknown): string | null {
@@ -416,20 +417,9 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
                 how: "model",
               });
             }
-            const readSkill =
-              block.name === "Read" && typeof input.file_path === "string"
-                ? skillFromFileRead(input.file_path)
-                : null;
-            if (readSkill !== null) {
-              skillLoads.push({
-                kind: "called",
-                toolCallId: block.id,
-                ts,
-                model,
-                skillName: readSkill,
-                how: "read",
-              });
-            }
+            const read =
+              block.name === "Read" && typeof input.file_path === "string" ? input.file_path : null;
+            skillLoads.push(...readLoadOf(read, block.id, ts, model));
             toolCalls.push({
               kind: "call",
               id: block.id,

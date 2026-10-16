@@ -9,10 +9,12 @@ import {
   NO_FACTS,
   type ParsedChunk,
   plainMessage,
+  resultBytesOf,
   type SessionFacts,
   type ToolCallRow,
   type UsageRow,
 } from "./ingest-session-records";
+import { readLoadOf, type SkillLoadRow } from "./ingest-skill-load";
 import { Timestamp } from "./timestamp";
 
 const PiToolCall = z
@@ -84,10 +86,12 @@ function exitCodeOf(parts: readonly z.output<typeof PiTextPart>[]): number | nul
   return code === undefined ? null : Number(code);
 }
 
+function resultTexts(parts: readonly z.output<typeof PiTextPart>[]): string[] {
+  return parts.flatMap((part) => (part.kind === "text" && part.text !== null ? [part.text] : []));
+}
+
 function failureTextOf(parts: readonly z.output<typeof PiTextPart>[]): string | null {
-  return errorTextOf(
-    parts.flatMap((part) => (part.kind === "text" && part.text !== null ? [part.text] : [])).join("\n"),
-  );
+  return errorTextOf(resultTexts(parts).join("\n"));
 }
 
 const PiToolResultLine = z
@@ -109,6 +113,7 @@ const PiToolResultLine = z
     isError: message.isError ?? null,
     exitCode:
       message.details?.exitCode ?? (message.isError === true ? exitCodeOf(message.content ?? []) : null),
+    resultBytes: resultBytesOf(resultTexts(message.content ?? [])),
     errorText: message.isError === true ? failureTextOf(message.content ?? []) : null,
   }));
 type PiToolResultLine = z.infer<typeof PiToolResultLine>;
@@ -161,7 +166,7 @@ function usageOf(line: PiAssistantLine, messageId: MessageId | null): UsageRow[]
   ];
 }
 
-function callsOf(line: PiAssistantLine, srcLine: number): ToolCallRow[] {
+function callsOf(line: PiAssistantLine, messageId: MessageId | null, srcLine: number): ToolCallRow[] {
   return line.parts.flatMap((part): ToolCallRow[] => {
     if (part.kind !== "toolCall") return [];
     return [
@@ -169,7 +174,7 @@ function callsOf(line: PiAssistantLine, srcLine: number): ToolCallRow[] {
         kind: "call",
         id: part.id,
         ts: line.ts,
-        messageId: null,
+        messageId,
         toolName: nonEmpty(part.name),
         skillName: null,
         filePath: nonEmpty(part.arguments?.path),
@@ -179,6 +184,15 @@ function callsOf(line: PiAssistantLine, srcLine: number): ToolCallRow[] {
         srcLine,
       },
     ];
+  });
+}
+
+const PI_READ = "read";
+
+function skillLoadsOf(line: PiAssistantLine): SkillLoadRow[] {
+  return line.parts.flatMap((part): SkillLoadRow[] => {
+    if (part.kind !== "toolCall" || part.name !== PI_READ) return [];
+    return readLoadOf(nonEmpty(part.arguments?.path), part.id, line.ts, line.model);
   });
 }
 
@@ -193,7 +207,7 @@ function resultOf(line: PiToolResultLine, srcLine: number): ToolCallRow {
     hostRefused: null,
     exitCode: line.exitCode,
     duration: CALL_TO_RESULT,
-    resultBytes: null,
+    resultBytes: line.resultBytes,
     errorText: line.errorText,
     srcLine,
   };
@@ -204,6 +218,7 @@ export function parsePiChunk(lines: readonly string[], firstLineNumber: number):
   const messages: MessageRow[] = [];
   const usage: UsageRow[] = [];
   const toolCalls: ToolCallRow[] = [];
+  const skillLoads: SkillLoadRow[] = [];
   const dropped: number[] = [];
 
   for (const [index, raw] of lines.entries()) {
@@ -230,8 +245,10 @@ export function parsePiChunk(lines: readonly string[], firstLineNumber: number):
       case "assistant": {
         const text = textOf(line.parts);
         if (text) messages.push(plainMessage({ ...line, role: "assistant", text, srcLine }));
-        usage.push(...usageOf(line, text ? line.id : null));
-        toolCalls.push(...callsOf(line, srcLine));
+        const messageId = text ? line.id : null;
+        usage.push(...usageOf(line, messageId));
+        toolCalls.push(...callsOf(line, messageId, srcLine));
+        skillLoads.push(...skillLoadsOf(line));
         break;
       }
       case "toolResult":
@@ -251,7 +268,7 @@ export function parsePiChunk(lines: readonly string[], firstLineNumber: number):
     turns: [],
     compactions: [],
     toolCalls,
-    skillLoads: [],
+    skillLoads,
     dropped,
     cursorState: null,
   };

@@ -221,6 +221,36 @@ describe("grok sessions", () => {
     }
   });
 
+  test("a read of a skill's SKILL.md named again by its updates is one load, at the call's time", () => {
+    const env = scratchEnv(newRoot());
+    const read = (sessionUpdate: string, eventId: string, ms: number) =>
+      event(
+        {
+          sessionUpdate,
+          toolCallId: "call-4",
+          rawInput: { target_file: "/Users/x/.agents/skills/plan/SKILL.md" },
+          _meta: { "x.ai/tool": { name: "read_file" } },
+        },
+        eventId,
+        ms,
+      );
+    writeSession(
+      env,
+      PARENT,
+      [read("tool_call", "tool-4", AT), read("tool_call_update", "tool-4-run", AT + 1)],
+      parentSummary(),
+    );
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
+    try {
+      sync(db, env);
+      expect(db.prepare("SELECT tool_call_id, ts, skill_name, how FROM skill_load").all()).toEqual([
+        { tool_call_id: "call-4", ts: "2023-11-14T22:13:20.000Z", skill_name: "plan", how: "read" },
+      ]);
+    } finally {
+      db.close();
+    }
+  });
+
   test("keeps prompts and tool names, and drops thinking and tool results", () => {
     const env = scratchEnv(newRoot());
     const path = seed(env);

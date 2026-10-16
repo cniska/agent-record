@@ -13,7 +13,7 @@ export type Step =
   | { readonly pending: string; readonly at: string }
   | { readonly read: string; readonly at: string }
   | { readonly compacted: string }
-  | { readonly rejected: string; readonly at: string }
+  | { readonly rejected: string; readonly at: string; readonly feedback?: string }
   | { readonly hostRefused: string; readonly at: string }
   | {
       readonly skill: string;
@@ -231,7 +231,10 @@ function linesOf(sessionId: string, cwd: string, steps: readonly Step[], prefix:
     }
     return [
       assistant(step.at, [{ type: "tool_use", id: tool, name: "Bash", input: { command: step.rejected } }]),
-      result(step.at, tool, { toolDenialKind: "user-rejected" }),
+      result(step.at, tool, {
+        toolDenialKind: "user-rejected",
+        ...(step.feedback === undefined ? {} : { userFeedback: step.feedback }),
+      }),
     ];
   });
   return lines.map((line) => `${JSON.stringify(line)}\n`).join("");

@@ -9,9 +9,11 @@ import {
   NO_FACTS,
   type ParsedChunk,
   plainMessage,
+  resultBytesOf,
   type SessionFacts,
   type ToolCallRow,
 } from "./ingest-session-records";
+import { readLoadOf, type SkillLoadRow } from "./ingest-skill-load";
 import { EpochMs, EpochSeconds, type Timestamp } from "./timestamp";
 
 const GrokContent = z.looseObject({ type: z.string().optional(), text: z.string().optional() });
@@ -178,17 +180,25 @@ function toolRowsOf({ update, ts }: GrokToolLine, srcLine: number): ToolCallRow[
       hostRefused: null,
       exitCode: update.shellExitCode,
       duration: CALL_TO_RESULT,
-      resultBytes: null,
+      resultBytes: resultBytesOf(update.texts),
       errorText: failed || (update.shellExitCode ?? 0) !== 0 ? errorTextOf(update.texts.join("\n")) : null,
       srcLine,
     },
   ];
 }
 
+const GROK_READ = "read_file";
+
+function skillLoadsOf({ update, ts }: GrokToolLine): SkillLoadRow[] {
+  const read = toolNameOf(update) === GROK_READ ? filePathOf(update) : null;
+  return readLoadOf(read, update.toolCallId, ts, null);
+}
+
 export function parseGrokChunk(lines: readonly string[], firstLineNumber: number): ParsedChunk {
   const session: SessionFacts[] = [];
   const messages: MessageRow[] = [];
   const toolCalls: ToolCallRow[] = [];
+  const skillLoads: SkillLoadRow[] = [];
   const dropped: number[] = [];
 
   for (const [index, raw] of lines.entries()) {
@@ -203,6 +213,7 @@ export function parseGrokChunk(lines: readonly string[], firstLineNumber: number
     switch (line.kind) {
       case "tool":
         toolCalls.push(...toolRowsOf(line, srcLine));
+        skillLoads.push(...skillLoadsOf(line));
         break;
       case "message":
         if (line.text) messages.push(plainMessage({ ...line, text: line.text, srcLine }));
@@ -221,7 +232,7 @@ export function parseGrokChunk(lines: readonly string[], firstLineNumber: number
     turns: [],
     compactions: [],
     toolCalls,
-    skillLoads: [],
+    skillLoads,
     dropped,
     cursorState: null,
   };

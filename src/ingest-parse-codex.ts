@@ -8,13 +8,14 @@ import {
   NO_FACTS,
   type ParsedChunk,
   ROLES,
+  resultBytesOf,
   type SessionFacts,
   type ToolCallRow,
   type ToolDuration,
   type TurnRow,
   type UsageRow,
 } from "./ingest-session-records";
-import { type SkillLoadRow, skillFromFileRead } from "./ingest-skill-load";
+import { readLoadOf, type SkillLoadRow } from "./ingest-skill-load";
 import { EpochMs, EpochSeconds, Timestamp } from "./timestamp";
 
 export const CodexState = z.strictObject({ model: z.string().nullable(), turnId: TurnId.nullable() });
@@ -269,17 +270,7 @@ export function parseCodexChunk(
         const { item } = line.p;
         const cmd = typeof item.command === "string" ? item.command : commandText(item.command);
         const startedAt = line.p.started_at_ms ?? line.ts;
-        const readSkill = cmd ? skillFromFileRead(cmd) : null;
-        if (readSkill) {
-          skillLoads.push({
-            kind: "called",
-            toolCallId: item.id,
-            ts: startedAt,
-            model: current.model,
-            skillName: readSkill,
-            how: "read",
-          });
-        }
+        skillLoads.push(...readLoadOf(cmd, item.id, startedAt, current.model));
         toolCalls.push(
           {
             kind: "call",
@@ -304,7 +295,9 @@ export function parseCodexChunk(
             hostRefused: null,
             exitCode: item.exit_code ?? null,
             duration: reportedDuration(item.duration),
-            resultBytes: (item.stdout?.length ?? 0) + (item.stderr?.length ?? 0) || null,
+            resultBytes: resultBytesOf(
+              [item.stdout, item.stderr].flatMap((text) => (text == null ? [] : [text])),
+            ),
             errorText: failureTextOf(item),
             srcLine,
           },

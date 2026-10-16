@@ -90,6 +90,16 @@ export function skillFromCommand(text: string): string | null {
   return COMMAND_NAME.exec(text)?.[1] ?? null;
 }
 
-export function skillFromFileRead(text: string): string | null {
+function skillFromFileRead(text: string): string | null {
   return SKILL_FILE.exec(text)?.[1] ?? null;
+}
+
+export function readLoadOf(
+  read: string | null,
+  toolCallId: ToolCallId,
+  ts: Timestamp,
+  model: string | null,
+): SkillLoadRow[] {
+  const skillName = read === null ? null : skillFromFileRead(read);
+  return skillName === null ? [] : [{ kind: "called", toolCallId, ts, model, skillName, how: "read" }];
 }

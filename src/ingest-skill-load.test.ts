@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { bareSkillName, type SkillBody, skillBodyOf, skillFromFileRead } from "./ingest-skill-load";
+import { ToolCallId } from "./ingest-ids";
+import {
+  bareSkillName,
+  readLoadOf,
+  type SkillBody,
+  type SkillLoadRow,
+  skillBodyOf,
+} from "./ingest-skill-load";
+import { Timestamp } from "./timestamp";
 
 const SKILL_FILE_BODY = "# Deploy\n\nRun the work.\n\n## Red flags\n\n- A stalled agent";
 
@@ -83,14 +91,26 @@ describe("reading an agent's preloaded skill", () => {
   });
 });
 
-describe("skillFromFileRead", () => {
+describe("reading a skill load from a file read", () => {
+  const toolCallId = ToolCallId.parse("call-1");
+  const ts = Timestamp.parse("2026-09-16T11:00:00.000Z");
+  const loadsOf = (read: string | null) => readLoadOf(read, toolCallId, ts, "m1");
+
   test("names the skill by the folder holding SKILL.md, however deep its folder of skills nests it", () => {
-    expect(
-      [
-        "cat skills/plan/SKILL.md",
-        "sed -n 1,80p /x/kit/skills/team/plan/SKILL.md",
-        "cat /x/notes/SKILL.md",
-      ].map(skillFromFileRead),
-    ).toEqual(["plan", "plan", null]);
+    const loaded: SkillLoadRow = {
+      kind: "called",
+      toolCallId,
+      ts,
+      model: "m1",
+      skillName: "plan",
+      how: "read",
+    };
+    expect(loadsOf("cat skills/plan/SKILL.md")).toEqual([loaded]);
+    expect(loadsOf("sed -n 1,80p /x/kit/skills/team/plan/SKILL.md")).toEqual([loaded]);
+  });
+
+  test("reads no load from a SKILL.md outside a folder of skills, or from no read", () => {
+    expect(loadsOf("cat /x/notes/SKILL.md")).toEqual([]);
+    expect(loadsOf(null)).toEqual([]);
   });
 });

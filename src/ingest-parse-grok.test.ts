@@ -104,9 +104,51 @@ describe("a grok update line", () => {
         hostRefused: null,
         exitCode: null,
         duration: { kind: "call-to-result" },
-        resultBytes: null,
+        resultBytes: "Tool `run_terminal_command` was not executed".length,
         errorText: "Tool `run_terminal_command` was not executed",
         srcLine: 2,
+      },
+    ]);
+  });
+
+  test("records a load of a skill for each read_file line that names its SKILL.md, and none for another read or an edit", () => {
+    const call = (id: string, name: string, target: string, sessionUpdate = "tool_call") =>
+      JSON.stringify(
+        event(
+          {
+            sessionUpdate,
+            toolCallId: id,
+            rawInput: { target_file: target },
+            _meta: { "x.ai/tool": { name } },
+          },
+          `${id}-${sessionUpdate}`,
+        ),
+      );
+    const parsed = parseGrokChunk(
+      [
+        call("call-s", "read_file", "/home/dev/.agents/skills/plan/SKILL.md"),
+        call("call-s", "read_file", "/home/dev/.agents/skills/plan/SKILL.md", "tool_call_update"),
+        call("call-r", "read_file", "/home/dev/widgets/README.md"),
+        call("call-e", "search_replace", "/home/dev/skills/draft/SKILL.md"),
+      ],
+      1,
+    );
+    expect(parsed.skillLoads).toEqual<object[]>([
+      {
+        kind: "called",
+        toolCallId: "call-s",
+        ts: "2023-11-14T22:13:20.000Z",
+        model: null,
+        skillName: "plan",
+        how: "read",
+      },
+      {
+        kind: "called",
+        toolCallId: "call-s",
+        ts: "2023-11-14T22:13:20.000Z",
+        model: null,
+        skillName: "plan",
+        how: "read",
       },
     ]);
   });
