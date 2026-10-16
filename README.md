@@ -70,18 +70,15 @@ The archive beside it, `$XDG_DATA_HOME/agent-record/archive/<tool>/`, keeps a co
 
 On APFS the first copy of a file is a clone and takes no space of its own. Bytes a session gains after that are appended to the copy, so they are stored twice.
 
-Where the data flows, and which copy each part comes back from:
+Where the data flows, with tool files standing for the session files and the hook event logs:
 
 ```mermaid
 flowchart LR
-  tools[("Each tool's session files")] -- "sync: new bytes, and a file rewritten" --> archive[("Archive<br/>the only copy once a tool deletes its file")]
-  logs[("Each plugin's hook event log")] -- "sync: new lines; a rewritten log keeps its earlier copy" --> archive
-  archive -- "sync: sessions and events, read from here alone; rebuild: all of it again" --> record[("Record, sessions.db<br/>keeps a removed checkout's history until a rebuild")]
-  repos[("Git checkouts on disk")] -- "sync: commits and files; rebuild: only of checkouts still on disk" --> record
-  record -- "rebuild: copied first" --> backup[("Backup of the record")]
-  record -- "query, sql" --> queries(["Queries"])
-  archive -- "sync: new and changed files, none deleted" --> mirror[("Mirror<br/>no command reads it")]
-  mirror -- "restore: ditto by hand, then rebuild" --> archive
+  files[("Tool files")] -- "new bytes" --> archive[("Archive")]
+  archive -- "sessions and events" --> record[("Record")]
+  git[("Checkouts")] -- "commits, files" --> record
+  record -- "rows" --> queries(["Queries"])
+  archive -- "copies" --> mirror[("Mirror")]
 ```
 
 ## Mirror
