@@ -18,8 +18,7 @@ const SECRET_SHAPES: readonly RegExp[] = [
 
 const BEARER = /\b(Bearer\s+)[A-Za-z0-9._~+/=-]{16,}/gi;
 
-const NAMED_SECRET =
-  /(\b[\w-]*?(?:api[_-]?key|secret|token|password|passwd)["']?\s*[=:]\s*["']?)[^\s"'`,;&]{8,}/gi;
+const NAMED_SECRET = /((?:api[_-]?key|secret|token|password|passwd)["']?\s*[=:]\s*["']?)[^\s"'`,;&]{8,}/gi;
 
 function redacted(text: string): string {
   const shaped = SECRET_SHAPES.reduce((kept, shape) => kept.replace(shape, REDACTED), text);
