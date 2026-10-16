@@ -2,7 +2,7 @@
 
 > Session record for coding agents: every past session on this machine, queryable and joined to its commits
 
-[![CI](https://img.shields.io/github/actions/workflow/status/cniska/agent-record/check.yml?branch=main&style=flat&label=ci)](https://github.com/cniska/agent-record/actions/workflows/check.yml) [![License](https://img.shields.io/badge/license-MIT-blue?style=flat)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/cniska/agent-record/check.yml?branch=main&style=flat&label=ci)](https://github.com/cniska/agent-record/actions/workflows/check.yml) [![npm](https://img.shields.io/npm/v/@cniska/agent-record?style=flat&label=npm)](https://www.npmjs.com/package/@cniska/agent-record) [![License](https://img.shields.io/badge/license-MIT-blue?style=flat)](LICENSE)
 
 It keeps each session verbatim in one SQLite database, even after the tool that wrote it deletes its own copy. It is not memory, since it puts nothing into an agent's context, and it gates nothing.
 
@@ -12,7 +12,35 @@ It keeps each session verbatim in one SQLite database, even after the tool that 
 
 ## Install
 
-agent-record runs on [Bun](https://bun.sh), which [mise](https://mise.jdx.dev) installs for it. With mise installed:
+Each channel installs the latest release, built for macOS on Apple silicon and for Linux on x64. Install it one way.
+
+With curl:
+
+```bash
+curl -fsSL https://github.com/cniska/agent-record/releases/latest/download/install.sh | sh
+```
+
+With Homebrew:
+
+```bash
+brew install cniska/tap/agent-record
+```
+
+With npm:
+
+```bash
+npm install -g @cniska/agent-record
+```
+
+With bun:
+
+```bash
+bun add -g @cniska/agent-record
+```
+
+Each channel updates the way it installed: `brew upgrade agent-record`, `npm update -g @cniska/agent-record`, `bun update -g @cniska/agent-record`, or the curl line run again.
+
+From source, with [mise](https://mise.jdx.dev) installed:
 
 ```bash
 git clone https://github.com/cniska/agent-record.git
@@ -20,7 +48,9 @@ cd agent-record
 mise trust && mise install
 ```
 
-`mise install` installs Bun, actionlint and the dependencies, and in the clone links `agent-record` into `~/.bun/bin`. Add that directory to your `PATH` if it is not there yet. Then build the record and check it:
+`mise install` installs actionlint, the dependencies and [Bun](https://bun.sh), which the source runs on, and in the clone links `agent-record` into `~/.bun/bin`. Add that directory to your `PATH` if it is not there yet.
+
+However you installed it, build the record and check it:
 
 ```bash
 agent-record sync
@@ -32,6 +62,25 @@ Then install the Claude Code plugin, the preferred way to keep the record curren
 ```bash
 claude plugin install cniska-record@cniska
 ```
+
+## Uninstall
+
+1. If you ran `agent-record agent install`, unload the launchd agent, then remove its plist and the backup copies of it beside it:
+
+   ```bash
+   launchctl bootout gui/$(id -u)/dev.agentrecord.sync
+   rm -f ~/Library/LaunchAgents/dev.agentrecord.sync.plist*
+   ```
+
+2. Remove the plugin: `claude plugin uninstall cniska-record@cniska`.
+3. Remove the CLI the way it was installed:
+   - **curl:** `rm ~/.local/bin/agent-record`, and the `export PATH` line the installer added to your `~/.zshrc`, `~/.bashrc` or `~/.bash_profile`, if it added one.
+   - **Homebrew:** `brew uninstall agent-record`.
+   - **npm:** `npm uninstall -g @cniska/agent-record`.
+   - **bun:** `bun remove -g @cniska/agent-record`.
+   - **From source:** `bun unlink` in the clone, then delete the clone.
+4. Remove `~/.local/state/agent-record/` (`$XDG_STATE_HOME/agent-record/` when that is set), which holds the sync log, the last-sync stamp and the locks.
+5. The data folder and the mirror hold the archive, which may be the only copy left of transcripts the tools have deleted: copy them elsewhere first if you may want those sessions. Then remove the data folder, `~/.local/share/agent-record/` (`$XDG_DATA_HOME/agent-record/` when that is set), and the [mirror](docs/mirror.md), `agent-record/` in iCloud Drive (`~/Library/Mobile Documents/com~apple~CloudDocs/agent-record/`, or the folder `$AGENT_RECORD_MIRROR` names when that is set).
 
 ## Why
 
