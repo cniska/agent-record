@@ -6,7 +6,7 @@ import { dirname, join } from "node:path";
 import { SCHEMA_SQL } from "./db-schema";
 import { errorCode } from "./error-read";
 import { scratchEnv } from "./fixtures.test-support";
-import { repoWithWorktree } from "./git-fixtures.test-support";
+import { repoWithWorktree, runFixtureGit } from "./git-fixtures.test-support";
 import { ingestCommits, probeCheckouts, repoRoots } from "./ingest-git";
 import { indexRepoFiles } from "./repo-files";
 
@@ -24,11 +24,10 @@ function dir(name: string): string {
 
 function repoWithCommit(content = "x"): string {
   const repo = dir("healthy");
-  const git = (...args: string[]) => Bun.spawnSync(["git", "-C", repo, ...args]);
-  git("init", "-q");
+  runFixtureGit(repo, ["init", "-q"]);
   writeFileSync(join(repo, "a.ts"), content);
-  git("add", "a.ts");
-  git("commit", "--no-verify", "-q", "-m", "feat: a");
+  runFixtureGit(repo, ["add", "a.ts"]);
+  runFixtureGit(repo, ["commit", "--no-verify", "-q", "-m", "feat: a"]);
   return repo;
 }
 
@@ -44,8 +43,8 @@ function freshDb(): Database {
 
 function commitIn(repo: string, file: string): void {
   writeFileSync(join(repo, file), file);
-  Bun.spawnSync(["git", "-C", repo, "add", file]);
-  Bun.spawnSync(["git", "-C", repo, "commit", "--no-verify", "-q", "-m", `feat: ${file}`]);
+  runFixtureGit(repo, ["add", file]);
+  runFixtureGit(repo, ["commit", "--no-verify", "-q", "-m", `feat: ${file}`]);
 }
 
 const commitsOf = (db: Database, roots: readonly string[]) =>
@@ -56,8 +55,8 @@ describe("reading the repos the sessions ran in", () => {
     const db = freshDb();
     const withOrigin = repoWithCommit();
     const upstreamOnly = repoWithCommit("y");
-    Bun.spawnSync(["git", "-C", withOrigin, "remote", "add", "origin", "git@github.com:Acme/Widgets.git"]);
-    Bun.spawnSync(["git", "-C", upstreamOnly, "remote", "add", "upstream", "git@github.com:acme/other.git"]);
+    runFixtureGit(withOrigin, ["remote", "add", "origin", "git@github.com:Acme/Widgets.git"]);
+    runFixtureGit(upstreamOnly, ["remote", "add", "upstream", "git@github.com:acme/other.git"]);
 
     commitsOf(db, [withOrigin, upstreamOnly]);
     expect(db.query("SELECT repo, label FROM repo_commit ORDER BY label IS NULL").all()).toEqual([
@@ -101,7 +100,7 @@ describe("reading the repos the sessions ran in", () => {
   test("records a repo with no commits yet without reading it, until its first commit", () => {
     const db = freshDb();
     const repo = dir("unborn");
-    Bun.spawnSync(["git", "init", "-q", repo]);
+    runFixtureGit(repo, ["init", "-q"]);
 
     expect(commitsOf(db, [repo])).toEqual({ repos: 0, commits: 0, files: 0, unchanged: 0 });
     expect(db.query("SELECT path, head FROM checkout").all()).toEqual([{ path: repo, head: null }]);
@@ -124,7 +123,7 @@ describe("reading the repos the sessions ran in", () => {
 
     sync();
     writeFileSync(join(repo, "b.ts"), "b");
-    Bun.spawnSync(["git", "-C", repo, "add", "b.ts"]);
+    runFixtureGit(repo, ["add", "b.ts"]);
     expect(sync()).toEqual({
       git: { repos: 0, commits: 0, files: 0, unchanged: 1 },
       repoFiles: { repos: 1, files: 2, unchanged: 0 },

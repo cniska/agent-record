@@ -2,19 +2,16 @@ import { describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { runFixtureGit } from "./git-fixtures.test-support";
 import { commitKind, commitsOf, readCommits } from "./ingest-git-source";
-
-function git(args: string[], cwd: string): void {
-  Bun.spawnSync(["git", ...args], { cwd, stdout: "pipe", stderr: "pipe" });
-}
 
 function repoWith(subjects: string[]): string {
   const dir = mkdtempSync(join(tmpdir(), "agent-record-git-"));
-  git(["init", "-q", "-b", "main"], dir);
+  runFixtureGit(dir, ["init", "-q", "-b", "main"]);
   subjects.forEach((subject, i) => {
     writeFileSync(join(dir, `f${i}.txt`), String(i));
-    git(["add", "."], dir);
-    git(["commit", "-q", "-m", subject], dir);
+    runFixtureGit(dir, ["add", "."]);
+    runFixtureGit(dir, ["commit", "-q", "-m", subject]);
   });
   return dir;
 }

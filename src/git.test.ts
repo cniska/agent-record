@@ -4,6 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Glob } from "bun";
 import { git, nulFields, ran } from "./git";
+import { runFixtureGit } from "./git-fixtures.test-support";
+
+const GIT_SPAWNERS = new Set(["git.ts", "git-fixtures.test-support.ts"]);
 
 const roots: string[] = [];
 
@@ -14,7 +17,7 @@ afterEach(() => {
 function emptyRepo(): string {
   const root = mkdtempSync(join(tmpdir(), "agent-record-git-"));
   roots.push(root);
-  Bun.spawnSync(["git", "init", "-q", root]);
+  runFixtureGit(root, ["init", "-q"]);
   return root;
 }
 
@@ -61,9 +64,9 @@ describe("running git", () => {
 });
 
 describe("the product", () => {
-  test("spawns git in one place", () => {
+  test("spawns git in one place, and a test fixture's git in one other", () => {
     const spawning = [...new Glob("**/*.{ts,tsx}").scanSync(import.meta.dir)]
-      .filter((file) => !/\.test\.tsx?$|test-support/.test(file) && file !== "git.ts")
+      .filter((file) => !GIT_SPAWNERS.has(file))
       .filter((file) =>
         /(spawnSync|spawn|execFileSync|execFile)\(\s*\[?\s*"git"/.test(
           readFileSync(join(import.meta.dir, file), "utf8"),

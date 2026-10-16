@@ -2,6 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { git } from "./git";
+import { runFixtureGit } from "./git-fixtures.test-support";
 
 const REPO_ROOT = join(import.meta.dir, "..");
 const FIXTURE = join(import.meta.dir, "git-fixtures.test-support.ts");
@@ -42,10 +44,13 @@ function runFixtureUnderPreload(at: Scratch, env: Record<string, string>) {
   return { exitCode: ran.exitCode, stderr: ran.stderr.toString() };
 }
 
-const commitsIn = (repo: string) =>
-  Bun.spawnSync(["git", "-C", repo, "rev-list", "--count", "HEAD"]).stdout.toString().trim();
+const commitsIn = (repo: string) => runFixtureGit(repo, ["rev-list", "--count", "HEAD"]);
 
 describe("the test preload", () => {
+  test("hands a fixture's git the identity it sets, not the one Bun started with", () => {
+    expect(runFixtureGit(scratch().root, ["var", "GIT_AUTHOR_IDENT"])).toStartWith("T <t@example.com> ");
+  });
+
   test("keeps a global commit.gpgsign from reaching a fixture's git", () => {
     const at = scratch();
     writeFileSync(join(at.home, ".gitconfig"), SIGNING_FAILS);
@@ -87,12 +92,13 @@ describe("the test preload", () => {
   test("drops a GIT_DIR a hook exports, so a fixture's git acts on its own repo", () => {
     const at = scratch();
     const outer = join(at.root, "outer");
-    Bun.spawnSync(["git", "init", "-q", outer]);
+    mkdirSync(outer);
+    runFixtureGit(outer, ["init", "-q"]);
 
     const ran = runFixtureUnderPreload(at, { GIT_DIR: join(outer, ".git"), GIT_WORK_TREE: outer });
 
     expect(ran).toMatchObject({ exitCode: 0 });
     expect(commitsIn(join(at.fixtureRoot, "repo"))).toBe("2");
-    expect(Bun.spawnSync(["git", "-C", outer, "rev-parse", "--verify", "-q", "HEAD"]).exitCode).not.toBe(0);
+    expect(git(outer, ["rev-parse", "--verify", "-q", "HEAD"]).status).not.toBe(0);
   });
 });

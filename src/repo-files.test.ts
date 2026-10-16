@@ -1,25 +1,25 @@
 import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SCHEMA_SQL } from "./db-schema";
 import { errorCode } from "./error-read";
+import { runFixtureGit } from "./git-fixtures.test-support";
 import { probeCheckout } from "./git-probe";
 import { indexRepoFiles, trackedFiles } from "./repo-files";
 
 function repoWith(files: string[]): string {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "agent-record-files-")));
-  execFileSync("git", ["init", "-q", "-b", "main", dir]);
-  execFileSync("git", ["-C", dir, "config", "maintenance.auto", "false"]);
+  runFixtureGit(dir, ["init", "-q", "-b", "main"]);
+  runFixtureGit(dir, ["config", "maintenance.auto", "false"]);
   writeFileSync(join(dir, ".gitignore"), "dist/\n");
   for (const f of files) {
     mkdirSync(join(dir, f, ".."), { recursive: true });
     writeFileSync(join(dir, f), "x");
   }
-  execFileSync("git", ["-C", dir, "add", "-A"]);
-  execFileSync("git", ["-C", dir, "commit", "--no-verify", "-q", "-m", "feat: the first commit"]);
+  runFixtureGit(dir, ["add", "-A"]);
+  runFixtureGit(dir, ["commit", "--no-verify", "-q", "-m", "feat: the first commit"]);
   return dir;
 }
 
@@ -65,13 +65,13 @@ describe("indexing what a repo tracks", () => {
       index(db, repo);
       expect(pathsIn(db, repo)).toContain("gone.ts");
 
-      execFileSync("git", ["-C", repo, "rm", "-q", "gone.ts"]);
-      execFileSync("git", ["-C", repo, "commit", "--no-verify", "-q", "-m", "chore: drop it"]);
+      runFixtureGit(repo, ["rm", "-q", "gone.ts"]);
+      runFixtureGit(repo, ["commit", "--no-verify", "-q", "-m", "chore: drop it"]);
       index(db, repo);
       expect(pathsIn(db, repo)).not.toContain("gone.ts");
       expect(pathsIn(db, repo)).toContain("keep.ts");
 
-      execFileSync("git", ["-C", repo, "rm", "-q", "-r", "."]);
+      runFixtureGit(repo, ["rm", "-q", "-r", "."]);
       index(db, repo);
       expect(pathsIn(db, repo)).toEqual([]);
       db.close();
@@ -110,7 +110,7 @@ describe("indexing what a repo tracks", () => {
       index(db, gone);
       const probedBeforeGone = probeCheckout(gone);
       writeFileSync(join(gone, "c.ts"), "x");
-      execFileSync("git", ["-C", gone, "add", "c.ts"]);
+      runFixtureGit(gone, ["add", "c.ts"]);
       const probedAfterAdd = probeCheckout(gone);
       expect(probedAfterAdd.indexStat).not.toBe(probedBeforeGone.indexStat);
       rmSync(gone, { recursive: true, force: true });
