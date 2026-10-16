@@ -16,7 +16,7 @@ mise trust && mise install
 ## Checks
 
 - `bun run check` runs the lint, the typecheck, knip (an export, file or dependency nothing uses) and the tests.
-- `bun run acceptance` proves the criteria in [`SPEC.md`](../SPEC.md) through the CLI alone; each test in `acceptance/` is named for the criteria it proves, and `src/spec.test.ts`, in the check, fails when the tests and the criteria do not cite each other.
+- `bun run acceptance` proves the criteria in [`SPEC.md`](../SPEC.md) through the CLI alone; each test in `acceptance/` is named for the criteria it proves, and `src/spec.test.ts`, in the check, fails when the tests and the criteria do not cite each other. Each test gets 20 seconds rather than Bun's default 5, since each syncs a fixture home and drives the CLI and git many times, and a loaded machine times that out at 5; the release criteria keep their own 60-second limit.
 - `scripts/build-compiled.sh <outfile>` compiles the release: one executable, from `src/cli-release.ts`, that runs with no Bun or checkout and prints its stamped version on `--version`.
 - `npm/agent-record` is the npm package's launcher, a POSIX shell script `scripts/build-npm.ts` fills with the release builds; `scripts/launcher.test.ts`, in the check, runs it over the layouts `npm` and `bun` install, with no runtime on `PATH`.
 - `scripts/smoke.sh <executable> <version>` is the release's smoke test: the executable prints the version, then, with its home, data, state and mirror folders all in a fresh scratch folder, runs `sync` and passes `doctor` there; the release runs it on each build and on each registry install.

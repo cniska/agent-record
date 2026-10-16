@@ -13,7 +13,7 @@
     "lint": "bunx biome check --error-on-warnings src acceptance scripts",
     "typecheck": "bunx tsc --noEmit",
     "test": "bun test",
-    "acceptance": "bun test ./acceptance/*.acceptance.ts",
+    "acceptance": "bun test --timeout 20000 ./acceptance/*.acceptance.ts",
     "search-recall": "bun run scripts/search-recall.ts",
     "knip": "bunx --bun knip",
     "check": "bun run lint && bun run typecheck && bun run knip && bun test",
