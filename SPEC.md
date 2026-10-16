@@ -64,7 +64,7 @@ The record is what agent workflows improve from. Its first use is search: an age
 
 - **FR-30** — Every command prints exactly one JSON line. A command that ran prints `{command, ok: true, result}` to stdout; a command refused or faulted prints `{command, ok: false, error}` to stderr and exits 1. `ok` says the command ran, not that what it judged is healthy.
 - **FR-31** — Every error is either a refusal (the caller can fix it) or a fault (a bug in agent-record), and carries a code, a message, its facts, and a `resolve` naming the fix. A fault's `resolve` says to hand it to the owner.
-- **FR-32** — `agent-record` with no command lists every command with its usage and summary.
+- **FR-32** — `agent-record` with no command, or with `--help`, `-h` or `help` in its place, lists every command with its usage and summary.
 - **FR-33** — An unknown command, an unknown flag, a flag without a value, a flag given twice, a wrong argument count, a blank argument and an unknown verb are each refused with the command's usage as the fix.
 
 ### 2.7 Queries
@@ -268,7 +268,7 @@ The steps of one task, for an agent to read instead of whole transcripts.
 - **AC-9** — Sync fixtures, then `rebuild`: the session, message, turn, usage, tool-call, git-run and skill-load rows are identical. (FR-26)
 - **AC-10** — Set the record's schema version lower: `query` and `sql` each refuse, naming the next sync or `agent-record rebuild`, `sync` with a new fixture file rebuilds it, holding that file's session, and reports `rebuilt` from the lower version to the current one, and `rebuild` succeeds on it too. Set it higher: `sync`, `query` and `sql` each refuse, naming all three upgrades: `brew upgrade agent-record`, `npm update -g @cniska/agent-record` and the installer's curl line. (FR-24, FR-27, FR-28, FR-29)
 - **AC-11** — Run each command once successfully and once with bad input, and `doctor` with a failing check: the successful runs and `doctor` print `ok: true` on stdout, `doctor` exiting 1; the bad input prints `ok: false` on stderr with exit 1, and the error carries kind, code, message, meta and resolve. (FR-30, FR-31)
-- **AC-12** — Run `agent-record` alone, an unknown command, and each malformed argument form: the listing and each refusal with its usage. (FR-32, FR-33)
+- **AC-12** — Run `agent-record` alone, with `--help`, `-h` and `help`, an unknown command, and each malformed argument form: the same listing four times, exiting 0, and each refusal with its usage. (FR-32, FR-33)
 - **AC-13** — `query list`, an unknown query, `--rows 0`, and a query with more rows than the default: listing, refusals, and the `more` note. (FR-34, FR-35, FR-36)
 - **AC-14** — `search` for words in a said message, in a skill body, and in no message, with more distinct words than it searches: the said message ranks by matched words, the skill body is absent, the unmatched and dropped words are named, and a hit's reference opens in `thread`. (FR-35, FR-37, FR-38, FR-39)
 - **AC-15** — `thread` on a whole session, around a time, with an ambiguous prefix, and with an unknown prefix: rows in order, the counts outside the stretch, the refusal naming matches, and an empty result with its note. (FR-40, FR-41, FR-44)

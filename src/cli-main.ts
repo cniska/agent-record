@@ -1,12 +1,12 @@
 import { allCommands, findCommand } from "./cli-commands";
-import { type Runtime, refuseUsage, VERSION_FLAG } from "./cli-contract";
+import { LISTING_NAMES, type Runtime, refuseUsage, VERSION_FLAG } from "./cli-contract";
 import { listing, writeError, writeResult, writeVersion } from "./cli-output";
 
 export const HELD_RECORD_WAIT_MS = 5000;
 
 export async function runCli(runtime: Runtime): Promise<void> {
   const [name, ...args] = process.argv.slice(2);
-  if (name === undefined) {
+  if (name === undefined || LISTING_NAMES.has(name)) {
     writeResult("agent-record", listing(await allCommands()));
     process.exitCode = 0;
     return;

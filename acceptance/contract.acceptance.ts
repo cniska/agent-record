@@ -167,6 +167,19 @@ test("AC-12 agent-record alone lists every command with its usage and summary", 
   for (const { summary } of result.commands) expect(summary).not.toBe("");
 });
 
+test("AC-12 --help, -h and help each print the listing agent-record alone prints", () => {
+  const home = scratchHome();
+  const alone = runCli(home, []);
+  for (const help of ["--help", "-h", "help"]) {
+    const asked = runCli(home, [help]);
+    expect({ help, exitCode: asked.exitCode, stdout: asked.stdout }).toEqual({
+      help,
+      exitCode: 0,
+      stdout: alone.stdout,
+    });
+  }
+});
+
 test("AC-12 an unknown command is refused with the listing as its fix", () => {
   const error = refused(runCli(scratchHome(), ["nope"]), "agent-record");
   expect({ code: error.code, resolve: error.resolve }).toEqual({

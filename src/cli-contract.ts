@@ -18,6 +18,8 @@ export type Runtime = {
 
 export const VERSION_FLAG = "--version";
 
+export const LISTING_NAMES: ReadonlySet<string> = new Set(["--help", "-h", "help"]);
+
 export type ProgramArguments = readonly [string, ...string[]];
 
 export type CommandResult = { readonly value: unknown; readonly exitCode: 0 | 1 };

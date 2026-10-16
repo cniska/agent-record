@@ -225,6 +225,20 @@ describe("the command contract", () => {
     });
   });
 
+  test("--help, -h and help print the listing agent-record alone prints", () => {
+    const root = mkdtempSync(join(tmpdir(), "agent-record-help-"));
+    try {
+      const alone = runCli(scratchEnv(root), []);
+      expect(JSON.parse(alone.stdout)).toMatchObject({ command: "agent-record", ok: true });
+      for (const help of ["--help", "-h", "help"]) {
+        const asked = runCli(scratchEnv(root), [help]);
+        expect({ help, ...asked }).toEqual({ help, exitCode: 0, stdout: alone.stdout, stderr: "" });
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   test("an unknown command is refused, resolved by the listing", () => {
     expect(refused(["nonesuch"])).toEqual({
       exitCode: 1,
