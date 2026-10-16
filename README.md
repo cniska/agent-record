@@ -16,7 +16,7 @@ cd agent-record
 mise trust && mise install
 ```
 
-`mise install` installs Bun and the dependencies, and in the clone links `agent-record` into `~/.bun/bin`. Add that directory to your `PATH` if it is not there yet. Then build the record and check it:
+`mise install` installs Bun, actionlint and the dependencies, and in the clone links `agent-record` into `~/.bun/bin`. Add that directory to your `PATH` if it is not there yet. Then build the record and check it:
 
 ```bash
 agent-record sync
