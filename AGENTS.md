@@ -1,6 +1,6 @@
 # agent-record
 
-A local record of coding-agent sessions and the queries over it. [`SPEC.md`](SPEC.md) states what must hold and changes in the same commit as the behavior it describes; [`README.md`](README.md) lists the commands; [`src/README.md`](src/README.md) maps the modules.
+A local record of coding-agent sessions and the queries over it. [`SPEC.md`](SPEC.md) states what must hold and changes in the same commit as the behavior it describes; [`docs/commands.md`](docs/commands.md) lists the commands; [`src/README.md`](src/README.md) maps the modules.
 
 ## Rules
 
@@ -9,7 +9,7 @@ A local record of coding-agent sessions and the queries over it. [`SPEC.md`](SPE
 - Ingest reads only the archive (`src/ingest-archive.ts`), never a tool's own files, so `rebuild` loses nothing a tool has since deleted.
 - A change to a per-call or per-event column, a column of `message`, `usage`, `turn`, `tool_call`, `git_command`, `skill_load` or `compaction`, decides it for every source the record reads (Claude Code, Codex, Grok, pi and omp): each source fills it, or `SPEC.md` names the source left out and why. `acceptance/sources.acceptance.ts` (AC-74) holds each column to the sources that fill it, so the change updates that table for every source.
 - A module reaches another only through its contract, its commands and the files `src/modules.test.ts` publishes; publish a file there, or move it, rather than reach past it.
-- This repo requires no other cniska tool, and names none of them, nor any of their skills, agents, plugin installs or report shapes, in src, SPEC, README, plugin or tests; the one exception is the README's contributor section, which may suggest cniska-skills. A workflow that wants a grouping writes a `tag` line. `scripts/standalone.test.ts`, in the check, refuses the names it knows.
+- This repo requires no other cniska tool, and names none of them, nor any of their skills, agents, plugin installs or report shapes, in src, SPEC, README, docs, plugin or tests; the one exception is [`docs/development.md`](docs/development.md), which may suggest cniska-skills. A workflow that wants a grouping writes a `tag` line. `scripts/standalone.test.ts`, in the check, refuses the names it knows.
 - Fix the cause, never work around it, and add no debt.
 - A bug fix lands with a test watched failing first.
 - No test waits real time: a wait or a clock is passed in, as `now` is.

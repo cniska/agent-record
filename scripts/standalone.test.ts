@@ -4,13 +4,11 @@ import { join } from "node:path";
 
 const ROOT = join(import.meta.dir, "..");
 
-const GUARDED_DIRS = ["src", "acceptance", "plugin"];
+const GUARDED_DIRS = ["src", "acceptance", "plugin", "docs"];
 
 const GUARDED_FILES = ["SPEC.md", "README.md"];
 
-const README = "README.md";
-
-const CONTRIBUTOR_SECTION = "## Development";
+const CONTRIBUTOR_DOC = "docs/development.md";
 
 const SUGGESTED = /^(cniska-skills|agent-skills)$/;
 
@@ -26,22 +24,13 @@ const NAMINGS: readonly Naming[] = [
 
 type Guarded = { readonly path: string; readonly text: string };
 
-function contributorLines(text: string): ReadonlySet<number> {
-  const lines = text.split("\n");
-  const start = lines.indexOf(CONTRIBUTOR_SECTION);
-  if (start === -1) return new Set();
-  const after = lines.findIndex((line, index) => index > start && /^## /.test(line));
-  const end = after === -1 ? lines.length : after;
-  return new Set(Array.from({ length: end - start }, (_, offset) => start + offset + 1));
-}
-
 function namings({ path, text }: Guarded): readonly string[] {
-  const suggesting = path === README ? contributorLines(text) : new Set<number>();
+  const suggesting = path === CONTRIBUTOR_DOC;
   return text.split("\n").flatMap((line, index) => {
     const at = index + 1;
     return NAMINGS.flatMap(({ names, pattern }) =>
       [...line.matchAll(pattern)]
-        .filter(([match]) => !(suggesting.has(at) && SUGGESTED.test(match)))
+        .filter(([match]) => !(suggesting && SUGGESTED.test(match)))
         .map(([match]) => `${path}:${at} names ${names}: ${match}`),
     );
   });
@@ -62,14 +51,15 @@ describe("the repo stands alone", () => {
     expect(guardedFiles().flatMap(namings)).toEqual([]);
   });
 
-  test("lets only the README's contributor section suggest cniska-skills", () => {
-    const text = `# x\n\nUse cniska-skills.\n\n${CONTRIBUTOR_SECTION}\n\nTry cniska-skills or agent-gates.\n\n## Next\n\ncniska-skills`;
-    expect(namings({ path: README, text })).toEqual([
-      "README.md:3 names another tool: cniska-skills",
-      "README.md:7 names another tool: agent-gates",
-      "README.md:11 names another tool: cniska-skills",
+  test("lets only docs/development.md suggest cniska-skills", () => {
+    const text = "# x\n\nTry cniska-skills or agent-gates.";
+    expect(namings({ path: "docs/development.md", text })).toEqual([
+      "docs/development.md:3 names another tool: agent-gates",
     ]);
-    expect(namings({ path: "SPEC.md", text })).toHaveLength(4);
+    expect(namings({ path: "README.md", text })).toEqual([
+      "README.md:3 names another tool: cniska-skills",
+      "README.md:3 names another tool: agent-gates",
+    ]);
   });
 
   test("names a skill's task only where a skill is named, and the report words only as they are capitalised", () => {

@@ -2,7 +2,7 @@
 
 > Session record for coding agents: every past session on this machine, queryable and joined to its commits. Agents search it, and the owner measures workflow changes from it.
 
-This document states what must hold, not how. [`README.md`](README.md) lists the commands and [`src/README.md`](src/README.md) maps the modules that meet these requirements.
+This document states what must hold, not how. [`docs/commands.md`](docs/commands.md) lists the commands and [`src/README.md`](src/README.md) maps the modules that meet these requirements.
 
 ## 1. Purpose & context
 
@@ -259,7 +259,7 @@ The steps of one task, for an agent to read instead of whole transcripts.
 - Memory: distilling sessions, or putting them into an agent's context; an agent searches the record and reads what it finds.
 - Gating or enforcing a workflow; the workflow's own hooks do that, and the signals only measure it.
 - Keeping earlier versions of a mirror copy, other than the one set aside when a smaller archive file replaces it (FR-63).
-- A command that restores the archive from the mirror; `README.md` documents the copy back.
+- A command that restores the archive from the mirror; `docs/mirror.md` documents the copy back.
 
 ## 5. Acceptance criteria
 
@@ -343,7 +343,7 @@ The steps of one task, for an agent to read instead of whole transcripts.
 
 - **D-1** — The `agent-record` CLI, as a release, one executable per platform that needs no Bun and no checkout (FR-91); and as source, run by Bun from a checkout and linked onto PATH by `mise install` in the primary checkout, never in a worktree.
 - **D-2** — The `cniska-record` Claude Code plugin in `plugin/`.
-- **D-3** — `README.md` (install, commands, where the record and its mirror live, and how to restore the archive from the mirror), `AGENTS.md` (repository rules), `src/README.md` (module map), and this spec.
+- **D-3** — `README.md` (install and the essential commands); under `docs/`, `commands.md` (the commands and where the record lives), `mirror.md` (the mirror and how to restore the archive from it), `plugin.md` (the plugin), `development.md` (development), `releasing.md` (releasing) and `trace.md` (what `query trace` shows); `AGENTS.md` (repository rules), `src/README.md` (module map), and this spec.
 - **D-4** — The test suite, run by `bun run check`, and the acceptance suite in `acceptance/`, run by `bun run acceptance`. The acceptance suite drives only the CLI, and reaches past it only in two files. `acceptance/cli.ts` plants or reads state no command makes or reports without waiting real time (the record's schema version, the last-sync stamp, the mirror's time, a held lock, a held record, a write to the record that fails while a sync runs (AC-28)) or stands in for the OS (a `launchctl` on PATH) or the network (a `curl` serving release downloads), runs the plugin's hook with an `agent-record` on PATH that tells the test when the CLI it started has exited (AC-21), runs the CLI under macOS's `sandbox-exec` with the network denied (AC-26), and compiles and lays out the release that runs where no Bun is (AC-60, AC-63, AC-64). `acceptance/cli-no-wait.ts` runs the CLI with no wait for a held record, so a busy record is refused at once.
 
 ## 7. Constraints (fixed)
