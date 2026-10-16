@@ -16,7 +16,7 @@ import {
 import type { ChunkParser, ParsedChunk, SessionFacts, ToolCallRow } from "./ingest-session-records";
 import type { SkillLoadRow } from "./ingest-skill-load";
 import type { Kind, Tool } from "./ingest-tools";
-import type { Timestamp } from "./timestamp";
+import { DAY_MS, type Timestamp } from "./timestamp";
 import { projectOf, worktreeOf } from "./worktree";
 
 export type FileSpec = SourceFile & { readonly tool: Tool };
@@ -218,9 +218,9 @@ export function createIngester(db: Database, home: string) {
 
   const upsertResult = db.prepare(
     `INSERT INTO tool_call (id, session_id, ts_result, tool_name, is_error, is_interrupted, host_refused,
-       exit_code, duration_ms, result_bytes, src_file, src_line_result)
+       exit_code, duration_ms, result_bytes, error_text, src_file, src_line_result)
      VALUES ($id, $sessionId, $ts, $toolName, $isError, $isInterrupted, $hostRefused, $exitCode,
-       $durationMs, $resultBytes, $srcFile, $srcLine)
+       $durationMs, $resultBytes, $errorText, $srcFile, $srcLine)
      ON CONFLICT(id) DO UPDATE SET
        ts_result       = excluded.ts_result,
        tool_name       = coalesce(excluded.tool_name, tool_call.tool_name),
@@ -228,8 +228,14 @@ export function createIngester(db: Database, home: string) {
        is_interrupted  = coalesce(excluded.is_interrupted, tool_call.is_interrupted),
        host_refused    = coalesce(excluded.host_refused, tool_call.host_refused),
        exit_code       = coalesce(excluded.exit_code, tool_call.exit_code),
-       duration_ms     = coalesce(excluded.duration_ms, tool_call.duration_ms),
+       duration_ms     = coalesce(
+         excluded.duration_ms,
+         CASE WHEN $durationFromCall AND excluded.ts_result >= tool_call.ts_call
+           THEN CAST(round((julianday(excluded.ts_result) - julianday(tool_call.ts_call)) * ${DAY_MS}) AS INTEGER)
+         END,
+         tool_call.duration_ms),
        result_bytes    = coalesce(excluded.result_bytes, tool_call.result_bytes),
+       error_text      = coalesce(excluded.error_text, tool_call.error_text),
        src_file        = excluded.src_file,
        src_line_result = excluded.src_line_result`,
   );
@@ -346,8 +352,10 @@ export function createIngester(db: Database, home: string) {
           $isInterrupted: bitOf(t.isInterrupted),
           $hostRefused: bitOf(t.hostRefused),
           $exitCode: t.exitCode,
-          $durationMs: t.durationMs,
+          $durationMs: t.duration?.kind === "reported" ? t.duration.ms : null,
+          $durationFromCall: bitOf(t.duration?.kind === "call-to-result"),
           $resultBytes: t.resultBytes,
+          $errorText: t.errorText,
           $srcFile: spec.path,
           $srcLine: t.srcLine,
         });

@@ -81,8 +81,9 @@ describe("a Pi or omp session", () => {
         isInterrupted: null,
         hostRefused: null,
         exitCode: null,
-        durationMs: null,
+        duration: { kind: "call-to-result" },
         resultBytes: null,
+        errorText: null,
         srcLine: 7,
       },
       {
@@ -94,8 +95,9 @@ describe("a Pi or omp session", () => {
         isInterrupted: null,
         hostRefused: null,
         exitCode: null,
-        durationMs: null,
+        duration: { kind: "call-to-result" },
         resultBytes: null,
+        errorText: null,
         srcLine: 8,
       },
     ]);
@@ -191,6 +193,37 @@ describe("a Pi or omp session", () => {
       ["call_d", null],
       ["call_e", null],
       ["call_f", null],
+    ]);
+  });
+
+  test("keeps a failed call's result as its error text, and none for a call that succeeded", () => {
+    const result = (id: string, isError: boolean, texts: readonly string[]) =>
+      JSON.stringify({
+        type: "message",
+        id: `r-${id}`,
+        timestamp: "2026-01-01T10:05:00.000Z",
+        message: {
+          role: "toolResult",
+          toolCallId: id,
+          toolName: "bash",
+          isError,
+          content: [...texts.map((text) => ({ type: "text", text })), { type: "image", data: "AAAA" }],
+        },
+      });
+    const parsed = parsePiChunk(
+      [
+        result("call_a", true, ["boom", "Command exited with code 2"]),
+        result("call_b", false, ["SECRET OUTPUT"]),
+        result("call_c", true, []),
+      ],
+      1,
+    );
+    expect(
+      parsed.toolCalls.map((call) => [call.id, call.kind === "result" ? call.errorText : "call"]),
+    ).toEqual([
+      ["call_a", "boom\nCommand exited with code 2"],
+      ["call_b", null],
+      ["call_c", null],
     ]);
   });
 

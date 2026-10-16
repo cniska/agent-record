@@ -139,7 +139,7 @@ describe("ingest", () => {
     }
   });
 
-  test("never stores tool results, file contents or thinking", () => {
+  test("never stores a successful call's result, file contents or thinking", () => {
     const root = newRoot();
     const env = scratchEnv(root);
     writeClaudeTranscript(env, "-Users-x-code-demo", SESSION);
@@ -226,7 +226,7 @@ describe("ingest", () => {
     }
   });
 
-  test("measures what a tool returned without storing any of it", () => {
+  test("measures what a successful call returned without storing any of it", () => {
     const root = newRoot();
     const env = scratchEnv(root);
     writeClaudeTranscript(env, "-Users-x-code-demo", SESSION);
@@ -242,10 +242,9 @@ describe("ingest", () => {
     }
   });
 
-  test("records Codex exit codes and durations, which Claude does not report", () => {
+  test("records no exit code for a Claude command that succeeded", () => {
     const root = newRoot();
     const env = scratchEnv(root);
-    writeCodexRollout(env, "sessions", THREAD);
     writeClaudeTranscript(env, "-Users-x-code-demo", SESSION);
     const db = run(env);
     try {
@@ -253,6 +252,20 @@ describe("ingest", () => {
         .prepare("SELECT count(*) AS n FROM tool_call WHERE session_id = ? AND exit_code IS NOT NULL")
         .get(SESSION);
       expect(claude).toEqual({ n: 0 });
+    } finally {
+      db.close();
+    }
+  });
+
+  test("times a Claude call from the call to its result", () => {
+    const root = newRoot();
+    const env = scratchEnv(root);
+    writeClaudeTranscript(env, "-Users-x-code-demo", SESSION);
+    const db = run(env);
+    try {
+      expect(db.prepare("SELECT duration_ms FROM tool_call WHERE id = 'toolu-1'").get()).toEqual({
+        duration_ms: 60000,
+      });
     } finally {
       db.close();
     }

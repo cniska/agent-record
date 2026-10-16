@@ -246,6 +246,36 @@ describe("parseCodexChunk", () => {
     ]);
   });
 
+  test("keeps a failed command's output as its error text, and none for one that succeeded", () => {
+    const item = (id: string, fields: Record<string, unknown>) =>
+      JSON.stringify({
+        type: "event_msg",
+        timestamp: "2026-09-16T10:00:00.000Z",
+        payload: {
+          type: "item_completed",
+          item: { id, type: "CommandExecution", command: "make", ...fields },
+        },
+      });
+    const parsed = parseCodexChunk(
+      [
+        item("item-1", { status: "failed", exit_code: 2, stdout: "building", stderr: "make: *** no rule" }),
+        item("item-2", { status: "completed", exit_code: 1, stdout: "", stderr: "boom" }),
+        item("item-3", { status: "declined" }),
+        item("item-4", { status: "completed", exit_code: 0, stdout: "SECRET OUTPUT" }),
+      ],
+      1,
+      FRESH,
+    );
+    expect(
+      parsed.toolCalls.flatMap((call) => (call.kind === "result" ? [[call.id, call.errorText]] : [])),
+    ).toEqual([
+      ["item-1", "building\nmake: *** no rule"],
+      ["item-2", "boom"],
+      ["item-3", null],
+      ["item-4", null],
+    ]);
+  });
+
   test("keeps lines whose model, turn id, usage and status are null", () => {
     const at = "2026-09-16T10:00:00.000Z";
     const parsed = parseCodexChunk(

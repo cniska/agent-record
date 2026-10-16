@@ -4,7 +4,7 @@ import { HOWS } from "./ingest-skill-load";
 import { KINDS, TOOLS } from "./ingest-tools";
 
 const sqlList = (values: readonly string[]): string => values.map((value) => `'${value}'`).join(",");
-export const SCHEMA_VERSION = 21;
+export const SCHEMA_VERSION = 22;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS source_file (
@@ -122,6 +122,7 @@ CREATE TABLE IF NOT EXISTS tool_call (
   exit_code       INTEGER,
   duration_ms     INTEGER,
   result_bytes    INTEGER,
+  error_text      TEXT,
   src_file        TEXT NOT NULL REFERENCES source_file(path) ON UPDATE CASCADE,
   src_line_call   INTEGER,
   src_line_result INTEGER

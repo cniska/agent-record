@@ -1,8 +1,10 @@
 import { z } from "zod";
 import { unreachable } from "./assert";
+import { errorTextOf } from "./ingest-error-text";
 import { MessageId, ResponseId, ToolCallId } from "./ingest-ids";
 import { byKind, lineOf, nonEmpty, TextPart, textAt, typeOf, UnkeptLine, UnkeptPart } from "./ingest-parse";
 import {
+  CALL_TO_RESULT,
   type MessageRow,
   NO_FACTS,
   type ParsedChunk,
@@ -82,6 +84,12 @@ function exitCodeOf(parts: readonly z.output<typeof PiTextPart>[]): number | nul
   return code === undefined ? null : Number(code);
 }
 
+function failureTextOf(parts: readonly z.output<typeof PiTextPart>[]): string | null {
+  return errorTextOf(
+    parts.flatMap((part) => (part.kind === "text" && part.text !== null ? [part.text] : [])).join("\n"),
+  );
+}
+
 const PiToolResultLine = z
   .looseObject({
     timestamp: Timestamp,
@@ -101,6 +109,7 @@ const PiToolResultLine = z
     isError: message.isError ?? null,
     exitCode:
       message.details?.exitCode ?? (message.isError === true ? exitCodeOf(message.content ?? []) : null),
+    errorText: message.isError === true ? failureTextOf(message.content ?? []) : null,
   }));
 type PiToolResultLine = z.infer<typeof PiToolResultLine>;
 
@@ -183,8 +192,9 @@ function resultOf(line: PiToolResultLine, srcLine: number): ToolCallRow {
     isInterrupted: null,
     hostRefused: null,
     exitCode: line.exitCode,
-    durationMs: null,
+    duration: CALL_TO_RESULT,
     resultBytes: null,
+    errorText: line.errorText,
     srcLine,
   };
 }

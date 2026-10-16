@@ -146,6 +146,14 @@ const ToolCallDetail = z
   })
   .readonly();
 
+const ToolDuration = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("reported"), ms: z.number() }).readonly(),
+  z.strictObject({ kind: z.literal("call-to-result") }).readonly(),
+]);
+export type ToolDuration = z.infer<typeof ToolDuration>;
+
+export const CALL_TO_RESULT: ToolDuration = { kind: "call-to-result" };
+
 const ToolResult = z
   .strictObject({
     kind: z.literal("result"),
@@ -156,8 +164,9 @@ const ToolResult = z
     isInterrupted: z.boolean().nullable(),
     hostRefused: z.boolean().nullable(),
     exitCode: nullableNumber,
-    durationMs: nullableNumber,
+    duration: ToolDuration.nullable(),
     resultBytes: nullableNumber,
+    errorText: nullableString,
     srcLine: z.number(),
   })
   .readonly();

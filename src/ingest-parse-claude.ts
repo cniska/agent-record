@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { unreachable } from "./assert";
+import { errorTextOf } from "./ingest-error-text";
 import { MessageId, ResponseId, ToolCallId, TurnId } from "./ingest-ids";
 import {
   byKind,
@@ -13,6 +14,7 @@ import {
   UnkeptPart,
 } from "./ingest-parse";
 import {
+  CALL_TO_RESULT,
   type CompactionRow,
   type MessageRow,
   MID_TURN_PROMPT,
@@ -304,6 +306,10 @@ function resultSize(content: unknown, result: ClaudeToolUseResult | undefined): 
   return parts.length > 0 ? parts.reduce((n, p) => n + p.length, 0) : null;
 }
 
+function failureTextOf(content: unknown): string | null {
+  return errorTextOf(resultTexts(content).join("\n"));
+}
+
 function sessionFactsOf(line: {
   readonly cwd?: string;
   readonly gitBranch?: string;
@@ -474,8 +480,9 @@ export function parseClaudeChunk(lines: readonly string[], firstLineNumber: numb
               isInterrupted: r?.interrupted === true,
               exitCode: block.isError ? exitCodeOf(block.content) : null,
               hostRefused: block.isError && hostRefused(block.content),
-              durationMs: null,
+              duration: CALL_TO_RESULT,
               resultBytes: resultSize(block.content, r),
+              errorText: block.isError ? failureTextOf(block.content) : null,
               srcLine,
             });
           }

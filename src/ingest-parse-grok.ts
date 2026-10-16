@@ -1,8 +1,10 @@
 import { z } from "zod";
 import { unreachable } from "./assert";
+import { errorTextOf } from "./ingest-error-text";
 import { MessageId, ToolCallId } from "./ingest-ids";
 import { byKind, lineOf, nonEmpty, textAt } from "./ingest-parse";
 import {
+  CALL_TO_RESULT,
   type MessageRow,
   NO_FACTS,
   type ParsedChunk,
@@ -43,6 +45,16 @@ const GrokShellExitCode = z.union([
   z.unknown().transform(() => null),
 ]);
 
+const GrokToolText = z.union([
+  z
+    .looseObject({
+      type: z.literal("content"),
+      content: z.looseObject({ type: z.literal("text"), text: z.string() }),
+    })
+    .transform((part) => part.content.text),
+  z.unknown().transform(() => null),
+]);
+
 const GrokToolLine = z
   .looseObject({
     timestamp: EpochSeconds.optional(),
@@ -54,6 +66,7 @@ const GrokToolLine = z
         locations: z.array(z.looseObject({ path: z.string().nullish() })).nullish(),
         status: z.string().nullish(),
         rawOutput: GrokShellExitCode.optional(),
+        content: z.array(GrokToolText).nullish(),
         _meta: z
           .looseObject({ "x.ai/tool": z.looseObject({ name: z.string().nullish() }).nullish() })
           .nullish(),
@@ -62,11 +75,15 @@ const GrokToolLine = z
     }),
   })
   .transform((line, ctx) => {
-    const { rawOutput, ...update } = line.params.update;
+    const { rawOutput, content, ...update } = line.params.update;
     return {
       kind: "tool" as const,
       ts: timed(line, ctx),
-      update: { ...update, shellExitCode: rawOutput ?? null },
+      update: {
+        ...update,
+        shellExitCode: rawOutput ?? null,
+        texts: (content ?? []).filter((text) => text !== null),
+      },
     };
   });
 type GrokToolLine = z.infer<typeof GrokToolLine>;
@@ -160,8 +177,9 @@ function toolRowsOf({ update, ts }: GrokToolLine, srcLine: number): ToolCallRow[
       isInterrupted: null,
       hostRefused: null,
       exitCode: update.shellExitCode,
-      durationMs: null,
+      duration: CALL_TO_RESULT,
       resultBytes: null,
+      errorText: failed || (update.shellExitCode ?? 0) !== 0 ? errorTextOf(update.texts.join("\n")) : null,
       srcLine,
     },
   ];

@@ -8,6 +8,7 @@ export type Step =
   | { readonly agent: string; readonly at: string; readonly usage?: Usage }
   | { readonly handback: string; readonly at: string }
   | { readonly bash: string; readonly at: string; readonly done: string }
+  | { readonly errored: string; readonly at: string; readonly output: string }
   | { readonly spawn: string; readonly at: string; readonly done: string; readonly failed?: true }
   | { readonly pending: string; readonly at: string }
   | { readonly read: string; readonly at: string }
@@ -122,6 +123,21 @@ function linesOf(sessionId: string, cwd: string, steps: readonly Step[], prefix:
       return [
         assistant(step.at, [{ type: "tool_use", id: tool, name: "Bash", input: { command: step.bash } }]),
         result(step.done, tool),
+      ];
+    }
+    if ("errored" in step) {
+      return [
+        assistant(step.at, [{ type: "tool_use", id: tool, name: "Bash", input: { command: step.errored } }]),
+        {
+          ...base,
+          type: "user",
+          uuid: `${uuid}-result`,
+          timestamp: step.at,
+          message: {
+            role: "user",
+            content: [{ type: "tool_result", tool_use_id: tool, content: step.output, is_error: true }],
+          },
+        },
       ];
     }
     if ("spawn" in step) {

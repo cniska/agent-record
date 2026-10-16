@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { unreachable } from "./assert";
+import { errorTextOf } from "./ingest-error-text";
 import { MessageId, ResponseId, type SessionId, ToolCallId, TurnId } from "./ingest-ids";
 import { byKind, jsonOrNull, lineOf, nonEmpty, textAt, typeOf, UnkeptLine } from "./ingest-parse";
 import {
@@ -9,6 +10,7 @@ import {
   ROLES,
   type SessionFacts,
   type ToolCallRow,
+  type ToolDuration,
   type TurnRow,
   type UsageRow,
 } from "./ingest-session-records";
@@ -133,9 +135,9 @@ const CodexLine = byKind(
   UnkeptLine,
 );
 
-function durationMs(d: CodexDuration | undefined): number | null {
+function reportedDuration(d: CodexDuration | undefined): ToolDuration | null {
   if (!d) return null;
-  return Math.round((d.secs ?? 0) * 1000 + (d.nanos ?? 0) / 1e6);
+  return { kind: "reported", ms: Math.round((d.secs ?? 0) * 1000 + (d.nanos ?? 0) / 1e6) };
 }
 
 function commandText(value: unknown): string | null {
@@ -145,6 +147,19 @@ function commandText(value: unknown): string | null {
 function visibleText(content: (z.infer<typeof CodexContent> | null)[] | null | undefined): string | null {
   if (!Array.isArray(content)) return null;
   return nonEmpty(content.flatMap((b) => (b?.text !== undefined ? [b.text] : [])).join("\n"));
+}
+
+type CodexItem = z.infer<typeof CodexItemLine>["p"]["item"];
+
+function failed(item: CodexItem): boolean {
+  return (item.status != null && item.status !== "completed") || (item.exit_code ?? 0) !== 0;
+}
+
+function failureTextOf(item: CodexItem): string | null {
+  if (!failed(item)) return null;
+  return errorTextOf(
+    [item.stdout, item.stderr].filter((part) => part !== undefined && part !== "").join("\n"),
+  );
 }
 
 type CodexThread = { readonly id: SessionId; readonly state: CodexState };
@@ -288,8 +303,9 @@ export function parseCodexChunk(
             isInterrupted: null,
             hostRefused: null,
             exitCode: item.exit_code ?? null,
-            durationMs: durationMs(item.duration),
+            duration: reportedDuration(item.duration),
             resultBytes: (item.stdout?.length ?? 0) + (item.stderr?.length ?? 0) || null,
+            errorText: failureTextOf(item),
             srcLine,
           },
         );

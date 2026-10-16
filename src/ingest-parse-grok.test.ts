@@ -80,6 +80,13 @@ describe("a grok update line", () => {
         toolCallId: "call-5",
         status: "failed",
         locations: [{ path: "a.ts" }],
+        content: [
+          {
+            type: "content",
+            content: { type: "text", text: "Tool `run_terminal_command` was not executed" },
+          },
+          { type: "diff", path: "a.ts" },
+        ],
       },
       "tool-5-done",
     );
@@ -96,8 +103,9 @@ describe("a grok update line", () => {
         isInterrupted: null,
         hostRefused: null,
         exitCode: null,
-        durationMs: null,
+        duration: { kind: "call-to-result" },
         resultBytes: null,
+        errorText: "Tool `run_terminal_command` was not executed",
         srcLine: 2,
       },
     ]);
@@ -126,6 +134,37 @@ describe("a grok update line", () => {
       ["call-b", null],
       ["call-c", null],
       ["call-d", null],
+    ]);
+  });
+
+  test("keeps the text of a failed call or a command that exited non-zero as its error text", () => {
+    const update = (id: string, status: string, rawOutput: unknown) =>
+      JSON.stringify(
+        event(
+          {
+            sessionUpdate: "tool_call_update",
+            toolCallId: id,
+            status,
+            rawOutput,
+            content: [{ type: "content", content: { type: "text", text: `${id} said why` } }],
+          },
+          `${id}-${status}`,
+        ),
+      );
+    const parsed = parseGrokChunk(
+      [
+        update("call-a", "completed", { type: "Bash", exit_code: 2 }),
+        update("call-b", "failed", null),
+        update("call-c", "completed", { type: "Bash", exit_code: 0 }),
+      ],
+      1,
+    );
+    expect(
+      parsed.toolCalls.flatMap((call) => (call.kind === "result" ? [[call.id, call.errorText]] : [])),
+    ).toEqual<unknown[]>([
+      ["call-a", "call-a said why"],
+      ["call-b", "call-b said why"],
+      ["call-c", null],
     ]);
   });
 

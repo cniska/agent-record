@@ -788,3 +788,182 @@ test("AC-53 a shell call's exit code is recorded from every tool that writes one
   rebuild(home);
   expect(rowsOf(home, exitCodes)).toEqual(expected);
 });
+
+const FAILING = "error-session";
+const KEPT_END = 2048;
+const cutAround = (text: string): string =>
+  `${text.slice(0, KEPT_END)}\n... [${text.length - 2 * KEPT_END} bytes cut] ...\n${text.slice(-KEPT_END)}`;
+
+test("AC-71 a failed or refused call keeps its result's head and tail as its error text, and a call that succeeded keeps none", () => {
+  const refusal = `<tool_use_error>InputValidationError: ${"the edit's old_string was not found. ".repeat(150)}</tool_use_error>`;
+  const listing = `Exit code 127\n${"src/ingest-parse-claude.ts\n".repeat(300)}zsh: command not found: ===`;
+  const codexOutput = `${"compiling crate\n".repeat(400)}error[E0425]: cannot find value \`x\``;
+  const home = withClaudeSessions(withFixtures(scratchHome(), [CODEX, GROK, PI]), [
+    {
+      id: FAILING,
+      cwd: "/Users/x/code/demo",
+      steps: [
+        { owner: "fix the build", at: "2026-10-16T09:00:00.000Z" },
+        { errored: "edit the parser", at: "2026-10-16T09:01:00.000Z", output: refusal },
+        { errored: "ls -R src; echo ===", at: "2026-10-16T09:02:00.000Z", output: listing },
+        { errored: "bun run check", at: "2026-10-16T09:03:00.000Z", output: "Exit code 1\nlint: 2 errors" },
+        { bash: "ls", at: "2026-10-16T09:04:00.000Z", done: "2026-10-16T09:04:01.000Z" },
+      ],
+    },
+  ]);
+  appendFileSync(
+    livePath(home, CODEX),
+    `${JSON.stringify({
+      type: "event_msg",
+      timestamp: "2026-09-16T10:07:00.000Z",
+      payload: {
+        type: "item_completed",
+        item: {
+          id: `${CODEX_THREAD}-failed`,
+          type: "CommandExecution",
+          command: "cargo build",
+          status: "failed",
+          exit_code: 101,
+          stdout: "",
+          stderr: codexOutput,
+        },
+      },
+    })}\n`,
+  );
+  appendFileSync(
+    livePath(home, GROK_UPDATES),
+    `${JSON.stringify({
+      timestamp: 1789553070,
+      method: "session/update",
+      params: {
+        sessionId: "grok-session",
+        update: {
+          sessionUpdate: "tool_call",
+          toolCallId: "grok-failed",
+          status: "failed",
+          rawInput: { command: "rm -rf build" },
+          content: [{ type: "content", content: { type: "text", text: "Denied by permission policy" } }],
+        },
+        _meta: { eventId: "g-failed", agentTimestampMs: 1789553070000 },
+      },
+    })}\n`,
+  );
+  appendFileSync(
+    livePath(home, GROK_UPDATES),
+    `${JSON.stringify({
+      timestamp: 1789553071,
+      method: "session/update",
+      params: {
+        sessionId: "grok-session",
+        update: {
+          sessionUpdate: "tool_call",
+          toolCallId: "grok-exited",
+          status: "completed",
+          rawInput: { command: "bun test" },
+          rawOutput: { type: "Bash", exit_code: 1 },
+          content: [{ type: "content", content: { type: "text", text: "1 fail" } }],
+        },
+        _meta: { eventId: "g-exited", agentTimestampMs: 1789553071000 },
+      },
+    })}\n`,
+  );
+  appendFileSync(
+    livePath(home, PI),
+    `${JSON.stringify({
+      type: "message",
+      id: "pi-failed-result",
+      timestamp: "2026-09-16T10:04:30.000Z",
+      message: {
+        role: "toolResult",
+        toolCallId: "pi-failed",
+        toolName: "bash",
+        isError: true,
+        content: [{ type: "text", text: "boom\n\nCommand exited with code 4" }],
+      },
+    })}\n`,
+  );
+  const errorTexts = `select id, error_text from tool_call
+    where session_id in ('${FAILING}', '${CODEX_THREAD}') order by session_id desc, src_line_call`;
+  const otherTexts =
+    "select id, error_text from tool_call where session_id in ('grok-session', 'pi-session') order by id";
+  const expected = [
+    [`${FAILING}-1-tool`, cutAround(refusal)],
+    [`${FAILING}-2-tool`, cutAround(listing)],
+    [`${FAILING}-3-tool`, "Exit code 1\nlint: 2 errors"],
+    [`${FAILING}-4-tool`, null],
+    [`${CODEX_THREAD}-c1`, null],
+    [`${CODEX_THREAD}-c2`, null],
+    [`${CODEX_THREAD}-failed`, cutAround(codexOutput)],
+  ];
+  const others = [
+    ["g-call-1", null],
+    ["grok-exited", "1 fail"],
+    ["grok-failed", "Denied by permission policy"],
+    ["pi-failed", "boom\n\nCommand exited with code 4"],
+    ["pi-session-call1", null],
+  ];
+
+  sync(home);
+  const rows = rowsOf(home, errorTexts);
+  expect(rows).toEqual(expected);
+  expect(String(rows[0]?.[1])).toStartWith("<tool_use_error>InputValidationError: ");
+  expect(String(rows[1]?.[1])).toEndWith("zsh: command not found: ===");
+  expect(String(rows[6]?.[1])).toEndWith("error[E0425]: cannot find value `x`");
+  expect(rowsOf(home, otherTexts)).toEqual(others);
+  rebuild(home);
+  expect(rowsOf(home, errorTexts)).toEqual(expected);
+  expect(rowsOf(home, otherTexts)).toEqual(others);
+});
+
+test("AC-72 a secret-shaped string in a failed call's result is redacted from its error text", () => {
+  const key = "sk-ant-api03-Zq8vN2kLp4Xr7Tb1Wm9Yc3Hd6Fg0Js5A";
+  const token = "ghp_9fK2mQ7xL4vR8tB1nW6yC3hD5gJ0sA2eZ1uP";
+  const home = withClaudeSessions(scratchHome(), [
+    {
+      id: FAILING,
+      cwd: "/Users/x/code/demo",
+      steps: [
+        { owner: "publish it", at: "2026-10-16T09:00:00.000Z" },
+        {
+          errored: "npm publish",
+          at: "2026-10-16T09:01:00.000Z",
+          output: `Exit code 1\nANTHROPIC_API_KEY=${key}\nAuthorization: token ${token}\nnpm error 401 Unauthorized`,
+        },
+      ],
+    },
+  ]);
+
+  sync(home);
+  expect(rowsOf(home, `select error_text from tool_call where session_id = '${FAILING}'`)).toEqual([
+    [
+      "Exit code 1\nANTHROPIC_API_KEY=[REDACTED]\nAuthorization: token [REDACTED]\nnpm error 401 Unauthorized",
+    ],
+  ]);
+});
+
+test("AC-73 a call's duration runs from the call to its result where its tool reports none", () => {
+  const home = withClaudeSessions(withFixtures(scratchHome(), [GROK, PI]), [
+    {
+      id: FAILING,
+      cwd: "/Users/x/code/demo",
+      steps: [
+        { owner: "run the tests", at: "2026-10-16T09:00:00.000Z" },
+        { bash: "bun test", at: "2026-10-16T09:01:00.000Z", done: "2026-10-16T09:01:01.500Z" },
+        { pending: "bun run acceptance", at: "2026-10-16T09:02:00.000Z" },
+      ],
+    },
+  ]);
+  const durations = `select id, duration_ms from tool_call
+    where session_id in ('${FAILING}', 'grok-session', 'pi-session') order by id`;
+  const expected = [
+    [`${FAILING}-1-tool`, 1500],
+    [`${FAILING}-2-tool`, null],
+    ["g-call-1", 60000],
+    ["pi-session-call1", 60000],
+  ];
+
+  sync(home);
+  expect(rowsOf(home, durations)).toEqual(expected);
+  rebuild(home);
+  expect(rowsOf(home, durations)).toEqual(expected);
+});
