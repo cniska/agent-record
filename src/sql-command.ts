@@ -2,7 +2,7 @@ import type { Database } from "bun:sqlite";
 import type { Command, CommandResult } from "./cli-contract";
 import { parseArg } from "./cli-flags";
 import type { HeldRecordWait } from "./db";
-import { sqliteCode } from "./db-error";
+import { sqliteCode, sqliteMissingColumn } from "./db-error";
 import { readingRecord } from "./db-read";
 import { errorDetail } from "./error-read";
 import { dbPath } from "./paths";
@@ -13,7 +13,33 @@ import { refuseSql } from "./sql-contract";
 
 const SQL_DENOMINATOR = "the rows the statement returned, in the order SQLite returned them";
 
-function refusalOf(error: unknown, statement: string): unknown {
+const WORD = /[A-Za-z_][A-Za-z0-9_]*/g;
+
+function namedTables(db: Database, statement: string): readonly string[] {
+  const schemaNames = new Map(
+    db
+      .query<{ name: string }, []>("SELECT name FROM sqlite_schema WHERE type IN ('table', 'view')")
+      .all()
+      .map(({ name }) => [name.toLowerCase(), name]),
+  );
+  const named = (statement.match(WORD) ?? []).map((word) => schemaNames.get(word.toLowerCase()));
+  return [...new Set(named.filter((name) => name !== undefined))];
+}
+
+function columnsOf(db: Database, tables: readonly string[]): Record<string, readonly string[]> {
+  const query = db.query<{ name: string }, [string]>(
+    "SELECT name FROM pragma_table_xinfo(?) WHERE hidden <> 1 ORDER BY cid",
+  );
+  return Object.fromEntries(tables.map((table) => [table, query.all(table).map(({ name }) => name)]));
+}
+
+function refusalOf(db: Database, error: unknown, statement: string): unknown {
+  const column = sqliteMissingColumn(error);
+  if (column !== null) {
+    const tables = namedTables(db, statement);
+    if (tables.length > 0)
+      return refuseSql("sql_unknown_column", { statement, column, columns: columnsOf(db, tables) }, error);
+  }
   const code = sqliteCode(error);
   if (code === "SQLITE_ERROR")
     return refuseSql("sql_invalid", { statement, detail: errorDetail(error) }, error);
@@ -40,7 +66,7 @@ function readRows(db: Database, statement: string, maxRows: number): Rows {
     }
     return { columns, rows };
   } catch (error) {
-    throw refusalOf(error, statement);
+    throw refusalOf(db, error, statement);
   }
 }
 

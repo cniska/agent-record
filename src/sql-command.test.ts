@@ -66,6 +66,77 @@ describe("agent-record sql", () => {
     }
   });
 
+  test("refuses an unknown column by listing the columns of each table the statement names", () => {
+    const { home, env } = recordWithCommit();
+    const repoCommit = ["sha", "repo", "label", "ts", "author", "subject", "kind"];
+    const cases = [
+      { statement: "SELECT shaa FROM repo_commit", column: "shaa", columns: { repo_commit: repoCommit } },
+      {
+        statement: 'SELECT c.sha, f.nope FROM "Repo_Commit" c JOIN [commit_file] f ON f.sha = c.sha',
+        column: "f.nope",
+        columns: { repo_commit: repoCommit, commit_file: ["sha", "path"] },
+      },
+      {
+        statement: "WITH recent AS (SELECT sha FROM repo_commit) SELECT subject FROM recent",
+        column: "subject",
+        columns: { repo_commit: repoCommit },
+      },
+      {
+        statement: "SELECT nope FROM main.commit_file",
+        column: "nope",
+        columns: { commit_file: ["sha", "path"] },
+      },
+    ];
+    try {
+      for (const { statement, column, columns } of cases) {
+        expect(refusal(() => sqlCommand.run([statement], testRuntime(env)))).toEqual(
+          expect.objectContaining({
+            kind: "refusal",
+            code: "sql_unknown_column",
+            message: `${JSON.stringify(statement)} names the column ${column}, which SQLite cannot find`,
+            meta: { statement, column, columns },
+          }),
+        );
+      }
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("names each table's columns in the fix, generated columns included", () => {
+    const { home, env } = recordWithCommit();
+    try {
+      expect(refusal(() => sqlCommand.run(["SELECT nope FROM commit_file"], testRuntime(env)))).toMatchObject(
+        {
+          resolve: "use a column of the tables it names: commit_file (sha, path)",
+        },
+      );
+      expect(refusal(() => sqlCommand.run(["SELECT nope FROM skill_load"], testRuntime(env)))).toMatchObject({
+        code: "sql_unknown_column",
+        meta: { columns: { skill_load: expect.arrayContaining(["skill_name", "anchor_id"]) } },
+      });
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("refuses an unknown column with SQLite's reason when the statement names no table", () => {
+    const { home, env } = recordWithCommit();
+    const statement = "WITH n(i) AS (SELECT 1) SELECT j FROM n";
+    try {
+      expect(refusal(() => sqlCommand.run([statement], testRuntime(env)))).toEqual(
+        expect.objectContaining({
+          kind: "refusal",
+          code: "sql_invalid",
+          meta: { statement, detail: "no such column: j" },
+          resolve: "fix the statement and run it again",
+        }),
+      );
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
   test("prints columns and rows like a query", () => {
     const { home, env } = recordWithCommit();
     try {

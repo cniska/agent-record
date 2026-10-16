@@ -117,6 +117,24 @@ test("AC-17 sql refuses a syntax error with SQLite's reason", () => {
   expect(error.message).toContain('near "selec": syntax error');
 });
 
+test("AC-17 sql refuses an unknown column by listing the columns of the table it names", () => {
+  const home = syncedHome();
+  const error = refused(runCli(home, ["sql", "select nope from commit_file"]), "sql");
+  expect({ code: error.code, meta: error.meta }).toEqual({
+    code: "sql_unknown_column",
+    meta: {
+      statement: "select nope from commit_file",
+      column: "nope",
+      columns: { commit_file: ["sha", "path"] },
+    },
+  });
+  const tableless = refused(runCli(home, ["sql", "with n(i) as (select 1) select j from n"]), "sql");
+  expect({ code: tableless.code, detail: tableless.meta.detail }).toEqual({
+    code: "sql_invalid",
+    detail: "no such column: j",
+  });
+});
+
 test("AC-17 sql refuses a column named twice, naming the column", () => {
   const error = refused(runCli(syncedHome(), ["sql", "select 1 as a, 2 as a"]), "sql");
   expect({ code: error.code, column: error.meta.column }).toEqual({
