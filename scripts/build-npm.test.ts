@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { PLATFORMS, platformManifest, platformTarball, shimManifest } from "./build-npm";
+import { launcher, PLATFORMS, platformManifest, platformTarball, shimManifest } from "./build-npm";
 
 describe("the npm packages", () => {
   test("name one package per release build, pinned to the shim's version", () => {
@@ -10,13 +10,21 @@ describe("the npm packages", () => {
     expect(shimManifest("1.2.3", PLATFORMS)).toMatchObject({
       name: "@cniska/agent-record",
       version: "1.2.3",
-      bin: { "agent-record": "bin/agent-record.cjs" },
-      files: ["bin/agent-record.cjs"],
+      bin: { "agent-record": "bin/agent-record" },
+      files: ["bin/agent-record"],
       optionalDependencies: {
         "@cniska/agent-record-darwin-arm64": "1.2.3",
         "@cniska/agent-record-linux-x64": "1.2.3",
       },
     });
+    expect(shimManifest("1.2.3", PLATFORMS)).not.toHaveProperty("engines");
+  });
+
+  test("ship a POSIX shell launcher that names the release builds", () => {
+    const script = launcher(PLATFORMS);
+    expect(script.startsWith("#!/bin/sh\n")).toBe(true);
+    expect(script).toContain("\nbuilds='darwin-arm64 linux-x64'\n");
+    expect(script).not.toContain("__BUILDS__");
   });
 
   test("install a platform's binary only on that platform", () => {

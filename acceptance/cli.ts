@@ -193,6 +193,14 @@ export function withLaunchctl(home: Home, agentLoaded: boolean): Home {
   return home;
 }
 
+export function unameSaying(system: string, machine: string): string {
+  const dir = scratchTempDir();
+  const uname = join(dir, "uname");
+  writeFileSync(uname, `#!/bin/sh\ncase "$1" in -s) echo '${system}' ;; -m) echo '${machine}' ;; esac\n`);
+  chmodSync(uname, 0o755);
+  return dir;
+}
+
 export function syncedHome(home: Home = scratchHome()): Home {
   sync(home);
   return home;

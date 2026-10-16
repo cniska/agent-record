@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { cpSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import { version } from "../package.json";
@@ -8,13 +8,16 @@ import {
   curlServing,
   type Home,
   QUERY_RESULT,
+  refused,
   releaseAssets,
   removeScratch,
   runOnCleanMachine,
   SYNC_COMMAND_RESULT,
+  SYSTEM_PATH,
   scratchHome,
   scratchTempDir,
   succeeded,
+  unameSaying,
   withFixtures,
 } from "./cli";
 import { LONG } from "./fixture-names";
@@ -99,16 +102,16 @@ test(
       `${"0".repeat(64)}  agent-record-darwin-arm64.tar.gz\n`,
     );
     const fresh = scratchHome();
-    const refused = runOnCleanMachine(fresh, [curl], ["/bin/sh", INSTALL]);
-    expect(refused.exitCode).toBe(1);
-    expect(refused.stderr).toContain("agent-record install: checksum mismatch for");
+    const badDownload = runOnCleanMachine(fresh, [curl], ["/bin/sh", INSTALL]);
+    expect(badDownload.exitCode).toBe(1);
+    expect(badDownload.stderr).toContain("agent-record install: checksum mismatch for");
     expect(existsSync(join(fresh.root, ".local"))).toBe(false);
   },
   BUILD_TIMEOUT_MS,
 );
 
 test(
-  "AC-64 the npm package runs its platform's binary, and the agent runs the npm command",
+  "AC-64 the npm package runs its platform's binary with no runtime on PATH, refuses on another platform and when the platform package is missing or cannot start, and the agent runs the npm command",
   () => {
     const dir = scratchTempDir();
     const assets = releaseAssets(join(dir, "assets"), compiledRelease(join(dir, "build")), "darwin-arm64");
@@ -123,14 +126,26 @@ test(
     const modules = join(dir, "prefix", "lib", "node_modules", "@cniska");
     mkdirSync(modules, { recursive: true });
     cpSync(join(tree, "agent-record"), join(modules, "agent-record"), { recursive: true });
-    cpSync(join(tree, "darwin-arm64"), join(modules, "agent-record-darwin-arm64"), { recursive: true });
     const bin = join(dir, "prefix", "bin");
     mkdirSync(bin);
-    symlinkSync(join(modules, "agent-record", "bin", "agent-record.cjs"), join(bin, "agent-record"));
-    const node = Bun.which("node");
-    expect(node).not.toBeNull();
-    const bins = [bin, dirname(node ?? "")];
+    symlinkSync(join(modules, "agent-record", "bin", "agent-record"), join(bin, "agent-record"));
+    const bins = [bin];
+    for (const runtime of ["node", "bun"])
+      expect(Bun.which(runtime, { PATH: [...bins, SYSTEM_PATH].join(":") })).toBeNull();
+    expect(Bun.which("git", { PATH: SYSTEM_PATH })).not.toBeNull();
     const home = scratchHome();
+
+    expect(refused(versionOf(home, [unameSaying("Plan9", "mips"), ...bins]), "agent-record").code).toBe(
+      "no_build_for_platform",
+    );
+    expect(refused(versionOf(home, bins), "agent-record").code).toBe("platform_package_missing");
+
+    const nested = join(modules, "agent-record", "node_modules", "@cniska", "agent-record-darwin-arm64");
+    cpSync(join(tree, "darwin-arm64"), nested, { recursive: true });
+    const platformBinary = join(nested, "agent-record");
+    chmodSync(platformBinary, 0o644);
+    expect(refused(versionOf(home, bins), "agent-record").code).toBe("binary_failed");
+    chmodSync(platformBinary, 0o755);
 
     expect(versionOf(home, bins)).toEqual({ exitCode: 0, stdout: `${version}\n`, stderr: "" });
     expect(scheduledSync(home, bins)).toContain(runsSync(join(bin, "agent-record")));

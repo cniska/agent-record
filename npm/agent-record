@@ -1,0 +1,66 @@
+#!/bin/sh
+set -u
+
+builds='__BUILDS__'
+name=agent-record
+scope=@cniska
+
+json_string() {
+  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+refuse() {
+  printf '{"command":"%s","ok":false,"error":{"kind":"refusal","code":"%s","message":"%s","meta":{},"resolve":"%s"}}\n' \
+    "$name" "$1" "$(json_string "$2")" "$(json_string "$3")" >&2
+  exit 1
+}
+
+self=$0
+while [ -L "$self" ]; do
+  link=$(readlink "$self")
+  case $link in
+    /*) self=$link ;;
+    *) self=$(dirname "$self")/$link ;;
+  esac
+done
+bin=$(cd "$(dirname "$self")" && pwd -P)
+
+case $(uname -s) in
+  Darwin) os=darwin ;;
+  Linux) os=linux ;;
+  *) os=$(uname -s) ;;
+esac
+case $(uname -m) in
+  arm64 | aarch64) cpu=arm64 ;;
+  x86_64) cpu=x64 ;;
+  *) cpu=$(uname -m) ;;
+esac
+target=$os-$cpu
+
+case " $builds " in
+  *" $target "*) ;;
+  *) refuse no_build_for_platform \
+    "$name ships no build for $target, only $(printf '%s' "$builds" | sed 's/ / and /g')" \
+    "build $name from source with Bun, as its README says" ;;
+esac
+
+package=$scope/$name-$target
+binary=
+for dir in "$bin/../node_modules/$package" "$bin/../../$name-$target"; do
+  if [ -e "$dir/$name" ]; then
+    binary=$dir/$name
+    break
+  fi
+done
+[ -n "$binary" ] || refuse platform_package_missing \
+  "$package is not installed beside $scope/$name" \
+  "reinstall $scope/$name with optional dependencies enabled"
+[ -x "$binary" ] || refuse binary_failed "$binary is not executable" "reinstall $scope/$name"
+
+case $0 in
+  /*) AGENT_RECORD_COMMAND=$0 ;;
+  *) AGENT_RECORD_COMMAND=$(pwd)/${0#./} ;;
+esac
+export AGENT_RECORD_COMMAND
+
+exec "$binary" "$@"
