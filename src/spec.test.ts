@@ -1,8 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { Node } from "@babel/types";
-import { nodesOf } from "./syntax.test-support";
+import { type TestCall, testCallsOf } from "./syntax.test-support";
 
 const ROOT = join(import.meta.dir, "..");
 const ACCEPTANCE = join(ROOT, "acceptance");
@@ -73,22 +72,22 @@ function mentionProblems(
     .map((id) => `${id} is mentioned but not defined`);
 }
 
-type AcceptanceTest = { readonly name: string | null; readonly modifier: string | null };
-
 function testProblems(
   criteria: readonly string[],
   retired: ReadonlySet<string>,
-  tests: readonly AcceptanceTest[],
+  tests: readonly TestCall[],
 ): readonly string[] {
   const problems: string[] = [];
   const tested = new Set<string>();
-  for (const { name, modifier } of tests) {
+  for (const { kind, name, modifier } of tests) {
     if (name === null) {
-      problems.push("an acceptance test's name is not a string literal");
+      problems.push(`an acceptance ${kind}'s name is not a string literal`);
       continue;
     }
     if (modifier !== null) {
-      problems.push(`acceptance test "${name}" is a test.${modifier}, not a test that runs`);
+      problems.push(
+        `acceptance ${kind} "${name}" is called as ${modifier}; only a plain test proves a criterion`,
+      );
       continue;
     }
     const proves = CITED_CRITERIA.exec(name)?.[1]?.trim().split(" ") ?? [];
@@ -106,32 +105,11 @@ function testProblems(
   return problems;
 }
 
-const PLAIN_TEST = "test";
-
-function testCalleeOf(callee: Node): { readonly modifier: string | null } | null {
-  if (callee.type === "Identifier") return callee.name === PLAIN_TEST ? { modifier: null } : null;
-  if (callee.type !== "MemberExpression") return null;
-  if (callee.object.type !== "Identifier" || callee.object.name !== PLAIN_TEST) return null;
-  return { modifier: callee.property.type === "Identifier" ? callee.property.name : "computed" };
-}
-
-function testsOf(source: string): readonly AcceptanceTest[] {
-  const tests: AcceptanceTest[] = [];
-  for (const node of nodesOf(source)) {
-    if (node.type !== "CallExpression") continue;
-    const callee = testCalleeOf(node.callee);
-    if (callee === null) continue;
-    const [name] = node.arguments;
-    tests.push({ name: name?.type === "StringLiteral" ? name.value : null, modifier: callee.modifier });
-  }
-  return tests;
-}
-
 function citationProblems(spec: string, acceptanceSources: readonly string[]): readonly string[] {
   const ids = captures(spec, DEFINITION);
   const retired = new Set(captures(spec, RETIRED_DEFINITION));
   const criteria = criteriaOf(spec, retired);
-  const tests = acceptanceSources.flatMap(testsOf);
+  const tests = acceptanceSources.flatMap(testCallsOf);
   const missing = [
     ...(criteria.length === 0 ? ["no acceptance criteria found in the spec"] : []),
     ...(tests.length === 0 ? ["no acceptance tests found"] : []),
@@ -205,14 +183,51 @@ describe("the citation check", () => {
   test("flags a todo or a skipped test as not proving its criterion", () => {
     const tests = [PROVEN, `test.todo("AC-2 it does another", () => {});`];
     expect(citationProblems(VALID_SPEC, tests)).toEqual([
-      'acceptance test "AC-2 it does another" is a test.todo, not a test that runs',
+      'acceptance test "AC-2 it does another" is called as test.todo; only a plain test proves a criterion',
       "AC-2 has no acceptance test",
     ]);
     const skipped = [PROVEN, `test.skip("AC-2 it does another", () => {});`];
     expect(citationProblems(VALID_SPEC, skipped)).toEqual([
-      'acceptance test "AC-2 it does another" is a test.skip, not a test that runs',
+      'acceptance test "AC-2 it does another" is called as test.skip; only a plain test proves a criterion',
       "AC-2 has no acceptance test",
     ]);
+  });
+
+  test("flags a test made from a table as not proving its criterion", () => {
+    const skipped = [PROVEN, `test.skip.each([[1]])("AC-2 it does another", () => {});`];
+    expect(citationProblems(VALID_SPEC, skipped)).toEqual([
+      'acceptance test "AC-2 it does another" is called as test.skip.each([[1]]); only a plain test proves a criterion',
+      "AC-2 has no acceptance test",
+    ]);
+    const table = [PROVEN, `test.each([[1]])("AC-2 it does another", () => {});`];
+    expect(citationProblems(VALID_SPEC, table)).toEqual([
+      'acceptance test "AC-2 it does another" is called as test.each([[1]]); only a plain test proves a criterion',
+      "AC-2 has no acceptance test",
+    ]);
+  });
+
+  test("flags a test inside a skipped or todo suite as not proving its criterion", () => {
+    const skipped = `describe.skip("again", () => { test("AC-2 it does another", () => {}); });`;
+    expect(citationProblems(VALID_SPEC, [PROVEN, skipped])).toEqual([
+      'acceptance suite "again" is called as describe.skip; only a plain test proves a criterion',
+    ]);
+    const todo = `describe.todo("again", () => { test("AC-2 it does another", () => {}); });`;
+    expect(citationProblems(VALID_SPEC, [PROVEN, todo])).toEqual([
+      'acceptance suite "again" is called as describe.todo; only a plain test proves a criterion',
+    ]);
+    const conditional = `describe.if(false)("again", () => { test("AC-2 it does another", () => {}); });`;
+    expect(citationProblems(VALID_SPEC, [PROVEN, conditional])).toEqual([
+      'acceptance suite "again" is called as describe.if(false); only a plain test proves a criterion',
+    ]);
+    const nested = `describe("outer", () => { describe.skip("again", () => { test("AC-2 it does another", () => {}); }); });`;
+    expect(citationProblems(VALID_SPEC, [PROVEN, nested])).toEqual([
+      'acceptance suite "again" is called as describe.skip; only a plain test proves a criterion',
+    ]);
+  });
+
+  test("passes a test inside a plain suite", () => {
+    const suite = `describe("again", () => { test("AC-2 it does another", () => {}); });`;
+    expect(citationProblems(VALID_SPEC, [PROVEN, suite])).toEqual([]);
   });
 
   test("flags an id that is not a family and a whole number", () => {
