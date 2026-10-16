@@ -4,8 +4,6 @@
 
 This document states what must hold, not how. [`README.md`](README.md) lists the commands and [`src/README.md`](src/README.md) maps the modules that meet these requirements.
 
-**Status: reverse-engineered from the code at `c0ea408`, unverified.** Each requirement states behavior the code shows today, or, where §9 says so, behavior it must reach. None is contract until the owner confirms it. §9 lists the open questions and the known gaps.
-
 ## 1. Purpose & context
 
 A coding agent's context ends at compaction, at a handoff, or when another agent takes over. The tools' transcripts on disk keep what was said, decided and done, but each tool keeps them in its own format and place, and may delete them. agent-record copies them into one archive, reads that archive into one SQLite record, and answers questions over it.
@@ -370,6 +368,4 @@ The steps of one task, for an agent to read instead of whole transcripts.
 
 ## 9. Open questions and known gaps
 
-Each requirement still needs the owner's confirmation before it is contract.
-
-Every criterion is proven: each has a passing test in the acceptance suite, which drives only the CLI. `src/spec.test.ts` ties the suite to this spec. The unit tests stay unit tests and cite no ID.
+No question is open. Every criterion is proven: each has a passing test in the acceptance suite, which drives only the CLI. `src/spec.test.ts` ties the suite to this spec. The unit tests stay unit tests and cite no ID.
