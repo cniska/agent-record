@@ -1,6 +1,10 @@
 # agent-record
 
-Session record for coding agents: every past session on this machine, queryable and joined to its commits. It keeps each session verbatim in one SQLite database, even after the tool that wrote it deletes its own copy. It is not memory, since it puts nothing into an agent's context, and it gates nothing.
+> Session record for coding agents: every past session on this machine, queryable and joined to its commits
+
+[![CI](https://img.shields.io/github/actions/workflow/status/cniska/agent-record/check.yml?branch=main&style=flat&label=ci)](https://github.com/cniska/agent-record/actions/workflows/check.yml) [![License](https://img.shields.io/badge/license-MIT-blue?style=flat)](LICENSE)
+
+It keeps each session verbatim in one SQLite database, even after the tool that wrote it deletes its own copy. It is not memory, since it puts nothing into an agent's context, and it gates nothing.
 
 - `agent-record sync` reads the session files of Claude Code, Codex, Grok, pi and omp into that database, with the commits of the repos those sessions worked in and the hook event log any Claude Code plugin writes in the format [`SPEC.md`](SPEC.md) §2.13 defines.
 - `agent-record query` and `agent-record sql` read it. Search comes first: `query search` finds where earlier work was said, decided or ran into friction, and `query thread` shows what happened around it.
