@@ -1,6 +1,6 @@
 # agent-record Specification
 
-> Query your past agent work: every coding-agent session on this machine, kept verbatim even after the tools delete theirs and joined to the commits it made, in one SQLite database. Agents search it, and the owner measures workflow changes from it.
+> Session record for coding agents: every past session on this machine, queryable and joined to its commits. Agents search it, and the owner measures workflow changes from it.
 
 This document states what must hold, not how. [`README.md`](README.md) lists the commands and [`src/README.md`](src/README.md) maps the modules that meet these requirements.
 

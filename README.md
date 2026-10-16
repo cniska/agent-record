@@ -1,6 +1,6 @@
 # agent-record
 
-Query your past agent work: every coding-agent session on this machine, kept verbatim even after the tools delete theirs and joined to the commits it made, in one SQLite database. It is not memory, since it puts nothing into an agent's context, and it gates nothing.
+Session record for coding agents: every past session on this machine, queryable and joined to its commits. It keeps each session verbatim in one SQLite database, even after the tool that wrote it deletes its own copy. It is not memory, since it puts nothing into an agent's context, and it gates nothing.
 
 - `agent-record sync` reads the session files of Claude Code, Codex, Grok, pi and omp into that database, with the commits of the repos those sessions worked in and the hook event log any Claude Code plugin writes in the format [`SPEC.md`](SPEC.md) §2.13 defines.
 - `agent-record query` and `agent-record sql` read it. Search comes first: `query search` finds where earlier work was said, decided or ran into friction, and `query thread` shows what happened around it.

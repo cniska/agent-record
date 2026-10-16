@@ -15,7 +15,7 @@ const NAME = "agent-record";
 const REPOSITORY = { type: "git", url: "git+https://github.com/cniska/agent-record.git" } as const;
 const HOMEPAGE = "https://github.com/cniska/agent-record";
 const SUMMARY =
-  "Query your past agent work: every coding-agent session on this machine, in one SQLite record.";
+  "Session record for coding agents: every past session on this machine, queryable and joined to its commits";
 
 const platformTarget = ({ os, cpu }: Platform): string => `${os}-${cpu}`;
 
