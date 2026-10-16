@@ -12,8 +12,6 @@ import { indexRepoFiles, trackedFiles } from "./repo-files";
 function repoWith(files: string[]): string {
   const dir = realpathSync(mkdtempSync(join(tmpdir(), "agent-record-files-")));
   execFileSync("git", ["init", "-q", "-b", "main", dir]);
-  execFileSync("git", ["-C", dir, "config", "user.email", "t@example.com"]);
-  execFileSync("git", ["-C", dir, "config", "user.name", "T"]);
   execFileSync("git", ["-C", dir, "config", "maintenance.auto", "false"]);
   writeFileSync(join(dir, ".gitignore"), "dist/\n");
   for (const f of files) {

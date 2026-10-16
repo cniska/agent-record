@@ -11,8 +11,6 @@ function git(args: string[], cwd: string): void {
 function repoWith(subjects: string[]): string {
   const dir = mkdtempSync(join(tmpdir(), "agent-record-git-"));
   git(["init", "-q", "-b", "main"], dir);
-  git(["config", "user.email", "t@example.com"], dir);
-  git(["config", "user.name", "Test"], dir);
   subjects.forEach((subject, i) => {
     writeFileSync(join(dir, `f${i}.txt`), String(i));
     git(["add", "."], dir);

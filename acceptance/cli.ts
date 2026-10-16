@@ -131,13 +131,7 @@ type Commit = { readonly subject: string; readonly file: string; readonly at: st
 function git(repo: string, args: readonly string[], at?: string): void {
   const ran = Bun.spawnSync(["git", "-C", repo, ...args], {
     env: {
-      PATH: process.env.PATH,
-      HOME: repo,
-      GIT_CONFIG_NOSYSTEM: "1",
-      GIT_AUTHOR_NAME: "Test Author",
-      GIT_AUTHOR_EMAIL: "author@example.test",
-      GIT_COMMITTER_NAME: "Test Author",
-      GIT_COMMITTER_EMAIL: "author@example.test",
+      ...process.env,
       ...(at === undefined ? {} : { GIT_AUTHOR_DATE: at, GIT_COMMITTER_DATE: at }),
     },
   });

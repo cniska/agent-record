@@ -15,10 +15,7 @@ export function repoWithWorktree(root: string): RepoWithWorktree {
   const commit = (file: string, subject: string, env: Record<string, string> = {}) => {
     writeFileSync(join(repo, file), subject);
     git(["add", file]);
-    git(
-      ["-c", "user.name=T", "-c", "user.email=t@example.com", "commit", "--no-verify", "-q", "-m", subject],
-      env,
-    );
+    git(["commit", "--no-verify", "-q", "-m", subject], env);
   };
 
   git(["init", "-q", "-b", "main"]);

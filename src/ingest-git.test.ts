@@ -28,7 +28,7 @@ function repoWithCommit(content = "x"): string {
   git("init", "-q");
   writeFileSync(join(repo, "a.ts"), content);
   git("add", "a.ts");
-  git("-c", "user.name=T", "-c", "user.email=t@example.com", "commit", "--no-verify", "-q", "-m", "feat: a");
+  git("commit", "--no-verify", "-q", "-m", "feat: a");
   return repo;
 }
 
@@ -45,20 +45,7 @@ function freshDb(): Database {
 function commitIn(repo: string, file: string): void {
   writeFileSync(join(repo, file), file);
   Bun.spawnSync(["git", "-C", repo, "add", file]);
-  Bun.spawnSync([
-    "git",
-    "-C",
-    repo,
-    "-c",
-    "user.name=T",
-    "-c",
-    "user.email=t@example.com",
-    "commit",
-    "--no-verify",
-    "-q",
-    "-m",
-    `feat: ${file}`,
-  ]);
+  Bun.spawnSync(["git", "-C", repo, "commit", "--no-verify", "-q", "-m", `feat: ${file}`]);
 }
 
 const commitsOf = (db: Database, roots: readonly string[]) =>
