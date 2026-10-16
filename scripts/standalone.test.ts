@@ -93,6 +93,7 @@ describe("the repo stands alone", () => {
     expect(paths).toContain("npm/agent-record");
     expect(paths).toContain("docs/releasing.md");
     expect(paths).toContain("scripts/install.sh");
+    expect(paths).toContain("scripts/smoke.sh");
     expect(paths).toContain(".github/workflows/release.yml");
     expect(paths).toContain(".github/workflows/check.yml");
     expect(paths).not.toContain(SELF);

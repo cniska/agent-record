@@ -50,20 +50,19 @@ jobs:
         run: bun run check
 
       - name: Build binary
-        run: bash scripts/build-compiled.sh agent-record
+        run: bash scripts/build-compiled.sh "$RUNNER_TEMP/bin/agent-record"
 
       - name: Smoke test binary
         run: |
           expected="$(bun -e 'console.log(require("./package.json").version)')"
-          test "$(./agent-record --version)" = "$expected"
-          ./agent-record | grep -q '"ok":true'
+          bash scripts/smoke.sh "$RUNNER_TEMP/bin/agent-record" "$expected"
 
       - name: Package artifact
         env:
           TARGET: ${{ matrix.target }}
         run: |
           mkdir -p artifacts
-          tar -czf "artifacts/agent-record-$TARGET.tar.gz" agent-record
+          tar -czf "artifacts/agent-record-$TARGET.tar.gz" -C "$RUNNER_TEMP/bin" agent-record
           cd artifacts && sha256sum "agent-record-$TARGET.tar.gz" > "agent-record-$TARGET.sha256"
 
       - name: Upload artifact
@@ -169,6 +168,70 @@ jobs:
             fi
             npm publish "./dist/npm/$package" --access public --provenance
           done
+
+  smoke:
+    name: Registry smoke (${{ matrix.target }})
+    needs: npm
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-arm64
+            runner: macos-latest
+          - target: linux-x64
+            runner: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Wait for the registry to serve the version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="${TAG#v}"
+          for package in agent-record agent-record-darwin-arm64 agent-record-linux-x64; do
+            for attempt in $(seq 1 12); do
+              npm view "@cniska/$package@$version" version >/dev/null 2>&1 && continue 2
+              sleep 10
+            done
+            echo "@cniska/$package@$version is not on the registry after $attempt tries"
+            exit 1
+          done
+
+      - name: Install from the registry with npm and bun
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          npm install -g "@cniska/agent-record@${TAG#v}"
+          bun add -g "@cniska/agent-record@${TAG#v}"
+
+      - name: Smoke test each install with no runtime on PATH
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="${TAG#v}"
+          npm_bin="$(npm prefix -g)/bin"
+          bun_bin="$HOME/.bun/bin"
+          PATH=/usr/bin:/bin
+          if command -v node || command -v bun; then
+            echo "a runtime is on PATH, so this proves nothing"
+            exit 1
+          fi
+          bash scripts/smoke.sh "$npm_bin/agent-record" "$version"
+          bash scripts/smoke.sh "$bun_bin/agent-record" "$version"
 
   homebrew:
     name: Bump Homebrew Formula
