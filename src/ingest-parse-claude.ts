@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { unreachable } from "./assert";
-import { errorTextOf } from "./ingest-error-text";
 import { MessageId, ResponseId, ToolCallId, TurnId } from "./ingest-ids";
 import {
   byKind,
@@ -308,7 +307,7 @@ function resultSize(content: unknown, result: ClaudeToolUseResult | undefined): 
 }
 
 function failureTextOf(content: unknown): string | null {
-  return errorTextOf(resultTexts(content).join("\n"));
+  return nonEmpty(resultTexts(content).join("\n"));
 }
 
 function sessionFactsOf(line: {

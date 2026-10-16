@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { unreachable } from "./assert";
-import { errorTextOf } from "./ingest-error-text";
 import { MessageId, ResponseId, type SessionId, ToolCallId, TurnId } from "./ingest-ids";
 import { byKind, jsonOrNull, lineOf, nonEmpty, textAt, typeOf, UnkeptLine } from "./ingest-parse";
 import {
@@ -158,9 +157,7 @@ function failed(item: CodexItem): boolean {
 
 function failureTextOf(item: CodexItem): string | null {
   if (!failed(item)) return null;
-  return errorTextOf(
-    [item.stdout, item.stderr].filter((part) => part !== undefined && part !== "").join("\n"),
-  );
+  return nonEmpty([item.stdout, item.stderr].filter((part) => part !== undefined && part !== "").join("\n"));
 }
 
 type CodexThread = { readonly id: SessionId; readonly state: CodexState };

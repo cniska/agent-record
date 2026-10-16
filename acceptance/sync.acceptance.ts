@@ -18,6 +18,7 @@ import { dirname, join } from "node:path";
 import { withClaudeSessions } from "./claude-sessions";
 import {
   archivedPath,
+  columnsHolding,
   doctor,
   type Fixture,
   failingRecordWrites,
@@ -939,6 +940,57 @@ test("AC-72 a secret-shaped string in a failed call's result is redacted from it
       "Exit code 1\nANTHROPIC_API_KEY=[REDACTED]\nAuthorization: token [REDACTED]\nnpm error 401 Unauthorized",
     ],
   ]);
+});
+
+test("AC-75 a value given to a name ending in _TOKEN or _SECRET is masked in every table the record holds", () => {
+  const token = "CLAUDE_CODE_MESSAGING_TOKEN=0123456789abcdef0123456789abcdef";
+  const secret = "NPM_PUBLISH_SECRET=test-secret-value";
+  const home = withClaudeSessions(scratchHome(), [
+    {
+      id: FAILING,
+      cwd: "/Users/x/code/demo",
+      steps: [
+        { owner: `run it with ${token} and ${secret} set`, at: "2026-10-16T09:00:00.000Z" },
+        {
+          bash: `${token} ${secret} bun run publish`,
+          at: "2026-10-16T09:01:00.000Z",
+          done: "2026-10-16T09:01:01.000Z",
+        },
+        {
+          errored: "env | grep SECRET",
+          at: "2026-10-16T09:02:00.000Z",
+          output: `Exit code 1\n${secret}\n${token}`,
+        },
+        { rejected: "cat .env", at: "2026-10-16T09:03:00.000Z", feedback: `no, it holds ${secret}` },
+      ],
+    },
+  ]);
+
+  sync(home);
+  expect(columnsHolding(home, "0123456789abcdef0123456789abcdef")).toEqual([]);
+  expect(columnsHolding(home, "test-secret-value")).toEqual([]);
+  expect(
+    rowsOf(
+      home,
+      `select text from message where session_id = '${FAILING}' and role = 'user' and text like 'run it%'`,
+    ),
+  ).toEqual([["run it with CLAUDE_CODE_MESSAGING_TOKEN=[REDACTED] and NPM_PUBLISH_SECRET=[REDACTED] set"]]);
+  expect(
+    rowsOf(home, `select command, error_text from tool_call where session_id = '${FAILING}' order by id`),
+  ).toEqual([
+    ["CLAUDE_CODE_MESSAGING_TOKEN=[REDACTED] NPM_PUBLISH_SECRET=[REDACTED] bun run publish", null],
+    [
+      "env | grep SECRET",
+      "Exit code 1\nNPM_PUBLISH_SECRET=[REDACTED]\nCLAUDE_CODE_MESSAGING_TOKEN=[REDACTED]",
+    ],
+    ["cat .env", null],
+  ]);
+  expect(
+    rowsOf(
+      home,
+      `select user_feedback from message where session_id = '${FAILING}' and user_feedback is not null`,
+    ),
+  ).toEqual([["no, it holds NPM_PUBLISH_SECRET=[REDACTED]"]]);
 });
 
 test("AC-73 a call's duration is the one its tool reports, or else runs from the call to its result", () => {

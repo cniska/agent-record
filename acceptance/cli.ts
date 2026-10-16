@@ -419,6 +419,25 @@ export function schemaVersion(home: Home): number {
     .user_version;
 }
 
+const Named = z.strictObject({ name: z.string() });
+
+export function columnsHolding(home: Home, value: string): readonly string[] {
+  using db = new Database(home.record, { readonly: true });
+  const tables = z.array(Named).parse(db.query("SELECT name FROM sqlite_master WHERE type = 'table'").all());
+  return tables.flatMap(({ name: table }) =>
+    z
+      .array(Named)
+      .parse(db.query(`SELECT name FROM pragma_table_info('${table}')`).all())
+      .filter(({ name: column }) => {
+        const held = db
+          .query(`SELECT count(*) AS n FROM "${table}" WHERE cast("${column}" AS text) LIKE ?`)
+          .get(`%${value}%`);
+        return z.strictObject({ n: z.number() }).parse(held).n > 0;
+      })
+      .map(({ name: column }) => `${table}.${column}`),
+  );
+}
+
 export function withSyncFinishedAt(home: Home, at: string): Home {
   mkdirSync(home.state, { recursive: true });
   writeFileSync(

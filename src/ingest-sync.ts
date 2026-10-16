@@ -15,6 +15,7 @@ import type { SessionId } from "./ingest-ids";
 import { parentsFirst } from "./ingest-order";
 import type { ReadResult } from "./ingest-read-new";
 import { scan } from "./ingest-scan";
+import { maskSecrets } from "./ingest-secrets";
 import { listSource, SESSION_SOURCES, type SessionSource } from "./ingest-sources";
 import { linkSpawnedSubagents } from "./ingest-spawn";
 import { TOOLS, type Tool } from "./ingest-tools";
@@ -111,7 +112,7 @@ function ingestFrom(db: Database, env: Env, from: ReadFrom): SyncReport {
     const ingest = (file: SourceFile): boolean => {
       const reset = run({ ...file, tool });
       const title = titles?.get(file.sessionId);
-      if (title) writeTransaction(db, () => setTitle.run(title, file.sessionId));
+      if (title) writeTransaction(db, () => setTitle.run(maskSecrets(title), file.sessionId));
       return reset;
     };
     const link = (listed: SourceFile): SourceFile => {

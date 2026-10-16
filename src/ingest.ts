@@ -5,6 +5,7 @@ import { unreachable } from "./assert";
 import { writeTransaction } from "./db";
 import { gitRuns } from "./git-operations";
 import type { SessionId, ToolCallId } from "./ingest-ids";
+import { maskedChunk } from "./ingest-mask";
 import { type ReadResult, readNewLines } from "./ingest-read-new";
 import {
   advance,
@@ -571,7 +572,7 @@ export function ingestFile(ingester: Ingester, spec: FileSpec): FileResult {
     if (reset) ingester.resetSession(spec);
     return { read: false, reset, dropped: [] };
   }
-  const parsed = spec.parse(chunk.lines, from.lines + 1, from.state);
+  const parsed = maskedChunk(spec.parse(chunk.lines, from.lines + 1, from.state));
   const to = advance(from, chunk, parsed.cursorState);
   ingester.commit(spec, reset, parsed, to);
   return { read: true, reset, dropped: parsed.dropped };

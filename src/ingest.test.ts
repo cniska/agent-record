@@ -561,6 +561,27 @@ describe("ingest", () => {
     }
   });
 
+  test("masks a secret in the title Codex keeps for a thread", () => {
+    const root = newRoot();
+    const env = scratchEnv(root);
+    writeCodexRollout(env, "sessions", THREAD);
+    const statePath = join(codexDir(env), "state_5.sqlite");
+    const state = new Database(statePath);
+    state.run("CREATE TABLE threads (id TEXT, title TEXT)");
+    state.run("INSERT INTO threads VALUES (?, ?)", [THREAD, "Set NPM_PUBLISH_SECRET=test-secret-value"]);
+    state.close();
+
+    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
+    try {
+      expect(sync(db, env).failures).toEqual([]);
+      expect(db.prepare("SELECT title FROM session WHERE id = ?").get(THREAD)).toEqual({
+        title: "Set NPM_PUBLISH_SECRET=[REDACTED]",
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   test("names a Codex thread store it cannot read as a failure and still reads the rollouts", () => {
     const root = newRoot();
     const env = scratchEnv(root);

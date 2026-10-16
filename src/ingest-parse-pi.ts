@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { unreachable } from "./assert";
-import { errorTextOf } from "./ingest-error-text";
 import { MessageId, ResponseId, ToolCallId } from "./ingest-ids";
 import { byKind, lineOf, nonEmpty, TextPart, textAt, typeOf, UnkeptLine, UnkeptPart } from "./ingest-parse";
 import {
@@ -91,7 +90,7 @@ function resultTexts(parts: readonly z.output<typeof PiTextPart>[]): string[] {
 }
 
 function failureTextOf(parts: readonly z.output<typeof PiTextPart>[]): string | null {
-  return errorTextOf(resultTexts(parts).join("\n"));
+  return nonEmpty(resultTexts(parts).join("\n"));
 }
 
 const PiToolResultLine = z

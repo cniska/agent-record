@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { unreachable } from "./assert";
-import { errorTextOf } from "./ingest-error-text";
 import { MessageId, ToolCallId } from "./ingest-ids";
 import { byKind, lineOf, nonEmpty, textAt } from "./ingest-parse";
 import {
@@ -181,7 +180,7 @@ function toolRowsOf({ update, ts }: GrokToolLine, srcLine: number): ToolCallRow[
       exitCode: update.shellExitCode,
       duration: CALL_TO_RESULT,
       resultBytes: resultBytesOf(update.texts),
-      errorText: failed || (update.shellExitCode ?? 0) !== 0 ? errorTextOf(update.texts.join("\n")) : null,
+      errorText: failed || (update.shellExitCode ?? 0) !== 0 ? nonEmpty(update.texts.join("\n")) : null,
       srcLine,
     },
   ];
