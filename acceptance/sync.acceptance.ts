@@ -916,8 +916,8 @@ test("AC-71 a failed or refused call keeps its result's head and tail as its err
 });
 
 test("AC-72 a secret-shaped string in a failed call's result is redacted from its error text", () => {
-  const key = "sk-ant-api03-Zq8vN2kLp4Xr7Tb1Wm9Yc3Hd6Fg0Js5A";
-  const token = "ghp_9fK2mQ7xL4vR8tB1nW6yC3hD5gJ0sA2eZ1uP";
+  const key = "sk-ant-api03-test-not-a-real-key-0000000";
+  const token = `ghp_${"x".repeat(36)}`;
   const home = withClaudeSessions(scratchHome(), [
     {
       id: FAILING,
