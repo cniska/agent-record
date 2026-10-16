@@ -66,9 +66,23 @@ Each command prints one JSON line.
 
 The record lives at `$XDG_DATA_HOME/agent-record/sessions.db` (`~/.local/share/agent-record/sessions.db` by default); `src/db-schema.ts` holds its tables.
 
-The archive beside it, `$XDG_DATA_HOME/agent-record/archive/<tool>/`, keeps a copy of every session file `sync` has seen, laid out as the tool lays it out, and the record reads only those copies. A tool deleting its old transcripts loses nothing the archive holds: `rebuild` gives back every session whose file `sync` archived, as it last saw it. A file the tool shrank or rewrote is kept as rewritten. Each plugin's hook event log is archived at `archive/plugin-data/<plugin>-<marketplace>/events.jsonl`; a log that shrank or was rewritten, as a reinstalled plugin starts it again, keeps its earlier copy beside it as `events-<n>.jsonl`, and the record keeps its events.
+The archive beside it, `$XDG_DATA_HOME/agent-record/archive/<tool>/`, keeps a copy of every session file `sync` has seen, laid out as the tool lays it out, and the record reads only those copies. A tool deleting its old transcripts loses nothing the archive holds: `rebuild` gives back every session whose file `sync` archived, as it last saw it. A file the tool shrank or rewrote is kept as rewritten. Each plugin's hook event log is archived at `archive/plugin-data/<plugin>-<marketplace>/events.jsonl`; a log that shrank or was rewritten, as a reinstalled plugin starts it again, keeps its earlier copy beside it as `events-<n>.jsonl`, and the record keeps its events. Git history is read from the checkouts on disk, not the archive: `sync` keeps the history of a checkout no longer on disk, and `rebuild` loses it, naming the checkout.
 
 On APFS the first copy of a file is a clone and takes no space of its own. Bytes a session gains after that are appended to the copy, so they are stored twice.
+
+Where the data flows, and which copy each part comes back from:
+
+```mermaid
+flowchart LR
+  tools[("Each tool's session files")] -- "sync: new bytes, and a file rewritten" --> archive[("Archive<br/>the only copy once a tool deletes its file")]
+  logs[("Each plugin's hook event log")] -- "sync: new lines; a rewritten log keeps its earlier copy" --> archive
+  archive -- "sync: sessions and events, read from here alone; rebuild: all of it again" --> record[("Record, sessions.db<br/>keeps a removed checkout's history until a rebuild")]
+  repos[("Git checkouts on disk")] -- "sync: commits and files; rebuild: only of checkouts still on disk" --> record
+  record -- "rebuild: copied first" --> backup[("Backup of the record")]
+  record -- "query, sql" --> queries(["Queries"])
+  archive -- "sync: new and changed files, none deleted" --> mirror[("Mirror<br/>no command reads it")]
+  mirror -- "restore: ditto by hand, then rebuild" --> archive
+```
 
 ## Mirror
 
