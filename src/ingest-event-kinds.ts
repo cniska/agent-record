@@ -22,7 +22,7 @@ const MOST_COUNTED = 1000;
 
 const count = z.number().int().nonnegative().max(MOST_COUNTED);
 
-export const Counted = z.object({
+export const Counted = z.strictObject({
   findings: z.record(z.enum(FINDING_KINDS), count),
   conflicts: count,
   rules: z.array(z.string().min(1)),

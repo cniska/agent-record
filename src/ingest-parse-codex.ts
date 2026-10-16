@@ -22,16 +22,16 @@ export type CodexState = z.infer<typeof CodexState>;
 
 export const NO_CODEX_STATE: CodexState = { model: null, turnId: null };
 
-const CodexContent = z.object({ type: z.string().optional(), text: z.string().optional() });
+const CodexContent = z.looseObject({ type: z.string().optional(), text: z.string().optional() });
 
-const CodexUsage = z.object({
+const CodexUsage = z.looseObject({
   input_tokens: z.number().optional(),
   cached_input_tokens: z.number().optional(),
   cache_write_input_tokens: z.number().optional(),
   output_tokens: z.number().optional(),
 });
 
-const CodexDuration = z.object({ secs: z.number().optional(), nanos: z.number().optional() });
+const CodexDuration = z.looseObject({ secs: z.number().optional(), nanos: z.number().optional() });
 type CodexDuration = z.infer<typeof CodexDuration>;
 
 function codexLine<Kind extends string, Payload>(kind: Kind, payload: z.ZodType<Payload>) {
@@ -52,10 +52,10 @@ const CODEX_TOOL_ITEMS = ["CommandExecution", "FileChange", "McpToolCall"] as co
 
 const CodexItemLine = codexLine(
   "item",
-  z.object({
+  z.looseObject({
     started_at_ms: EpochMs.optional(),
     completed_at_ms: EpochMs.optional(),
-    item: z.object({
+    item: z.looseObject({
       id: ToolCallId,
       type: z.enum(CODEX_TOOL_ITEMS),
       command: z.unknown().optional(),
@@ -71,7 +71,7 @@ const CodexItemLine = codexLine(
 
 const CodexMessageLine = codexLine(
   "message",
-  z.object({
+  z.looseObject({
     id: MessageId.nullish(),
     role: z.enum(ROLES),
     content: z.array(CodexContent.nullable()).nullish(),
@@ -103,30 +103,30 @@ const CodexLine = byKind(
   {
     session_meta: codexLine(
       "session",
-      z.object({
+      z.looseObject({
         timestamp: Timestamp.optional(),
         cwd: z.string().optional(),
         originator: z.string().nullish(),
         cli_version: z.string().nullish(),
-        git: z.object({ branch: z.string().optional() }).optional(),
+        git: z.looseObject({ branch: z.string().optional() }).optional(),
       }),
     ),
     turn_context: codexLine(
       "turnContext",
-      z.object({ cwd: z.string().optional(), model: z.string().nullish(), turn_id: TurnId.nullish() }),
+      z.looseObject({ cwd: z.string().optional(), model: z.string().nullish(), turn_id: TurnId.nullish() }),
     ),
     "response_item/message/user": CodexMessageLine,
     "response_item/message/assistant": CodexMessageLine,
-    "event_msg/task_complete": codexLine("turnComplete", z.object(CodexTurnEnd)),
+    "event_msg/task_complete": codexLine("turnComplete", z.looseObject(CodexTurnEnd)),
     "event_msg/turn_aborted": codexLine(
       "turnAborted",
-      z.object({ ...CodexTurnEnd, reason: z.string().min(1) }),
+      z.looseObject({ ...CodexTurnEnd, reason: z.string().min(1) }),
     ),
     item_completed: CodexItemLine,
     token_usage_record: codexLine(
       "usage",
       z
-        .object({ response_id: ResponseId, usage: CodexUsage.nullish() })
+        .looseObject({ response_id: ResponseId, usage: CodexUsage.nullish() })
         .refine((p) => (p.usage?.cached_input_tokens ?? 0) <= (p.usage?.input_tokens ?? 0), {
           error: "reports more cached input than input",
         }),

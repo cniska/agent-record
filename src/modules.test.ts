@@ -9,6 +9,7 @@ const SRC = import.meta.dir;
 const PUBLIC: Readonly<Record<string, readonly string[]>> = {
   agent: ["agent-launchd"],
   assert: ["assert"],
+  casts: [],
   cli: ["cli-flags"],
   "coded-error": ["coded-error"],
   db: ["db", "db-error", "db-lock", "db-read", "db-schema"],

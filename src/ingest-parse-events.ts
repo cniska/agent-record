@@ -18,7 +18,7 @@ const placed = {
   cwd: unknown,
 };
 
-const GateLine = z.object({
+const GateLine = z.looseObject({
   ...placed,
   event: z.literal("gate"),
   gate: z.enum(GATES),
@@ -38,7 +38,7 @@ const verdict = {
 };
 
 const CountedVerdictLine = z
-  .object({ ...verdict, ...Counted.shape })
+  .looseObject({ ...verdict, ...Counted.shape })
   .transform(({ findings, conflicts, rules, ...rest }) => ({
     ...rest,
     counted: { findings, conflicts, rules },
@@ -47,7 +47,7 @@ const CountedVerdictLine = z
 const uncounted = z.null().optional();
 
 const UncountedVerdictLine = z
-  .object({
+  .looseObject({
     ...verdict,
     findings: uncounted,
     conflicts: uncounted,
@@ -57,10 +57,10 @@ const UncountedVerdictLine = z
 
 const VerdictLine = z.union([CountedVerdictLine, UncountedVerdictLine]);
 
-const PromptLine = z.object({ ...placed, event: z.literal("permission_prompt"), tool: known });
+const PromptLine = z.looseObject({ ...placed, event: z.literal("permission_prompt"), tool: known });
 
 const DeniedLine = z
-  .object({
+  .looseObject({
     ...placed,
     event: z.literal("permission_denied"),
     tool: known,
@@ -70,7 +70,7 @@ const DeniedLine = z
   })
   .transform(({ tool_use, ...rest }) => ({ ...rest, toolUse: tool_use }));
 
-const TagLine = z.object({ ...placed, event: z.literal("tag"), key: known, value: known });
+const TagLine = z.looseObject({ ...placed, event: z.literal("tag"), key: known, value: known });
 
 const Unkept = z.looseObject({ v: z.literal(FORMAT_VERSION) }).transform(() => null);
 
@@ -84,7 +84,9 @@ const KEPT = {
 
 const EventLine = byKind((value) => textAt(value, "event"), KEPT, Unkept);
 
-type Unversioned<Line> = Line extends unknown ? Omit<Line, "v"> : never;
+type Unversioned<Line> = Line extends unknown
+  ? { [Field in keyof Line as Field extends "v" ? never : string extends Field ? never : Field]: Line[Field] }
+  : never;
 
 type Parsed = Unversioned<NonNullable<z.output<typeof EventLine>>>;
 

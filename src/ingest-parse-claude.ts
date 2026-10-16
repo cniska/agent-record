@@ -66,14 +66,14 @@ const ClaudeAssistantBlock = byKind(typeOf, { text: TextPart, tool_use: ClaudeTo
 
 const ClaudeUserBlock = byKind(typeOf, { text: TextPart, tool_result: ClaudeToolResult }, UnkeptPart);
 
-const ClaudeToolUseResult = z.object({
+const ClaudeToolUseResult = z.looseObject({
   stdout: z.string().optional(),
   stderr: z.string().optional(),
   interrupted: z.boolean().optional(),
 });
 type ClaudeToolUseResult = z.infer<typeof ClaudeToolUseResult>;
 
-const ClaudeUsage = z.object({
+const ClaudeUsage = z.looseObject({
   input_tokens: z.number().optional(),
   output_tokens: z.number().optional(),
   cache_read_input_tokens: z.number().optional(),
@@ -111,7 +111,7 @@ const ClaudeAssistantLine = z
     attributionSkill: z.string().nullish(),
     requestId: z.string().optional(),
     effort: z.string().optional(),
-    message: z.object({
+    message: z.looseObject({
       id: MessageId,
       model: z.string().optional(),
       content: z.union([z.string(), z.array(ClaudeAssistantBlock.nullable())]).optional(),
@@ -141,7 +141,7 @@ const ClaudeUserLine = z
     promptSource: z.string().optional(),
     promptId: TurnId.optional(),
     permissionMode: z.string().optional(),
-    origin: z.object({ kind: z.string().optional() }).optional(),
+    origin: z.looseObject({ kind: z.string().optional() }).optional(),
     parentUuid: MessageId.nullish(),
     sourceToolUseID: ToolCallId.nullish(),
     interruptedMessageId: z.string().nullish(),
@@ -155,7 +155,7 @@ const ClaudeUserLine = z
       ])
       .optional(),
     message: z
-      .object({ content: z.union([z.string(), z.array(ClaudeUserBlock.nullable())]).optional() })
+      .looseObject({ content: z.union([z.string(), z.array(ClaudeUserBlock.nullable())]).optional() })
       .optional(),
   })
   .transform((line) => ({

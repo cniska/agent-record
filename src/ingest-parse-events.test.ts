@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { Counted } from "./ingest-event-kinds";
 import { parseEventChunk } from "./ingest-parse-events";
 
 const COMMON = {
@@ -32,6 +33,8 @@ const DENIED = {
   reason: "rule",
   rule: "no-force-push",
 };
+
+const TAG = { event: "tag", key: "task", value: "record-row-parse" };
 
 const PLACE = {
   ts: "2026-10-14T08:51:25.000Z",
@@ -112,6 +115,25 @@ describe("a hook event log", () => {
     ]);
   });
 
+  test("reads each kept kind with a field added to it without a new version", () => {
+    const findings = { critical: 0, major: 1, minor: 2, fix: 1, consider: 0, unrated: 0 };
+    const kinds = [GATE, VERDICT, { ...VERDICT, findings, conflicts: 0, rules: [] }, PROMPT, DENIED, TAG];
+    const { events, dropped } = parseEventChunk(
+      kinds.map((kind) => line({ ...kind, added_later: "x" })),
+      1,
+    );
+
+    expect(dropped).toEqual([]);
+    expect(events.map((event) => event.event)).toEqual([
+      "gate",
+      "verdict",
+      "verdict",
+      "permission_prompt",
+      "permission_denied",
+      "tag",
+    ]);
+  });
+
   test("reads a verdict's finding counts, conflicts and cited rules", () => {
     const findings = { critical: 0, major: 1, minor: 2, fix: 1, consider: 0, unrated: 0 };
     const { events } = parseEventChunk(
@@ -130,6 +152,21 @@ describe("a hook event log", () => {
         counted: { findings, conflicts: 1, rules: ["Clear names", "Clear names"] },
       },
     ]);
+  });
+
+  test("reads back the counts it stores, and refuses a stored count with a field it never writes", () => {
+    const findings = { critical: 0, major: 1, minor: 2, fix: 1, consider: 0, unrated: 0 };
+    const [event] = parseEventChunk(
+      [line({ ...VERDICT, findings, conflicts: 1, rules: ["Clear names"] })],
+      1,
+    ).events;
+    const stored = event?.event === "verdict" ? JSON.stringify(event.counted) : null;
+
+    expect(stored).toBe(
+      '{"findings":{"critical":0,"major":1,"minor":2,"fix":1,"consider":0,"unrated":0},"conflicts":1,"rules":["Clear names"]}',
+    );
+    expect(Counted.safeParse(JSON.parse(stored ?? "null")).success).toBe(true);
+    expect(Counted.safeParse({ findings, conflicts: 1, rules: [], fixed: 1 }).success).toBe(false);
   });
 
   test("reads a verdict whose counts are all null as one that counted none", () => {
@@ -160,10 +197,6 @@ describe("a hook event log", () => {
 
     expect(dropped).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     expect(events).toEqual([]);
-  });
-
-  test("reads a field added to a kind without a new version", () => {
-    expect(parseEventChunk([line({ ...PROMPT, mode: "auto" })], 1).events).toHaveLength(1);
   });
 
   test("reports a kept line it cannot read, and a line of another version", () => {
