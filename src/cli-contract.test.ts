@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Node } from "@babel/types";
 import { allCommands, findCommand } from "./cli-commands";
 import { runCli, scratchEnv } from "./fixtures.test-support";
 import { SYNCED_SESSION, syncedRecord } from "./query.test-support";
-import { importsOf, nodesOf } from "./syntax.test-support";
+import { importsOf, nodesOf, productionSourcesOf } from "./syntax.test-support";
 
 const COMMANDS = await allCommands();
 
@@ -79,12 +79,6 @@ function readsEnvironment(text: string): boolean {
   );
 }
 
-function sources(): string[] {
-  return readdirSync(SRC, { recursive: true })
-    .map(String)
-    .filter((path) => /\.tsx?$/.test(path) && !/\.test\.tsx?$|test-support/.test(path));
-}
-
 describe("the command contract", () => {
   test("cli.ts only runs the CLI with its runtime", () => {
     expect([...importsOf(readFileSync(join(SRC, "cli.ts"), "utf8"))].sort()).toEqual([
@@ -104,7 +98,9 @@ describe("the command contract", () => {
   });
 
   test("only the two entries read the environment, and env.ts parses it", () => {
-    const readers = sources().filter((path) => readsEnvironment(readFileSync(join(SRC, path), "utf8")));
+    const readers = productionSourcesOf(SRC)
+      .filter(({ text }) => readsEnvironment(text))
+      .map(({ file }) => file);
     expect(readers.sort()).toEqual(["cli-release.ts", "cli.ts", "env.ts"]);
   });
 
@@ -133,7 +129,9 @@ describe("the command contract", () => {
   });
 
   test("only the writer writes to stdout", () => {
-    const writers = sources().filter((path) => writesStdout(readFileSync(join(SRC, path), "utf8")));
+    const writers = productionSourcesOf(SRC)
+      .filter(({ text }) => writesStdout(text))
+      .map(({ file }) => file);
     expect(writers.sort()).toEqual(["cli-output.ts"]);
   });
 
@@ -155,10 +153,8 @@ describe("the command contract", () => {
   });
 
   test("every command declared is on the list, once", () => {
-    const declared = sources().flatMap((path) =>
-      [...readFileSync(join(SRC, path), "utf8").matchAll(/export const (\w+): Command = \{/g)].map(
-        (m) => m[1],
-      ),
+    const declared = productionSourcesOf(SRC).flatMap(({ text }) =>
+      [...text.matchAll(/export const (\w+): Command = \{/g)].map((m) => m[1]),
     );
     const names = COMMANDS.map((command) => command.name);
     expect(new Set(names).size).toBe(names.length);
@@ -173,12 +169,10 @@ describe("the command contract", () => {
   });
 
   test("each command file holds one command, named for the file", () => {
-    for (const path of sources().filter((p) => p.endsWith("-command.ts"))) {
-      const declared = [
-        ...readFileSync(join(SRC, path), "utf8").matchAll(
-          /export const \w+: Command = \{\s*name: "([^"]+)"/g,
-        ),
-      ];
+    for (const { file: path, text } of productionSourcesOf(SRC).filter(({ file }) =>
+      file.endsWith("-command.ts"),
+    )) {
+      const declared = [...text.matchAll(/export const \w+: Command = \{\s*name: "([^"]+)"/g)];
       expect({ path, names: declared.map((m) => m[1]) }).toEqual({
         path,
         names: [path.replace(/-command\.ts$/, "")],

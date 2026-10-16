@@ -1,10 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { Glob } from "bun";
-import { importsOf } from "./syntax.test-support";
-
-const SRC = import.meta.dir;
+import { importsOf, sourcesOf } from "./syntax.test-support";
 
 const PUBLIC: Readonly<Record<string, readonly string[]>> = {
   agent: ["agent-launchd"],
@@ -43,15 +38,6 @@ const PUBLIC: Readonly<Record<string, readonly string[]>> = {
 };
 
 const LIST_OF_COMMANDS = "cli-commands.ts";
-
-type Source = { readonly file: string; readonly text: string };
-
-function sources(): readonly Source[] {
-  return [...new Glob("**/*.{ts,tsx}").scanSync(SRC)].map((file) => ({
-    file,
-    text: readFileSync(join(SRC, file), "utf8"),
-  }));
-}
 
 const isTestSupport = (name: string) => /\.test-support(\.ts)?$/.test(name);
 
@@ -99,17 +85,17 @@ function commandBreaches(file: string, text: string): readonly string[] {
 
 describe("the modules", () => {
   test("another module or its tests reach a module only through its contract, its commands and the files it publishes", () => {
-    expect(sources().flatMap(({ file, text }) => boundaryBreaches(file, text))).toEqual([]);
+    expect(sourcesOf(import.meta.dir).flatMap(({ file, text }) => boundaryBreaches(file, text))).toEqual([]);
   });
 
   test("only the list of commands imports a command", () => {
-    expect(sources().flatMap(({ file, text }) => commandBreaches(file, text))).toEqual([]);
+    expect(sourcesOf(import.meta.dir).flatMap(({ file, text }) => commandBreaches(file, text))).toEqual([]);
   });
 });
 
 describe("the module checks", () => {
   test("place every file in a module, and publish only files that exist", () => {
-    const names = sources().map(({ file }) => file.replace(/\.ts$/, ""));
+    const names = sourcesOf(import.meta.dir).map(({ file }) => file.replace(/\.ts$/, ""));
     expect(names.filter((name) => !isTestSupport(name) && moduleOf(name) === null)).toEqual([]);
     expect(
       Object.values(PUBLIC)

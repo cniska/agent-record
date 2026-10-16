@@ -1,6 +1,24 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { parse } from "@babel/parser";
 import { isNode, type Node } from "@babel/types";
+import { Glob } from "bun";
 import { invariant } from "./assert";
+
+type Source = { readonly file: string; readonly text: string };
+
+export function sourcesOf(dir: string): readonly Source[] {
+  return [...new Glob("**/*.{ts,tsx}").scanSync(dir)].map((file) => ({
+    file,
+    text: readFileSync(join(dir, file), "utf8"),
+  }));
+}
+
+const NOT_PRODUCTION = /\.test\.tsx?$|test-support/;
+
+export function productionSourcesOf(dir: string): readonly Source[] {
+  return sourcesOf(dir).filter(({ file }) => !NOT_PRODUCTION.test(file));
+}
 
 export function* nodesOf(text: string): Iterable<Node> {
   yield* walk(parse(text, { sourceType: "module", plugins: ["typescript"] }).program);

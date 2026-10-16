@@ -1,11 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { Glob } from "bun";
 import { invariant } from "./assert";
-import { nodesOf } from "./syntax.test-support";
-
-const SRC = import.meta.dir;
+import { nodesOf, sourcesOf } from "./syntax.test-support";
 
 function castBreaches(file: string, text: string): readonly string[] {
   const breaches: string[] = [];
@@ -22,16 +17,9 @@ function castBreaches(file: string, text: string): readonly string[] {
   return breaches;
 }
 
-function sources(): readonly { readonly file: string; readonly text: string }[] {
-  return [...new Glob("**/*.{ts,tsx}").scanSync(SRC)].map((file) => ({
-    file,
-    text: readFileSync(join(SRC, file), "utf8"),
-  }));
-}
-
 describe("every object schema in src", () => {
   test("is built strict or loose, never a bare z.object", () => {
-    expect(sources().flatMap(({ file, text }) => castBreaches(file, text))).toEqual([]);
+    expect(sourcesOf(import.meta.dir).flatMap(({ file, text }) => castBreaches(file, text))).toEqual([]);
   });
 });
 

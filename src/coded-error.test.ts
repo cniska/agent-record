@@ -1,11 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { Glob } from "bun";
 import { codedOf } from "./coded-error";
-import { nodesOf } from "./syntax.test-support";
-
-const SRC = import.meta.dir;
+import { nodesOf, productionSourcesOf } from "./syntax.test-support";
 
 const BUILDS_THE_BASE = "coded-error.ts";
 
@@ -40,15 +35,11 @@ export function errorBreaches(file: string, text: string): readonly string[] {
   return breaches;
 }
 
-function production(): readonly { readonly file: string; readonly text: string }[] {
-  return [...new Glob("**/*.{ts,tsx}").scanSync(SRC)]
-    .filter((file) => !/\.test\.tsx?$|test-support/.test(file))
-    .map((file) => ({ file, text: readFileSync(join(SRC, file), "utf8") }));
-}
-
 describe("every error", () => {
   test("is a refusal from its module's refusal table, or an assertion's", () => {
-    expect(production().flatMap(({ file, text }) => errorBreaches(file, text))).toEqual([]);
+    expect(
+      productionSourcesOf(import.meta.dir).flatMap(({ file, text }) => errorBreaches(file, text)),
+    ).toEqual([]);
   });
 });
 
