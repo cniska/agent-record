@@ -6,7 +6,7 @@ import {
   type Home,
   QUERY_RESULT,
   rebuild,
-  removeScratch,
+  removeScratchDirs,
   rowsOf,
   runCli,
   scratchHome,
@@ -16,7 +16,7 @@ import {
 } from "./cli";
 import { archivedEventLog, eventLogPath, gate, type HookLine, verdict, withEventLog } from "./hook-events";
 
-afterEach(removeScratch);
+afterEach(removeScratchDirs);
 
 const SESSION = "0b8f2c1e-7d4a-4e2b-9c3f-5a6d7e8f9a0b";
 const OTHER_PLUGIN = "other-plugin-market";

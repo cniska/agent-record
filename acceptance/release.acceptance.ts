@@ -10,19 +10,19 @@ import {
   QUERY_RESULT,
   refused,
   releaseAssets,
-  removeScratch,
+  removeScratchDirs,
   runOnCleanMachine,
   SYNC_COMMAND_RESULT,
   SYSTEM_PATH,
+  scratchDir,
   scratchHome,
-  scratchTempDir,
   succeeded,
   unameSaying,
   withFixtures,
 } from "./cli";
 import { LONG } from "./fixture-names";
 
-afterEach(removeScratch);
+afterEach(removeScratchDirs);
 
 const BUILD_TIMEOUT_MS = 60_000;
 const INSTALL = join(import.meta.dir, "..", "scripts", "install.sh");
@@ -49,7 +49,7 @@ const versionOf = (home: Home, bins: readonly string[]) =>
 test(
   "AC-60 the release binary, alone on PATH in a fresh home, syncs, answers a query and schedules the sync of the command it was run as",
   () => {
-    const binary = compiledRelease(scratchTempDir());
+    const binary = compiledRelease(scratchDir());
     const bins = [dirname(binary)];
     const home = withFixtures(scratchHome(), [LONG]);
 
@@ -69,7 +69,7 @@ test(
 
     expect(scheduledSync(home, bins)).toContain(runsSync(binary));
 
-    const linked = join(scratchTempDir(), "bin", "agent-record");
+    const linked = join(scratchDir(), "bin", "agent-record");
     mkdirSync(dirname(linked));
     symlinkSync(binary, linked);
     const { path } = succeeded(
@@ -85,7 +85,7 @@ test(
 test(
   "AC-63 install.sh installs the latest release after checking its checksums, and installs nothing from a bad download",
   () => {
-    const dir = scratchTempDir();
+    const dir = scratchDir();
     const assets = releaseAssets(join(dir, "assets"), compiledRelease(join(dir, "build")), "darwin-arm64");
     const curl = curlServing(join(dir, "fake-bin"), assets);
     const home = scratchHome();
@@ -113,7 +113,7 @@ test(
 test(
   "AC-64 the npm package runs its platform's binary with no runtime on PATH, refuses on another platform and when the platform package is missing or cannot start, and the agent runs the npm command",
   () => {
-    const dir = scratchTempDir();
+    const dir = scratchDir();
     const assets = releaseAssets(join(dir, "assets"), compiledRelease(join(dir, "build")), "darwin-arm64");
     cpSync(join(assets, "agent-record-darwin-arm64.tar.gz"), join(assets, "agent-record-linux-x64.tar.gz"));
     const tree = join(dir, "npm");

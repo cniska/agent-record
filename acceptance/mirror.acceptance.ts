@@ -19,11 +19,11 @@ import {
   livePath,
   rebuild,
   refused,
-  removeScratch,
+  removeScratchDirs,
   rowsOf,
   runCli,
+  scratchDir,
   scratchHome,
-  scratchTempDir,
   setSchemaVersion,
   sync,
   withFixtures,
@@ -32,7 +32,7 @@ import {
 } from "./cli";
 import { CLAUDE, CODEX, CODEX_ROLLOUT, LONG } from "./fixture-names";
 
-afterEach(removeScratch);
+afterEach(removeScratchDirs);
 
 const UNREADABLE_SCHEMA_VERSION = 999;
 
@@ -59,7 +59,7 @@ test("AC-32 sync mirrors every archive file into iCloud Drive, again after it gr
     readFileSync(archivedPath(home, CLAUDE), "utf8"),
   );
 
-  const elsewhere = join(scratchTempDir(), "record-mirror");
+  const elsewhere = join(scratchDir(), "record-mirror");
   const other = withFixtures(scratchHome(), [CLAUDE]);
   expect(sync(other, { AGENT_RECORD_MIRROR: elsewhere }).mirror).toMatchObject({
     state: "mirrored",

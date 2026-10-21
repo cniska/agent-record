@@ -6,6 +6,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -59,12 +60,12 @@ const scratchDirs: string[] = [];
 
 function scratchDirUnder(parent: string): string {
   mkdirSync(parent, { recursive: true });
-  const dir = mkdtempSync(join(parent, "scratch-"));
+  const dir = realpathSync(mkdtempSync(join(parent, "scratch-")));
   scratchDirs.push(dir);
   return dir;
 }
 
-export function scratchTempDir(): string {
+export function scratchDir(): string {
   return scratchDirUnder(join(tmpdir(), "agent-record-acceptance"));
 }
 
@@ -73,7 +74,7 @@ export function scratchDirOutsideTemp(): string {
 }
 
 export function scratchHome(): Home {
-  const root = scratchTempDir();
+  const root = scratchDir();
   const data = join(root, "data", "agent-record");
   return {
     root,
@@ -85,7 +86,7 @@ export function scratchHome(): Home {
   };
 }
 
-export function removeScratch(): void {
+export function removeScratchDirs(): void {
   for (const dir of scratchDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 }
 
@@ -194,7 +195,7 @@ export function withLaunchctl(home: Home, agentLoaded: boolean): Home {
 }
 
 export function unameSaying(system: string, machine: string): string {
-  const dir = scratchTempDir();
+  const dir = scratchDir();
   const uname = join(dir, "uname");
   writeFileSync(uname, `#!/bin/sh\ncase "$1" in -s) echo '${system}' ;; -m) echo '${machine}' ;; esac\n`);
   chmodSync(uname, 0o755);

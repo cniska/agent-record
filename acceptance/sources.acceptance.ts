@@ -1,9 +1,9 @@
 import { afterEach, expect, test } from "bun:test";
 import { withClaudeSessions } from "./claude-sessions";
-import { type Home, removeScratch, rowsOf, scratchHome, sync, withFixtures } from "./cli";
+import { type Home, removeScratchDirs, rowsOf, scratchHome, sync, withFixtures } from "./cli";
 import { CLAUDE, CODEX_COLUMNS, GROK_COLUMNS, OMP_COLUMNS, PI_COLUMNS } from "./fixture-names";
 
-afterEach(removeScratch);
+afterEach(removeScratchDirs);
 
 const EVERY_SOURCE = ["claude", "codex", "grok", "omp", "pi"] as const;
 const BUT_GROK = ["claude", "codex", "omp", "pi"] as const;

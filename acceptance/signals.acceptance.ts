@@ -8,19 +8,19 @@ import {
   QUERY_RESULT,
   rebuild,
   refused,
-  removeScratch,
+  removeScratchDirs,
   runCli,
+  scratchDir,
   scratchDirOutsideTemp,
   scratchHome,
   scratchRepo,
-  scratchTempDir,
   scratchWorktree,
   succeeded,
   sync,
 } from "./cli";
 import { gate, verdict, withEventLog } from "./hook-events";
 
-afterEach(removeScratch);
+afterEach(removeScratchDirs);
 
 const query = (home: Home, args: readonly string[]) =>
   succeeded(runCli(home, ["query", ...args]), "query", QUERY_RESULT);
@@ -101,7 +101,7 @@ test("AC-40 owner-interrupts counts one interrupt of each cause over two tasks, 
 
 test("AC-41 time-to-land gives the median minutes of the landed tasks and counts one not landed", () => {
   const repo = appRepo();
-  const elsewhere = scratchTempDir();
+  const elsewhere = scratchDir();
   const home = synced([
     {
       id: "pushes",

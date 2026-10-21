@@ -1,23 +1,12 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { curlServing, releaseAssets, SYSTEM_PATH } from "../acceptance/cli";
+import { curlServing, releaseAssets, removeScratchDirs, SYSTEM_PATH, scratchDir } from "../acceptance/cli";
 
 const INSTALL = join(import.meta.dir, "install.sh");
 const TARGET = `${process.platform}-${process.arch}`;
 
-const cleanups: (() => void)[] = [];
-
-afterEach(() => {
-  for (const cleanup of cleanups.splice(0)) cleanup();
-});
-
-function scratchDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), "agent-record-install-"));
-  cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
-  return dir;
-}
+afterEach(removeScratchDirs);
 
 function executable(path: string, lines: readonly string[]): void {
   writeFileSync(path, `${lines.join("\n")}\n`);

@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { chmodSync, mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
-import { refused, SYSTEM_PATH } from "../acceptance/cli";
+import { refused, removeScratchDirs, SYSTEM_PATH, scratchDir } from "../acceptance/cli";
 import { launcher, PLATFORMS } from "./build-npm";
 
 const SCOPE = "@cniska";
@@ -35,17 +34,7 @@ type Ran = {
   readonly stderr: string;
 };
 
-const scratch: string[] = [];
-
-afterEach(() => {
-  for (const dir of scratch.splice(0)) rmSync(dir, { recursive: true, force: true });
-});
-
-function scratchDir(): string {
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), "agent-record-launcher-")));
-  scratch.push(dir);
-  return dir;
-}
+afterEach(removeScratchDirs);
 
 function executable(path: string, text: string): void {
   mkdirSync(join(path, ".."), { recursive: true });

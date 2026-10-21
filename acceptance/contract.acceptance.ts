@@ -10,7 +10,7 @@ import {
   okLine,
   rebuild,
   refused,
-  removeScratch,
+  removeScratchDirs,
   rowsOf,
   runCli,
   schemaVersion,
@@ -24,7 +24,7 @@ import {
 } from "./cli";
 import { CLAUDE } from "./fixture-names";
 
-afterEach(removeScratch);
+afterEach(removeScratchDirs);
 
 const USAGE = {
   sync: "agent-record sync",

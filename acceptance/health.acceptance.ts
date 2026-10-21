@@ -10,7 +10,7 @@ import {
   livePath,
   pluginNote,
   refused,
-  removeScratch,
+  removeScratchDirs,
   rowsOf,
   runCli,
   runPluginHook,
@@ -27,7 +27,7 @@ import {
 } from "./cli";
 import { CLAUDE, LONG } from "./fixture-names";
 
-afterEach(removeScratch);
+afterEach(removeScratchDirs);
 
 const UNREADABLE_SCHEMA_VERSION = 999;
 

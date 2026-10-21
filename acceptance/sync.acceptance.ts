@@ -30,16 +30,16 @@ import {
   type PlantedInsertFailure,
   rebuild,
   refused,
-  removeScratch,
+  removeScratchDirs,
   rowsOf,
   runCli,
   runCliOffline,
   SYNC_COMMAND_RESULT,
   schemaVersion,
+  scratchDir,
   scratchDirOutsideTemp,
   scratchHome,
   scratchRepo,
-  scratchTempDir,
   setSchemaVersion,
   succeeded,
   sync,
@@ -64,7 +64,7 @@ import {
 } from "./fixture-names";
 import { archivedEventLog, eventLogPath, withEventLog } from "./hook-events";
 
-afterEach(removeScratch);
+afterEach(removeScratchDirs);
 
 const LARGE: Fixture = "claude/-Users-x-code-demo/large-session.jsonl";
 const LARGE_LINE_BYTES = 1 << 20;
@@ -339,7 +339,7 @@ test("AC-7 a sync over a malformed line from each tool, an unreadable file and a
 
 test("AC-8 a sync records a session repo's commits, label and files, skips a temp repo, and rereads neither", () => {
   const { home, repo } = homeWithRepo();
-  const tempRepo = scratchRepo(join(scratchTempDir(), "scratch"), "git@github.com:acme/scratch.git", [
+  const tempRepo = scratchRepo(join(scratchDir(), "scratch"), "git@github.com:acme/scratch.git", [
     { subject: "chore: scratch", file: "notes.md", at: "2026-09-15T12:00:00Z" },
   ]);
   withFixtures(home, [TEMP_REPO_SESSION], tempRepo);
@@ -461,7 +461,7 @@ test("AC-69 a rebuild, and a sync that rebuilds an older record, name each check
     backup: `${removed.home.record}.agent-record-backup`,
     unreadCheckouts: [checkout],
   });
-  const keptAside = join(scratchTempDir(), "first-backup");
+  const keptAside = join(scratchDir(), "first-backup");
   copyFileSync(first.backup, keptAside);
   const second = rebuild(removed.home);
   expect(second).toMatchObject({

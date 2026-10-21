@@ -7,7 +7,7 @@ import {
   holdingRecord,
   QUERY_RESULT,
   refused,
-  removeScratch,
+  removeScratchDirs,
   runCli,
   scratchDirOutsideTemp,
   scratchHome,
@@ -22,7 +22,7 @@ import {
 import { CLAUDE, CODEX, CODEX_OVERCACHED, LONG, REPO_SESSION, WORKTREE_SESSION } from "./fixture-names";
 import { gate, verdict, withEventLog } from "./hook-events";
 
-afterEach(removeScratch);
+afterEach(removeScratchDirs);
 
 const query = (home: Home, args: readonly string[]) =>
   succeeded(runCli(home, ["query", ...args]), "query", QUERY_RESULT);
