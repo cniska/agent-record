@@ -243,7 +243,7 @@ jobs:
     steps:
       - name: Dispatch formula bump
         env:
-          GH_TOKEN: ${{ secrets.AGENT_RECORD_TAP_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ secrets.TAP_DISPATCH_TOKEN }}
           TAG: ${{ github.ref_name }}
         run: |
           gh api --method POST repos/cniska/homebrew-tap/dispatches \
