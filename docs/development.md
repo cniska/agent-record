@@ -14,6 +14,7 @@ mise trust && mise install
 
 - `mise install` installs actionlint, the dependencies and [Bun](https://bun.sh), which the source runs on, and the `bun install` its postinstall runs calls the `prepare` script, which points `core.hooksPath` at `.githooks/`. Only in the clone, never in a worktree, does it link `agent-record` into `~/.bun/bin`, so removing a worktree never leaves the command pointing at a deleted checkout. Add `~/.bun/bin` to your `PATH` if it is not there yet.
 - `.worktree-hooks/setup` sets up a task worktree the same way, without linking the CLI.
+- `bin/agent-record` runs Bun through mise from `$MISE_DATA_DIR`, or `~/.local/share/mise` when that is unset, never through `XDG_DATA_HOME`, so a test or command that points `XDG_DATA_HOME` at a scratch directory still runs the CLI; `scripts/source-launcher.test.ts`, in the check, holds this. If you set `XDG_DATA_HOME` for your whole shell, set `MISE_DATA_DIR` to where mise keeps its installs.
 - `.githooks/` holds the commit-subject, format and no-comments gates.
 - [cniska-skills](https://github.com/cniska/agent-skills) is one workflow to contribute with: the skills and hooks this repository is worked with.
 

@@ -19,6 +19,15 @@ const SCRATCH_DIRS = {
   XDG_STATE_HOME: "state",
 } as const;
 
+type ScratchVariable = keyof typeof SCRATCH_DIRS;
+
+export const ownerEnv: Readonly<Record<ScratchVariable, string | undefined>> = {
+  HOME: process.env.HOME,
+  XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
+  XDG_DATA_HOME: process.env.XDG_DATA_HOME,
+  XDG_STATE_HOME: process.env.XDG_STATE_HOME,
+};
+
 for (const name of Object.keys(process.env)) {
   if (name.startsWith("GIT_")) delete process.env[name];
 }
