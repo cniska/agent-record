@@ -40,17 +40,7 @@ bun add -g @cniska/agent-record
 
 Each channel updates the way it installed: `brew upgrade agent-record`, `npm update -g @cniska/agent-record`, `bun update -g @cniska/agent-record`, or the curl line run again.
 
-From source, with [mise](https://mise.jdx.dev) installed:
-
-```bash
-git clone https://github.com/cniska/agent-record.git
-cd agent-record
-mise trust && mise install
-```
-
-`mise install` installs actionlint, the dependencies and [Bun](https://bun.sh), which the source runs on, and in the clone links `agent-record` into `~/.bun/bin`. Add that directory to your `PATH` if it is not there yet.
-
-However you installed it, build the record and check it:
+Then build the record and check it:
 
 ```bash
 agent-record sync

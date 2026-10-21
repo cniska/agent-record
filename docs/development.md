@@ -4,11 +4,15 @@ Setup, checks and layout, for working on this repo.
 
 ## Setup
 
+With [mise](https://mise.jdx.dev) installed:
+
 ```bash
+git clone https://github.com/cniska/agent-record.git
+cd agent-record
 mise trust && mise install
 ```
 
-- `mise install` sets up the clone as the [README](../README.md#install) says, and the `bun install` its postinstall runs calls the `prepare` script, which points `core.hooksPath` at `.githooks/`. Only in the clone, never in a worktree, does it link `agent-record` into `~/.bun/bin`, so removing a worktree never leaves the command pointing at a deleted checkout.
+- `mise install` installs actionlint, the dependencies and [Bun](https://bun.sh), which the source runs on, and the `bun install` its postinstall runs calls the `prepare` script, which points `core.hooksPath` at `.githooks/`. Only in the clone, never in a worktree, does it link `agent-record` into `~/.bun/bin`, so removing a worktree never leaves the command pointing at a deleted checkout. Add `~/.bun/bin` to your `PATH` if it is not there yet.
 - `.worktree-hooks/setup` sets up a task worktree the same way, without linking the CLI.
 - `.githooks/` holds the commit-subject, format and no-comments gates.
 - [cniska-skills](https://github.com/cniska/agent-skills) is one workflow to contribute with: the skills and hooks this repository is worked with.

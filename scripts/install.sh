@@ -37,7 +37,7 @@ platform_target() {
   esac
   case "${platform}-${arch}" in
     darwin-arm64 | linux-x64) printf '%s-%s\n' "$platform" "$arch" ;;
-    *) die "no release build for ${platform}-${arch}; build from source with Bun, as the README says" ;;
+    *) die "no release build for ${platform}-${arch}; build from source with Bun, as docs/development.md says" ;;
   esac
 }
 

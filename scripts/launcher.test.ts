@@ -128,7 +128,7 @@ describe.each<Layout>(["nested", "hoisted"])("the launcher over the %s layout", 
       code: "no_build_for_platform",
       message: "agent-record ships no build for Plan9-mips, only darwin-arm64 and linux-x64",
       meta: {},
-      resolve: "build agent-record from source with Bun, as its README says",
+      resolve: "build agent-record from source with Bun, as its docs/development.md says",
     });
   });
 
