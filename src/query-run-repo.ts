@@ -28,12 +28,12 @@ function holdsSubject(command: string, subject: string): boolean {
   return false;
 }
 
-function firstAtOrAfter(dated: readonly Dated[], ms: number): number {
+export function firstAtOrAfter(times: readonly number[], ms: number): number {
   let low = 0;
-  let high = dated.length;
+  let high = times.length;
   while (low < high) {
     const mid = (low + high) >> 1;
-    if ((dated[mid]?.ms ?? Number.POSITIVE_INFINITY) < ms) low = mid + 1;
+    if ((times[mid] ?? Number.POSITIVE_INFINITY) < ms) low = mid + 1;
     else high = mid;
   }
   return low;
@@ -44,13 +44,13 @@ const onlyOne = (repos: ReadonlySet<string>): string | null => {
   return repo !== undefined && other === undefined ? repo : null;
 };
 
-function repoMadeBy(run: GitRunRow, dated: readonly Dated[]): string | null {
+function repoMadeBy(run: GitRunRow, dated: readonly Dated[], times: readonly number[]): string | null {
   if (run.callAt === null) return null;
   const from = Date.parse(run.callAt) - AUTHOR_TIME_GRAIN_MS;
   const until = Date.parse(run.at) + AUTHOR_TIME_GRAIN_MS;
   const repos = new Set<string>();
   for (
-    let i = firstAtOrAfter(dated, from), at = dated[i];
+    let i = firstAtOrAfter(times, from), at = dated[i];
     at !== undefined && at.ms <= until;
     at = dated[++i]
   ) {
@@ -66,10 +66,11 @@ function committedDirs(
 ): readonly DirRepo[] {
   const commitRuns = gitRuns.filter((run) => run.subcommand === "commit");
   const dated = commits.map((commit) => ({ ms: Date.parse(commit.at), commit })).sort((a, b) => a.ms - b.ms);
+  const times = dated.map((at) => at.ms);
   const reposByDir = new Map<string, Set<string>>();
   for (const run of commitRuns) {
     if (covered(run.dir) !== null || run.commitsInCall !== 1) continue;
-    const repo = repoMadeBy(run, dated);
+    const repo = repoMadeBy(run, dated, times);
     if (repo === null) continue;
     const repos = reposByDir.get(run.dir) ?? new Set<string>();
     repos.add(repo);

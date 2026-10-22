@@ -273,6 +273,35 @@ describe("timing a task from its prompt to its last commit run on origin/main", 
     ]);
   });
 
+  test("does not land a worktree's commit run made after the merge of its branch, by the push that follows", () => {
+    const record = recordOf({
+      sessions: [session("a", "2026-10-14T09:00:00.000Z"), session("m", "2026-10-14T09:00:00.000Z")],
+      checkouts: treeCheckouts,
+      gitRuns: [
+        run("a", "2026-10-14T09:10:00.000Z", "commit", TREE),
+        run("a", "2026-10-14T09:15:00.000Z", "push", TREE, "topic"),
+        run("m", "2026-10-14T09:20:00.000Z", "merge", REPO, "topic"),
+        run("a", "2026-10-14T09:25:00.000Z", "commit", TREE),
+        run("m", "2026-10-14T09:40:00.000Z", "push", REPO),
+      ],
+    });
+    expect(eventsOf("time-to-land", record).map((e) => [e.sessionId, e.kind])).toEqual([["a", "not landed"]]);
+  });
+
+  test("does not land a worktree's commit run by a main-checkout push before the merge of its branch", () => {
+    const record = recordOf({
+      sessions: [session("a", "2026-10-14T09:00:00.000Z"), session("m", "2026-10-14T09:00:00.000Z")],
+      checkouts: treeCheckouts,
+      gitRuns: [
+        run("a", "2026-10-14T09:10:00.000Z", "commit", TREE),
+        run("a", "2026-10-14T09:15:00.000Z", "push", TREE, "topic"),
+        run("m", "2026-10-14T09:20:00.000Z", "push", REPO),
+        run("m", "2026-10-14T09:40:00.000Z", "merge", REPO, "topic"),
+      ],
+    });
+    expect(eventsOf("time-to-land", record).map((e) => [e.sessionId, e.kind])).toEqual([["a", "not landed"]]);
+  });
+
   test("never lands a worktree's runs by a main-checkout merge of origin/main, since main is no worktree's branch", () => {
     const record = recordOf({
       sessions: [session("a", "2026-10-14T09:00:00.000Z"), session("m", "2026-10-14T09:00:00.000Z")],
@@ -423,6 +452,30 @@ describe("finding commit runs stranded off origin/main", () => {
     });
     expect(eventsOf("stranded-work", record).map((e) => [e.at, e.kind, e.minutes])).toEqual([
       ["2026-10-14T10:00:00.000Z", "landed", 20],
+    ]);
+  });
+
+  test("keeps a task's commit run in one repo's main checkout judged when the task then commits in another repo", () => {
+    const second = "/h/code/second";
+    const record = recordOf({
+      sessions: [session("a", "2026-10-14T08:00:00.000Z")],
+      checkouts: [
+        { path: REPO, repo: REPO },
+        { path: second, repo: second },
+      ],
+      labels: new Map([
+        [REPO, "me/demo"],
+        [second, "me/second"],
+      ]),
+      gitRuns: [
+        run("a", "2026-10-14T09:00:00.000Z", "commit"),
+        run("a", "2026-10-14T09:10:00.000Z", "commit", second),
+        run("a", "2026-10-14T09:20:00.000Z", "push"),
+      ],
+    });
+    expect(eventsOf("stranded-work", record).map((e) => [e.kind, e.minutes])).toEqual([
+      ["landed", 20],
+      ["ended unlanded", null],
     ]);
   });
 
