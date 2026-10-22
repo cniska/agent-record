@@ -4,7 +4,7 @@ import { HOWS } from "./ingest-skill-load";
 import { KINDS, TOOLS } from "./ingest-tools";
 
 const sqlList = (values: readonly string[]): string => values.map((value) => `'${value}'`).join(",");
-export const SCHEMA_VERSION = 24;
+export const SCHEMA_VERSION = 25;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS source_file (
@@ -138,6 +138,7 @@ CREATE TABLE IF NOT EXISTS git_command (
   position        INTEGER NOT NULL,
   subcommand      TEXT NOT NULL,
   dir             TEXT,
+  target          TEXT,
   PRIMARY KEY (tool_call_id, position)
 );
 CREATE INDEX IF NOT EXISTS git_command_sub ON git_command(subcommand);

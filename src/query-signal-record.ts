@@ -46,10 +46,13 @@ const timed = { sessionId: text, at: text };
 const TimedRow = z.strictObject(timed);
 export type TimedRow = Readonly<z.infer<typeof TimedRow>>;
 
+const RUN_SUBCOMMANDS = ["commit", "push", "merge", "rebase", "reset"] as const;
+
 const GitRunRow = z.strictObject({
   ...timed,
-  subcommand: z.enum(["commit", "push"]),
+  subcommand: z.enum(RUN_SUBCOMMANDS),
   dir: text,
+  target: maybeText,
   callAt: maybeText,
   commitsInCall: z.number(),
   command: text,
@@ -248,12 +251,13 @@ export function readSignalRecord(db: Database): SignalRecord {
   ).all(TimedRow);
   const gitRuns = readRows(
     db,
-    `SELECT c.session_id AS sessionId, c.ts_result AS at, g.subcommand, g.dir,
+    `SELECT c.session_id AS sessionId, c.ts_result AS at, g.subcommand, g.dir, g.target,
               c.ts_call AS callAt, c.command,
               (SELECT count(*) FROM git_command x WHERE x.tool_call_id = c.id AND x.subcommand = 'commit')
                 AS commitsInCall
        FROM git_command g JOIN tool_call c ON c.id = g.tool_call_id
-       WHERE g.subcommand IN ('commit', 'push') AND g.dir IS NOT NULL AND ${SUCCEEDED}
+       WHERE g.subcommand IN (${RUN_SUBCOMMANDS.map((subcommand) => `'${subcommand}'`).join(", ")})
+         AND g.dir IS NOT NULL AND ${SUCCEEDED}
        ORDER BY c.ts_result`,
   ).all(GitRunRow);
   const compactions = readRows(

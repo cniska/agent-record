@@ -239,7 +239,7 @@ export function createIngester(db: Database, home: string) {
 
   const clearGitCommands = db.prepare("DELETE FROM git_command WHERE tool_call_id = ?");
   const insertGitCommand = db.prepare(
-    "INSERT INTO git_command (tool_call_id, position, subcommand, dir) VALUES (?, ?, ?, ?)",
+    "INSERT INTO git_command (tool_call_id, position, subcommand, dir, target) VALUES (?, ?, ?, ?, ?)",
   );
   const selectSessionCwd = readRows<[string]>(db, "SELECT cwd FROM session WHERE id = ?");
 
@@ -412,8 +412,8 @@ export function createIngester(db: Database, home: string) {
 
   function writeGitCommands(id: ToolCallId, command: string, cwd: string | null): void {
     clearGitCommands.run(id);
-    for (const [position, { subcommand, dir }] of gitRuns(command, { cwd, home }).entries()) {
-      insertGitCommand.run(id, position, subcommand, dir);
+    for (const [position, { subcommand, dir, target }] of gitRuns(command, { cwd, home }).entries()) {
+      insertGitCommand.run(id, position, subcommand, dir, target);
     }
   }
 

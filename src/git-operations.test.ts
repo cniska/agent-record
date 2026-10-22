@@ -90,39 +90,109 @@ describe("reading git out of a shell command", () => {
   });
 });
 
+const ran = (subcommand: string, dir: string | null, target: string | null = null) => ({
+  subcommand,
+  dir,
+  target,
+});
+
 describe("reading where each git call in a shell command ran", () => {
   test("runs git in the working directory when nothing moves it", () => {
     expect(gitRuns("git commit -m wip && git push", AT)).toEqual([
-      { subcommand: "commit", dir: "/w/repo" },
-      { subcommand: "push", dir: "/w/repo" },
+      ran("commit", "/w/repo"),
+      ran("push", "/w/repo"),
     ]);
   });
 
   test("follows a cd before git, resolving a relative path and the home", () => {
     expect(gitRuns("cd ~/code/ops && git commit -q -m x && git push -q", AT)).toEqual([
-      { subcommand: "commit", dir: "/h/code/ops" },
-      { subcommand: "push", dir: "/h/code/ops" },
+      ran("commit", "/h/code/ops"),
+      ran("push", "/h/code/ops"),
     ]);
-    expect(gitRuns("cd sub; git commit -m x", AT)).toEqual([{ subcommand: "commit", dir: "/w/repo/sub" }]);
-    expect(gitRuns("cd && git push", AT)).toEqual([{ subcommand: "push", dir: "/h" }]);
-    expect(gitRuns('cd "/my repo" && git push', AT)).toEqual([{ subcommand: "push", dir: "/my repo" }]);
+    expect(gitRuns("cd sub; git commit -m x", AT)).toEqual([ran("commit", "/w/repo/sub")]);
+    expect(gitRuns("cd && git push", AT)).toEqual([ran("push", "/h")]);
+    expect(gitRuns('cd "/my repo" && git push', AT)).toEqual([ran("push", "/my repo")]);
   });
 
   test("reads git -C as the directory of that call alone", () => {
     expect(gitRuns("git -C ../other commit -m x && git push", AT)).toEqual([
-      { subcommand: "commit", dir: "/w/other" },
-      { subcommand: "push", dir: "/w/repo" },
+      ran("commit", "/w/other"),
+      ran("push", "/w/repo"),
     ]);
   });
 
   test("knows no directory when nothing anchors a relative one", () => {
     const unanchored = { cwd: null, home: "/h" };
-    expect(gitRuns("git push", unanchored)).toEqual([{ subcommand: "push", dir: null }]);
-    expect(gitRuns("cd sub && git push", unanchored)).toEqual([{ subcommand: "push", dir: null }]);
-    expect(gitRuns("cd /r && git push", unanchored)).toEqual([{ subcommand: "push", dir: "/r" }]);
+    expect(gitRuns("git push", unanchored)).toEqual([ran("push", null)]);
+    expect(gitRuns("cd sub && git push", unanchored)).toEqual([ran("push", null)]);
+    expect(gitRuns("cd /r && git push", unanchored)).toEqual([ran("push", "/r")]);
   });
 
   test("skips a command that is not git", () => {
     expect(gitRuns("echo git push && ls", AT)).toEqual([]);
+  });
+});
+
+const targets = (command: string) => gitRuns(command, AT).map((run) => run.target);
+
+describe("reading the target a git call names", () => {
+  test("reads a push's destination branch from each refspec form", () => {
+    expect(targets("git push origin main")).toEqual(["main"]);
+    expect(targets("git push origin topic:main")).toEqual(["main"]);
+    expect(targets("git push origin HEAD:main")).toEqual(["main"]);
+    expect(targets("git push origin refs/heads/main")).toEqual(["main"]);
+    expect(targets("git push origin +main")).toEqual(["main"]);
+    expect(targets("git push origin HEAD:topic")).toEqual(["topic"]);
+    expect(targets("git push --force-with-lease origin HEAD:refs/heads/topic")).toEqual(["topic"]);
+  });
+
+  test("reads the branch a push names with -u, and HEAD as written", () => {
+    expect(targets("git push -u origin topic")).toEqual(["topic"]);
+    expect(targets("git push -u origin HEAD")).toEqual(["HEAD"]);
+    expect(targets("git push origin HEAD")).toEqual(["HEAD"]);
+  });
+
+  test("names no target for a bare push or one naming only the remote", () => {
+    expect(targets("git push")).toEqual([null]);
+    expect(targets("git push origin")).toEqual([null]);
+    expect(targets("git push -q origin")).toEqual([null]);
+  });
+
+  test("names the option for a push that sends no branch", () => {
+    expect(targets("git push --tags")).toEqual(["--tags"]);
+    expect(targets("git push origin --tags")).toEqual(["--tags"]);
+    expect(targets("git push --mirror origin")).toEqual(["--mirror"]);
+  });
+
+  test("names the ref a push deletes", () => {
+    expect(targets("git push origin --delete topic")).toEqual(["topic"]);
+    expect(targets("git push -d origin refs/heads/topic")).toEqual(["topic"]);
+    expect(targets("git push --delete origin topic")).toEqual(["topic"]);
+    expect(targets("git push origin :topic")).toEqual(["topic"]);
+  });
+
+  test("skips a push option that carries a value", () => {
+    expect(targets("git push -o ci.skip origin main")).toEqual(["main"]);
+    expect(targets("git push --push-option=ci.skip origin main")).toEqual(["main"]);
+  });
+
+  test("reads the branch a merge, rebase or reset names, origin/ stripped, and none when it names none", () => {
+    expect(targets("git merge --ff-only topic")).toEqual(["topic"]);
+    expect(targets("git merge --ff-only origin/main")).toEqual(["main"]);
+    expect(targets("git merge -m 'merge topic' topic")).toEqual(["topic"]);
+    expect(targets("git rebase origin/main")).toEqual(["main"]);
+    expect(targets("git rebase --onto main topic")).toEqual(["topic"]);
+    expect(targets("git rebase --continue")).toEqual([null]);
+    expect(targets("git reset --hard topic")).toEqual(["topic"]);
+    expect(targets("git reset --hard origin/topic")).toEqual(["topic"]);
+    expect(targets("git reset")).toEqual([null]);
+  });
+
+  test("names no target for a subcommand that lands nothing", () => {
+    expect(targets("git commit -m x && git fetch origin main && git checkout main")).toEqual([
+      null,
+      null,
+      null,
+    ]);
   });
 });

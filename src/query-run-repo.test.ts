@@ -13,6 +13,7 @@ const run = (more: Run): GitRunRow => ({
   sessionId: "s",
   subcommand: "commit",
   dir: GONE,
+  target: null,
   callAt: more.at,
   command: "",
   commitsInCall: more.subcommand === "push" ? 0 : 1,

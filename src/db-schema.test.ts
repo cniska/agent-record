@@ -5,7 +5,7 @@ import { readRows } from "./db";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
 import { TOOLS } from "./ingest-tools";
 
-const PINNED = "24 582aad2691343ea6c20427b0ba060be45cf056a986fc7ebaeecad824ffeb4a1c";
+const PINNED = "25 8fa6c66e251ee1d1f72a437b8139060877487fd78524f7264201a7a50af9f75c";
 
 function schema(): Database {
   const db = new Database(":memory:");

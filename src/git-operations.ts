@@ -154,14 +154,107 @@ const DIR_FLAG = "-C";
 
 const HOME = "~";
 
-export type GitRun = { readonly subcommand: string; readonly dir: string | null };
+const OPTIONS_END = "--";
+
+const OPTION = "-";
+
+const BRANCHLESS_PUSHES = new Set(["--tags", "--mirror", "--all", "--branches"]);
+
+const DELETE_PUSHES = new Set(["--delete", "-d"]);
+
+const FORCED = "+";
+
+const REFSPEC_SPLIT = ":";
+
+const HEADS = "refs/heads/";
+
+const ORIGIN = "origin/";
+
+export type GitRun = {
+  readonly subcommand: string;
+  readonly dir: string | null;
+  readonly target: string | null;
+};
 
 export type RunsIn = { readonly cwd: string | null; readonly home: string };
+
+type Arguments = { readonly positionals: readonly string[]; readonly options: readonly string[] };
 
 function within(dir: string | null, path: string, home: string): string | null {
   if (path === HOME || path.startsWith(`${HOME}/`)) return resolve(home, path.slice(2));
   if (isAbsolute(path)) return resolve(path);
   return dir === null ? null : resolve(dir, path);
+}
+
+function argumentsOf(words: readonly string[], valued: ReadonlySet<string>): Arguments {
+  const positionals: string[] = [];
+  const options: string[] = [];
+  let optionsEnded = false;
+  for (let at = 0; at < words.length; at += 1) {
+    const word = words[at] ?? "";
+    if (optionsEnded || !word.startsWith(OPTION)) {
+      positionals.push(word);
+      continue;
+    }
+    if (word === OPTIONS_END) {
+      optionsEnded = true;
+      continue;
+    }
+    options.push(word);
+    if (valued.has(word)) at += 1;
+  }
+  return { positionals, options };
+}
+
+const withoutPrefix = (ref: string, prefix: string): string =>
+  ref.startsWith(prefix) ? ref.slice(prefix.length) : ref;
+
+const branchOf = (ref: string): string | null => withoutPrefix(ref, HEADS) || null;
+
+function pushTarget({ positionals, options }: Arguments): string | null {
+  const [, refspec] = positionals;
+  if (refspec === undefined) return options.find((option) => BRANCHLESS_PUSHES.has(option)) ?? null;
+  if (options.some((option) => DELETE_PUSHES.has(option))) return branchOf(refspec);
+  const sent = withoutPrefix(refspec, FORCED);
+  const split = sent.indexOf(REFSPEC_SPLIT);
+  return branchOf(split === -1 ? sent : sent.slice(split + 1));
+}
+
+function namedBranch({ positionals }: Arguments): string | null {
+  const named = positionals[0];
+  return named === undefined ? null : withoutPrefix(named, ORIGIN);
+}
+
+type Targeted = {
+  readonly valued: ReadonlySet<string>;
+  readonly target: (parsed: Arguments) => string | null;
+};
+
+const TARGETED: ReadonlyMap<string, Targeted> = new Map([
+  [
+    "push",
+    { valued: new Set(["-o", "--push-option", "--receive-pack", "--exec", "--repo"]), target: pushTarget },
+  ],
+  [
+    "merge",
+    {
+      valued: new Set(["-m", "-F", "--file", "-s", "--strategy", "-X", "--strategy-option", "--into-name"]),
+      target: namedBranch,
+    },
+  ],
+  [
+    "rebase",
+    {
+      valued: new Set(["--onto", "-x", "--exec", "-s", "--strategy", "-X", "--strategy-option", "-C"]),
+      target: namedBranch,
+    },
+  ],
+  ["reset", { valued: new Set(), target: namedBranch }],
+]);
+
+function targetOf(subcommand: string, words: readonly string[]): string | null {
+  const targeted = TARGETED.get(subcommand);
+  return targeted === undefined ? null : targeted.target(argumentsOf(words, targeted.valued));
 }
 
 function runOf(words: readonly string[], cwd: string | null, home: string): GitRun | null {
@@ -172,7 +265,10 @@ function runOf(words: readonly string[], cwd: string | null, home: string): GitR
     const word = words[at] ?? "";
     if (word === DIR_FLAG) dir = within(dir, words[at + 1] ?? "", home);
     if (VALUED.has(word)) at += 1;
-    else if (!word.startsWith("-")) return SUBCOMMAND.test(word) ? { subcommand: word, dir } : null;
+    else if (!word.startsWith(OPTION))
+      return SUBCOMMAND.test(word)
+        ? { subcommand: word, dir, target: targetOf(word, words.slice(at + 1)) }
+        : null;
   }
   return null;
 }
