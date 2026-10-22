@@ -9,6 +9,7 @@ import {
   rebuild,
   refused,
   removeScratchDirs,
+  removeWorktree,
   runCli,
   scratchDir,
   scratchDirOutsideTemp,
@@ -148,7 +149,7 @@ test("AC-41 time-to-land gives the median minutes of the landed tasks and counts
   ]);
 });
 
-test("AC-42 stranded-work counts two stranded commit runs of three, one of them ended unpushed", () => {
+test("AC-42 stranded-work counts two stranded commit runs of three, one of them ended unlanded", () => {
   const repo = appRepo();
   const home = synced([
     {
@@ -167,7 +168,7 @@ test("AC-42 stranded-work counts two stranded commit runs of three, one of them 
   ]);
 
   expect(query(home, ["signal", "stranded-work"]).rows).toEqual([
-    ["2026-09-14", 0.67, 2, 3, "pushed 1, stranded 1, ended unpushed 1"],
+    ["2026-09-14", 0.67, 2, 3, "landed 1, stranded 1, ended unlanded 1"],
   ]);
 });
 
@@ -187,15 +188,125 @@ test("AC-70 a commit run in a worktree removed before sync counts in the repo it
       steps: [
         { owner: "add the parser", at: "2026-09-16T08:50:00Z" },
         ran(`git -C ${worktree} commit -m "${subject}"`, "2026-09-16T09:00:00Z", "2026-09-16T09:00:02Z"),
-        ran(`git -C ${worktree} push`, "2026-09-16T09:30:00Z", "2026-09-16T09:30:00Z"),
+        ran(`git -C ${worktree} push origin HEAD:main`, "2026-09-16T09:30:00Z", "2026-09-16T09:30:00Z"),
       ],
     },
     { id: "after", cwd: repo, steps: [later("2026-09-16T14:00:00Z")] },
   ]);
 
   expect(query(home, ["signal", "stranded-work", "--by", "repo"]).rows).toEqual([
-    ["2026-09-14", repo, "acme/app", 0, 0, 1, "pushed 1"],
+    ["2026-09-14", repo, "acme/app", 0, 0, 1, "landed 1"],
   ]);
+});
+
+type Worktrees = "kept outside the repo" | "under .claude/worktrees, landed and removed before sync";
+
+type Landing = "push HEAD:main from the worktree" | "merge and push from the repo";
+
+type LandingCase = { readonly worktrees: Worktrees; readonly landing: Landing };
+
+const TOPIC = "topic";
+
+const LANDINGS: Record<Landing, { readonly worktree: readonly Step[]; readonly repo: readonly Step[] }> = {
+  "push HEAD:main from the worktree": {
+    worktree: [
+      ran(`git push -u origin ${TOPIC}`, "2026-09-16T11:10:00Z", "2026-09-16T11:10:00Z"),
+      ran("git push origin HEAD:main", "2026-09-16T11:20:00Z", "2026-09-16T11:20:00Z"),
+    ],
+    repo: [],
+  },
+  "merge and push from the repo": {
+    worktree: [ran("git push -u origin HEAD", "2026-09-16T11:10:00Z", "2026-09-16T11:10:00Z")],
+    repo: [
+      { owner: "land the parser", at: "2026-09-16T11:15:00Z" },
+      ran(`git merge --ff-only ${TOPIC}`, "2026-09-16T11:18:00Z", "2026-09-16T11:18:00Z"),
+      ran("git push", "2026-09-16T11:20:00Z", "2026-09-16T11:20:00Z"),
+    ],
+  },
+};
+
+function landingCase({ worktrees, landing }: LandingCase): Home {
+  const repo = appRepo();
+  const removed = worktrees === "under .claude/worktrees, landed and removed before sync";
+  const treesAt = removed ? join(repo, ".claude", "worktrees") : join(scratchDirOutsideTemp(), "trees");
+  const topic = scratchWorktree(repo, join(treesAt, TOPIC), {
+    subject: "feat: add the parser",
+    file: "src/parser.ts",
+    at: "2026-09-16T09:00:01Z",
+  });
+  commitTo(topic, { subject: "feat: add the printer", file: "src/printer.ts", at: "2026-09-16T11:00:01Z" });
+  const other = scratchWorktree(repo, join(treesAt, "other"), {
+    subject: "feat: add the linter",
+    file: "src/linter.ts",
+    at: "2026-09-16T10:00:01Z",
+  });
+  if (removed) {
+    landAndRemoveWorktree(repo, topic);
+    removeWorktree(repo, other);
+  }
+  return synced([
+    {
+      id: TOPIC,
+      cwd: topic,
+      steps: [
+        { owner: "add the parser and the printer", at: "2026-09-16T08:50:00Z" },
+        ran('git commit -m "feat: add the parser"', "2026-09-16T09:00:00Z", "2026-09-16T09:00:02Z"),
+        ran('git commit -m "feat: add the printer"', "2026-09-16T11:00:00Z", "2026-09-16T11:00:02Z"),
+        ...LANDINGS[landing].worktree,
+      ],
+    },
+    {
+      id: "other",
+      cwd: other,
+      steps: [
+        { owner: "add the linter", at: "2026-09-16T09:50:00Z" },
+        ran('git commit -m "feat: add the linter"', "2026-09-16T10:00:00Z", "2026-09-16T10:00:02Z"),
+      ],
+    },
+    { id: "main", cwd: repo, steps: [...LANDINGS[landing].repo, later("2026-09-16T14:00:00Z")] },
+  ]);
+}
+
+function expectLanding(home: Home): void {
+  expect(query(home, ["signal", "stranded-work"]).rows).toEqual([
+    ["2026-09-14", 0.5, 1, 2, "landed 1, ended unlanded 1"],
+  ]);
+  expect(query(home, ["signal", "time-to-land"]).rows).toEqual([
+    ["2026-09-14", 150, 1, 2, "landed 1, not landed 1"],
+  ]);
+  const events = query(home, ["signal-events", "time-to-land"]).rows;
+  expect(events.map(([, kind, , , minutes, session]) => [session, kind, minutes])).toEqual([
+    ["other", "not landed", null],
+    [TOPIC, "landed", 150],
+  ]);
+}
+
+test("AC-76 a worktree's push of HEAD:main lands its slices, and a parallel worktree that never lands ends unlanded", () => {
+  expectLanding(
+    landingCase({ worktrees: "kept outside the repo", landing: "push HEAD:main from the worktree" }),
+  );
+});
+
+test("AC-76 a merge of the worktree's branch and a push in the repo's checkout lands its slices", () => {
+  expectLanding(landingCase({ worktrees: "kept outside the repo", landing: "merge and push from the repo" }));
+});
+
+test("AC-76 a worktree under the repo's .claude/worktrees removed before sync still lands by its own push of HEAD:main", () => {
+  expectLanding(
+    landingCase({
+      worktrees: "under .claude/worktrees, landed and removed before sync",
+      landing: "push HEAD:main from the worktree",
+    }),
+  );
+});
+
+test("AC-76 a worktree under the repo's .claude/worktrees removed before sync still lands by a merge and push in the repo", () => {
+  expectLanding(
+    landingCase({
+      worktrees: "under .claude/worktrees, landed and removed before sync",
+      landing: "merge and push from the repo",
+    }),
+  );
 });
 
 const counts = (more: Readonly<Record<string, number>> = {}) => ({
@@ -326,8 +437,8 @@ test("AC-44 signal splits each week by repo or a tag's key, newest first, and re
   sync(home);
 
   expect(query(home, ["signal", "stranded-work"]).rows).toEqual([
-    ["2026-09-21", 0.5, 1, 2, "pushed 1, stranded 1"],
-    ["2026-09-14", 0, 0, 1, "pushed 1"],
+    ["2026-09-21", 0.5, 1, 2, "landed 1, stranded 1"],
+    ["2026-09-14", 0, 0, 1, "landed 1"],
   ]);
   const byRepo = query(home, ["signal", "stranded-work", "--by", "repo"]);
   expect(byRepo.columns).toEqual(["week", "repo", "label", "value", "count", "of", "kinds"]);
@@ -512,7 +623,7 @@ test("AC-51 --skill keeps the tasks that loaded a skill and before-after names t
   const scoped = query(home, ["signal", "stranded-work", "--skill", "plan"]);
   expect(scoped.rows).toEqual([
     ["2026-09-21", 1, 1, 1, "stranded 1"],
-    ["2026-09-14", 0, 0, 1, "pushed 1"],
+    ["2026-09-14", 0, 0, 1, "landed 1"],
   ]);
   expect(scoped.denominator).toEndWith(", in the tasks that loaded plan");
 

@@ -13,7 +13,7 @@ import {
 } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, relative } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import type { SyncSubprocess } from "bun";
 import { z } from "zod";
 
@@ -158,16 +158,18 @@ export function scratchRepo(repo: string, origin: string, commits: readonly Comm
   return repo;
 }
 
-const SCRATCH_BRANCH = "side";
-
 export function scratchWorktree(repo: string, worktree: string, commit: Commit): string {
-  git(repo, ["worktree", "add", "--quiet", "-b", SCRATCH_BRANCH, worktree]);
+  git(repo, ["worktree", "add", "--quiet", "-b", basename(worktree), worktree]);
   commitTo(worktree, commit);
   return worktree;
 }
 
 export function landAndRemoveWorktree(repo: string, worktree: string): void {
-  git(repo, ["merge", "--quiet", "--ff-only", SCRATCH_BRANCH]);
+  git(repo, ["merge", "--quiet", "--ff-only", basename(worktree)]);
+  removeWorktree(repo, worktree);
+}
+
+export function removeWorktree(repo: string, worktree: string): void {
   git(repo, ["worktree", "remove", worktree]);
 }
 
