@@ -2,7 +2,7 @@ import { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
 import { z } from "zod";
 import { readRows } from "./db";
-import { projectOf, withoutWorktree, worktreeOf } from "./worktree";
+import { projectOf, withoutWorktree, worktreeAt, worktreeCheckout, worktreeOf } from "./worktree";
 
 describe("naming the worktree a path sits in", () => {
   test("names it, and nothing for a primary checkout", () => {
@@ -18,6 +18,21 @@ describe("naming the worktree a path sits in", () => {
     expect([projectOf(cwd), worktreeOf(cwd)]).toEqual(["/h/code/one", "side"]);
     expect([projectOf("/h/code/one"), worktreeOf("/h/code/one")]).toEqual(["/h/code/one", null]);
     expect([projectOf(null), worktreeOf(null)]).toEqual([null, null]);
+  });
+
+  test("finds the worktree a path lies in and names its checkout, and nothing outside one", () => {
+    const side = worktreeAt("/h/code/one/.claude/worktrees/side/lib/x.dart");
+    expect(side).toEqual({ project: "/h/code/one", name: "side" });
+    expect(worktreeCheckout({ project: "/h/code/one", name: "side" })).toBe(
+      "/h/code/one/.claude/worktrees/side",
+    );
+    expect(worktreeAt("/h/code/one/.claude/worktrees/side")).toEqual({
+      project: "/h/code/one",
+      name: "side",
+    });
+    expect(worktreeAt("/h/code/one/.claude/worktrees/")).toBeNull();
+    expect(worktreeAt("/h/code/one/lib/x.dart")).toBeNull();
+    expect(worktreeAt(null)).toBeNull();
   });
 
   test("a worktree checkout collapses onto the file it is a copy of", () => {

@@ -1,19 +1,25 @@
 const WORKTREE_SEGMENT = "/.claude/worktrees/";
 
-export function worktreeOf(path: string | null): string | null {
+export type Worktree = { readonly project: string; readonly name: string };
+
+export function worktreeAt(path: string | null): Worktree | null {
   if (!path) return null;
   const at = path.indexOf(WORKTREE_SEGMENT);
   if (at === -1) return null;
   const rest = path.slice(at + WORKTREE_SEGMENT.length);
   const name = rest.split("/")[0];
-  return name || null;
+  return name ? { project: path.slice(0, at), name } : null;
 }
+
+export const worktreeOf = (path: string | null): string | null => worktreeAt(path)?.name ?? null;
 
 export function projectOf(cwd: string | null): string | null {
   if (!cwd) return null;
-  const at = cwd.indexOf(WORKTREE_SEGMENT);
-  return at === -1 ? cwd : cwd.slice(0, at);
+  return worktreeAt(cwd)?.project ?? cwd;
 }
+
+export const worktreeCheckout = (worktree: Worktree): string =>
+  `${worktree.project}${WORKTREE_SEGMENT}${worktree.name}`;
 
 export const withoutWorktree = (col: string): string => {
   const at = `instr(${col}, '${WORKTREE_SEGMENT}')`;

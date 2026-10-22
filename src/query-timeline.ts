@@ -11,10 +11,11 @@ import {
   reviewRounds,
 } from "./query-hook-timeline";
 import type { Cause } from "./query-interrupt";
+import { inMainCheckout, landingOf, type RunInCheckout } from "./query-landing";
 import { type Reread, rereadsAfterCompactions } from "./query-lost-context";
-import { repoFinder } from "./query-run-repo";
+import { checkoutFinder, repoFinder } from "./query-run-repo";
 import { asksSecondRead } from "./query-second-read";
-import type { GitRunRow, HookRow, SessionRow, SignalRecord } from "./query-signal-record";
+import type { HookRow, SessionRow, SignalRecord } from "./query-signal-record";
 import { type Stretch, stepStretches } from "./query-step-cost";
 import {
   type SaidRow,
@@ -49,7 +50,11 @@ type TaskOutcome = Placed & {
   readonly landedAt: string | null;
 };
 
-type CommitRun = Placed & { readonly onOriginAt: string | null; readonly lastOfSession: boolean };
+type CommitRun = Placed & {
+  readonly onOriginAt: string | null;
+  readonly lastOfSession: boolean;
+  readonly standsForSlice: boolean;
+};
 
 type Kinded<Kind extends string> = Placed & { readonly kind: Kind };
 
@@ -93,7 +98,7 @@ export type Timeline = {
   readonly newest: string | null;
 };
 
-type Run = GitRunRow & { readonly repo: string; readonly root: string; readonly ms: number };
+type Run = RunInCheckout & { readonly root: string };
 
 type Pending = {
   readonly sessionId: string;
@@ -169,14 +174,6 @@ function tasksByRoot(
   return { tasks, ownerTyped, pending };
 }
 
-function pushesByRepo(runs: readonly Run[]): (run: Run) => number | null {
-  const pushes = Map.groupBy(
-    runs.filter((run) => run.subcommand === "push"),
-    (run) => run.repo,
-  );
-  return (run) => pushes.get(run.repo)?.find((push) => push.ms >= run.ms)?.ms ?? null;
-}
-
 export function timelineOf(record: SignalRecord): Timeline {
   const sessions = new Map(record.sessions.map((session) => [session.id, session]));
   const rootOf = rootFinder(sessions);
@@ -203,13 +200,19 @@ export function timelineOf(record: SignalRecord): Timeline {
     return { task, tags: tagsOf(task) };
   };
 
+  const checkoutOf = checkoutFinder(record.checkouts);
   const runs: Run[] = record.gitRuns
     .flatMap((run) => {
       const repo = repoOf(run.dir);
-      return repo === null ? [] : [{ ...run, repo, root: rootOf(run.sessionId), ms: ms(run.at) }];
+      if (repo === null) return [];
+      const checkout = checkoutOf(run.dir);
+      const root = rootOf(run.sessionId);
+      const at = ms(run.at);
+      const slice = inMainCheckout({ checkout, repo }) ? taskKey(root, at) : checkout;
+      return [{ ...run, repo, checkout, slice, root, ms: at }];
     })
     .sort((a, b) => a.ms - b.ms);
-  const onOrigin = pushesByRepo(runs);
+  const { onOrigin, supersededBeforeLanding } = landingOf(runs);
   const commits = runs.filter((run) => run.subcommand === "commit");
   const lastOfRoot = new Map(commits.map((run) => [run.root, run]));
   const lastOfTask = new Map(commits.map((run) => [taskKey(run.root, run.ms), run]));
@@ -265,6 +268,7 @@ export function timelineOf(record: SignalRecord): Timeline {
     ...inTask(run.root, run.ms),
     onOriginAt: iso(onOrigin(run)),
     lastOfSession: lastOfRoot.get(run.root) === run,
+    standsForSlice: !supersededBeforeLanding(run),
   }));
 
   const steps: StepSpent[] = stepStretches(record.sessions, record.responses, record.skillLoads, {

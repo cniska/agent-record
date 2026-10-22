@@ -61,7 +61,7 @@ Git keeps what landed. Everything else an agent did lives in each tool's own ses
 - **What did we already try?** A dropped approach never reaches git. Read what was tried and dropped, months back and in another repo.
 - **What do I keep correcting?** Corrections, failed commands retried unchanged, checks an agent skipped: patterns that show only when counted over hundreds of sessions.
 - **Which ways of working hold up?** The record ties a feature's commit and the fixes that followed it to the sessions that made them, in every repo.
-- **Where does work stall?** How long a task takes from your prompt to origin, and which commits sat unpushed.
+- **Where does work stall?** How long a task takes from your prompt to origin/main, and which commits sat unlanded.
 
 `rg` over the transcripts finds a phrase from last week. It cannot search what the tools have deleted, and it cannot count or join: group corrections, tie a session to its commits, or check whether the files a session touched have changed since.
 

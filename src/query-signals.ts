@@ -130,8 +130,14 @@ const ownerInterrupts = signalOf({
 
 const timeToLand = signalOf({
   name: "time-to-land",
-  value: "median minutes from a task prompt to its last commit run on origin",
-  note: "On origin means a later push run in the same repo, from any session; a push run by hand is not seen.",
+  value: "median minutes from a task prompt to its last commit run on origin/main",
+  note:
+    "On origin/main means a later push run in the same repo, from any session, that lands: a push to main from " +
+    "any checkout, or a bare or HEAD push from the repo's main checkout, carrying the runs of its own checkout " +
+    "and, after a main-checkout merge, rebase or reset naming a worktree's branch, that worktree's. A worktree's " +
+    "branch is the one its push names, or the worktree's name when it pushes HEAD. A task whose branch was " +
+    "pushed but never landed is not landed. A push run by hand, a pull request merge and a default branch not " +
+    "named main are not seen.",
   kinds: ["landed", "not landed"] as const,
   events: (timeline) =>
     timeline.tasks.flatMap((task): readonly SignalEvent<"landed" | "not landed">[] => {
@@ -148,23 +154,28 @@ const timeToLand = signalOf({
 
 const strandedWork = signalOf({
   name: "stranded-work",
-  value: "share of commit runs not on origin within the hour",
+  value:
+    "share of judged commit runs, one standing for a slice's commits, not on origin/main within the hour",
   note:
-    "Only commit runs an hour older than the newest message count. Ended unpushed stands in for a session " +
-    "archived with unpushed commits.",
-  kinds: ["pushed", "stranded", "ended unpushed"] as const,
+    "A judged commit run is one no later commit run of its slice, a worktree or a task in the main checkout, " +
+    "follows before it lands on origin/main (see time-to-land for what lands); the earlier ones land with it. " +
+    "Only commit runs an hour older than the newest message count. Ended unlanded stands in for a session " +
+    "archived with its last slice not on origin/main. A worktree's branch is the one its push names, or the " +
+    "worktree's name when it pushes HEAD.",
+  kinds: ["landed", "stranded", "ended unlanded"] as const,
   events: (timeline) =>
-    timeline.commitRuns.flatMap((run): readonly SignalEvent<"pushed" | "stranded" | "ended unpushed">[] => {
+    timeline.commitRuns.flatMap((run): readonly SignalEvent<"landed" | "stranded" | "ended unlanded">[] => {
+      if (!run.standsForSlice) return [];
       if (timeline.newest === null || Date.parse(timeline.newest) - Date.parse(run.at) <= HOUR_MS) return [];
-      if (run.onOriginAt === null) return [event(run, run.lastOfSession ? "ended unpushed" : "stranded")];
-      const pushedAfter = Date.parse(run.onOriginAt) - Date.parse(run.at);
+      if (run.onOriginAt === null) return [event(run, run.lastOfSession ? "ended unlanded" : "stranded")];
+      const landedAfter = Date.parse(run.onOriginAt) - Date.parse(run.at);
       return [
-        event(run, pushedAfter <= HOUR_MS ? "pushed" : "stranded", minutesBetween(run.at, run.onOriginAt)),
+        event(run, landedAfter <= HOUR_MS ? "landed" : "stranded", minutesBetween(run.at, run.onOriginAt)),
       ];
     }),
   rate: (count) => {
-    const stranded = count("stranded") + count("ended unpushed");
-    const of = stranded + count("pushed");
+    const stranded = count("stranded") + count("ended unlanded");
+    const of = stranded + count("landed");
     return { value: ratio(stranded, of), count: stranded, of };
   },
 });

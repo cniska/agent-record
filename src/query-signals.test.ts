@@ -18,12 +18,18 @@ const session = (id: string, start: string, more: Partial<SessionRow> = {}): Ses
   ...more,
 });
 
-const run = (sessionId: string, at: string, subcommand: GitRunRow["subcommand"], dir = REPO): GitRunRow => ({
+const run = (
+  sessionId: string,
+  at: string,
+  subcommand: GitRunRow["subcommand"],
+  dir = REPO,
+  target: string | null = null,
+): GitRunRow => ({
   sessionId,
   at,
   subcommand,
   dir,
-  target: null,
+  target,
   callAt: at,
   commitsInCall: subcommand === "commit" ? 1 : 0,
   command: "",
@@ -165,17 +171,142 @@ describe("counting a message the owner typed while a turn ran", () => {
   });
 });
 
-describe("timing a task from its prompt to its last commit run on origin", () => {
-  test("takes the first push in the repo at or after the last commit run, from any session", () => {
+const TREE = "/h/trees/demo-a1/topic";
+const OTHER_TREE = "/h/trees/demo-a1/other";
+
+const treeCheckouts = [
+  { path: REPO, repo: REPO },
+  { path: TREE, repo: REPO },
+  { path: OTHER_TREE, repo: REPO },
+];
+
+describe("timing a task from its prompt to its last commit run on origin/main", () => {
+  test("takes the first push to main in the repo at or after the last commit run, from any session", () => {
     const record = recordOf({
       sessions: [session("a", "2026-10-14T09:00:00.000Z"), session("b", "2026-10-14T11:00:00.000Z")],
       gitRuns: [
         run("a", "2026-10-14T09:10:00.000Z", "commit"),
         run("a", "2026-10-14T09:20:00.000Z", "commit", `${REPO}/src`),
-        run("b", "2026-10-14T11:05:00.000Z", "push", `${REPO}/.claude/worktrees/x`),
+        run("b", "2026-10-14T11:05:00.000Z", "push", REPO, "main"),
       ],
     });
     expect(eventsOf("time-to-land", record).map((e) => [e.kind, e.minutes])).toEqual([["landed", 125]]);
+  });
+
+  test("ends at the push to main, not at the push of the branch", () => {
+    const record = recordOf({
+      sessions: [session("a", "2026-10-14T09:00:00.000Z")],
+      checkouts: treeCheckouts,
+      gitRuns: [
+        run("a", "2026-10-14T09:10:00.000Z", "commit", TREE),
+        run("a", "2026-10-14T09:15:00.000Z", "push", TREE, "topic"),
+        run("a", "2026-10-14T09:40:00.000Z", "push", TREE, "main"),
+      ],
+    });
+    expect(eventsOf("time-to-land", record).map((e) => [e.kind, e.minutes])).toEqual([["landed", 40]]);
+  });
+
+  test("counts a task whose branch was pushed but never landed on main as not landed", () => {
+    const record = recordOf({
+      sessions: [session("a", "2026-10-14T09:00:00.000Z")],
+      checkouts: treeCheckouts,
+      gitRuns: [
+        run("a", "2026-10-14T09:10:00.000Z", "commit", TREE),
+        run("a", "2026-10-14T09:15:00.000Z", "push", TREE, "topic"),
+      ],
+    });
+    expect(eventsOf("time-to-land", record).map((e) => e.kind)).toEqual(["not landed"]);
+  });
+
+  test("lands a commit run only by a push from its own checkout, not another worktree's", () => {
+    const record = recordOf({
+      sessions: [session("a", "2026-10-14T09:00:00.000Z"), session("b", "2026-10-14T09:00:00.000Z")],
+      checkouts: treeCheckouts,
+      gitRuns: [
+        run("a", "2026-10-14T09:10:00.000Z", "commit", TREE),
+        run("b", "2026-10-14T09:20:00.000Z", "commit", OTHER_TREE),
+        run("b", "2026-10-14T09:30:00.000Z", "push", OTHER_TREE, "main"),
+      ],
+    });
+    expect(eventsOf("time-to-land", record).map((e) => [e.sessionId, e.kind])).toEqual([
+      ["a", "not landed"],
+      ["b", "landed"],
+    ]);
+  });
+
+  test("lands a worktree's runs by a main-checkout push after a merge naming the branch its push named", () => {
+    const record = recordOf({
+      sessions: [
+        session("a", "2026-10-14T09:00:00.000Z"),
+        session("b", "2026-10-14T09:00:00.000Z"),
+        session("m", "2026-10-14T09:00:00.000Z"),
+      ],
+      checkouts: treeCheckouts,
+      gitRuns: [
+        run("a", "2026-10-14T09:10:00.000Z", "commit", TREE),
+        run("a", "2026-10-14T09:15:00.000Z", "push", TREE, "topic"),
+        run("b", "2026-10-14T09:20:00.000Z", "commit", OTHER_TREE),
+        run("b", "2026-10-14T09:25:00.000Z", "push", OTHER_TREE, "other"),
+        run("m", "2026-10-14T09:30:00.000Z", "merge", REPO, "topic"),
+        run("m", "2026-10-14T09:40:00.000Z", "push", REPO),
+      ],
+    });
+    expect(eventsOf("time-to-land", record).map((e) => [e.sessionId, e.kind, e.minutes])).toEqual([
+      ["a", "landed", 40],
+      ["b", "not landed", null],
+    ]);
+  });
+
+  test("names a worktree that pushed HEAD by its name, so a merge naming it lands its runs", () => {
+    const record = recordOf({
+      sessions: [session("a", "2026-10-14T09:00:00.000Z"), session("m", "2026-10-14T09:00:00.000Z")],
+      checkouts: treeCheckouts,
+      gitRuns: [
+        run("a", "2026-10-14T09:10:00.000Z", "commit", TREE),
+        run("a", "2026-10-14T09:15:00.000Z", "push", TREE, "HEAD"),
+        run("m", "2026-10-14T09:30:00.000Z", "merge", REPO, "topic"),
+        run("m", "2026-10-14T09:40:00.000Z", "push", REPO, "HEAD"),
+      ],
+    });
+    expect(eventsOf("time-to-land", record).map((e) => [e.sessionId, e.kind, e.minutes])).toEqual([
+      ["a", "landed", 40],
+    ]);
+  });
+
+  test("never lands a worktree's runs by a main-checkout merge of origin/main, since main is no worktree's branch", () => {
+    const record = recordOf({
+      sessions: [session("a", "2026-10-14T09:00:00.000Z"), session("m", "2026-10-14T09:00:00.000Z")],
+      checkouts: treeCheckouts,
+      gitRuns: [
+        run("a", "2026-10-14T09:10:00.000Z", "commit", TREE),
+        run("a", "2026-10-14T09:15:00.000Z", "push", TREE, "HEAD"),
+        run("m", "2026-10-14T09:30:00.000Z", "merge", REPO, "main"),
+        run("m", "2026-10-14T09:40:00.000Z", "push", REPO),
+      ],
+    });
+    expect(eventsOf("time-to-land", record).map((e) => [e.sessionId, e.kind])).toEqual([["a", "not landed"]]);
+  });
+
+  test("reads a removed Claude worktree as its own checkout, so its bare push does not land", () => {
+    const record = recordOf({
+      sessions: [session("a", "2026-10-14T09:00:00.000Z")],
+      gitRuns: [
+        run("a", "2026-10-14T09:10:00.000Z", "commit", `${REPO}/.claude/worktrees/x/src`),
+        run("a", "2026-10-14T09:15:00.000Z", "push", `${REPO}/.claude/worktrees/x`),
+      ],
+    });
+    expect(eventsOf("time-to-land", record).map((e) => e.kind)).toEqual(["not landed"]);
+  });
+
+  test("does not land by a push of tags from the main checkout", () => {
+    const record = recordOf({
+      sessions: [session("a", "2026-10-14T09:00:00.000Z")],
+      gitRuns: [
+        run("a", "2026-10-14T09:10:00.000Z", "commit"),
+        run("a", "2026-10-14T09:15:00.000Z", "push", REPO, "--tags"),
+      ],
+    });
+    expect(eventsOf("time-to-land", record).map((e) => e.kind)).toEqual(["not landed"]);
   });
 
   test("counts a task whose commit run never reached origin apart, and leaves out one that made none", () => {
@@ -248,8 +379,8 @@ describe("timing a task from its prompt to its last commit run on origin", () =>
   });
 });
 
-describe("finding commit runs stranded off origin", () => {
-  test("counts a run pushed after the hour and a last run never pushed, and skips the last hour", () => {
+describe("finding commit runs stranded off origin/main", () => {
+  test("counts a run landed after the hour, skips the last hour, and lets a run in it stand for the one before", () => {
     const record = recordOf({
       sessions: [session("a", "2026-10-14T08:00:00.000Z")],
       gitRuns: [
@@ -262,14 +393,13 @@ describe("finding commit runs stranded off origin", () => {
       ],
     });
     expect(eventsOf("stranded-work", record).map((e) => [e.kind, e.minutes])).toEqual([
-      ["pushed", 30],
+      ["landed", 30],
       ["stranded", 90],
-      ["stranded", null],
     ]);
-    expect(rateOf("stranded-work", record)).toEqual({ value: 0.67, count: 2, of: 3 });
+    expect(rateOf("stranded-work", record)).toEqual({ value: 0.5, count: 1, of: 2 });
   });
 
-  test("calls a session's last run never pushed ended unpushed", () => {
+  test("calls a session's last run never landed ended unlanded, standing for the task's earlier run", () => {
     const record = recordOf({
       sessions: [session("a", "2026-10-14T08:00:00.000Z")],
       gitRuns: [
@@ -277,7 +407,38 @@ describe("finding commit runs stranded off origin", () => {
         run("a", "2026-10-14T09:00:00.000Z", "commit"),
       ],
     });
-    expect(eventsOf("stranded-work", record).map((e) => e.kind)).toEqual(["stranded", "ended unpushed"]);
+    expect(eventsOf("stranded-work", record).map((e) => e.kind)).toEqual(["ended unlanded"]);
+  });
+
+  test("judges only the last commit run of a worktree slice before it lands, which stands for the earlier ones", () => {
+    const record = recordOf({
+      sessions: [session("a", "2026-10-14T08:00:00.000Z")],
+      checkouts: treeCheckouts,
+      gitRuns: [
+        run("a", "2026-10-14T08:00:00.000Z", "commit", TREE),
+        run("a", "2026-10-14T08:10:00.000Z", "push", TREE, "topic"),
+        run("a", "2026-10-14T10:00:00.000Z", "commit", TREE),
+        run("a", "2026-10-14T10:20:00.000Z", "push", TREE, "main"),
+      ],
+    });
+    expect(eventsOf("stranded-work", record).map((e) => [e.at, e.kind, e.minutes])).toEqual([
+      ["2026-10-14T10:00:00.000Z", "landed", 20],
+    ]);
+  });
+
+  test("still judges a main-checkout commit run that another task's commit run follows", () => {
+    const record = recordOf({
+      sessions: [session("a", "2026-10-14T08:00:00.000Z"), session("b", "2026-10-14T08:00:00.000Z")],
+      gitRuns: [
+        run("a", "2026-10-14T08:00:00.000Z", "commit"),
+        run("b", "2026-10-14T09:00:00.000Z", "commit"),
+        run("b", "2026-10-14T09:10:00.000Z", "push"),
+      ],
+    });
+    expect(eventsOf("stranded-work", record).map((e) => [e.sessionId, e.kind, e.minutes])).toEqual([
+      ["a", "stranded", 70],
+      ["b", "landed", 10],
+    ]);
   });
 });
 

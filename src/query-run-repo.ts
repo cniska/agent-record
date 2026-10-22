@@ -1,4 +1,5 @@
-import type { CommitRow, GitRunRow, SignalRecord } from "./query-signal-record";
+import type { CheckoutRow, CommitRow, GitRunRow, SignalRecord } from "./query-signal-record";
+import { worktreeAt, worktreeCheckout } from "./worktree";
 
 type DirRepo = { readonly path: string; readonly repo: string };
 
@@ -10,12 +11,11 @@ const AUTHOR_TIME_GRAIN_MS = 1000;
 
 const SUBJECT_EDGES = new Set(['"', "'", "\n"]);
 
-function longestCovering(dirs: readonly DirRepo[]): Finder {
+type Covering = (path: string) => DirRepo | null;
+
+function longestCovering(dirs: readonly DirRepo[]): Covering {
   const longestFirst = [...dirs].sort((a, b) => b.path.length - a.path.length);
-  return (path) => {
-    if (path === null) return null;
-    return longestFirst.find((d) => path === d.path || path.startsWith(`${d.path}/`))?.repo ?? null;
-  };
+  return (path) => longestFirst.find((d) => path === d.path || path.startsWith(`${d.path}/`)) ?? null;
 }
 
 function holdsSubject(command: string, subject: string): boolean {
@@ -62,7 +62,7 @@ function repoMadeBy(run: GitRunRow, dated: readonly Dated[]): string | null {
 function committedDirs(
   gitRuns: readonly GitRunRow[],
   commits: readonly CommitRow[],
-  covered: Finder,
+  covered: Covering,
 ): readonly DirRepo[] {
   const commitRuns = gitRuns.filter((run) => run.subcommand === "commit");
   const dated = commits.map((commit) => ({ ms: Date.parse(commit.at), commit })).sort((a, b) => a.ms - b.ms);
@@ -83,5 +83,19 @@ function committedDirs(
 
 export function repoFinder(record: Pick<SignalRecord, "checkouts" | "gitRuns" | "commits">): Finder {
   const covered = longestCovering(record.checkouts);
-  return longestCovering([...record.checkouts, ...committedDirs(record.gitRuns, record.commits, covered)]);
+  const covering = longestCovering([
+    ...record.checkouts,
+    ...committedDirs(record.gitRuns, record.commits, covered),
+  ]);
+  return (path) => (path === null ? null : (covering(path)?.repo ?? null));
+}
+
+export function checkoutFinder(checkouts: readonly CheckoutRow[]): (dir: string) => string {
+  const covering = longestCovering(checkouts);
+  const indexed = new Set(checkouts.map((checkout) => checkout.path));
+  return (dir) => {
+    const worktree = worktreeAt(dir);
+    if (worktree !== null && indexed.has(worktree.project)) return worktreeCheckout(worktree);
+    return covering(dir)?.path ?? dir;
+  };
 }
