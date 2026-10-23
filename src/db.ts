@@ -4,7 +4,7 @@ import { dirname } from "node:path";
 import { z } from "zod";
 import { invariant, unreachable } from "./assert";
 import { faultRecord, refuseRecord } from "./db-contract";
-import { sqliteCode } from "./db-error";
+import { sqliteBusy, sqliteCode } from "./db-error";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
 import { issuesOf } from "./error-read";
 import { nextBackupPath } from "./file-backup";
@@ -54,16 +54,21 @@ export const AnyRow = z.record(z.string(), z.unknown());
 
 export const Exists = z.strictObject({ one: z.literal(1) });
 
-function holdsNoTables(db: Database): boolean {
-  return readRows(db, "SELECT count(*) AS n FROM sqlite_master").get(Count)?.n === 0;
+const VersionAndTables = z.strictObject({ version: z.number(), tables: z.number() });
+
+const VERSION_AND_TABLES_SQL =
+  "SELECT (SELECT user_version FROM pragma_user_version) AS version, (SELECT count(*) FROM sqlite_master) AS tables";
+
+export function versionAndFreshnessInOneSnapshot(db: Database): {
+  readonly found: number;
+  readonly fresh: boolean;
+} {
+  const row = readRows(db, VERSION_AND_TABLES_SQL).get(VersionAndTables);
+  invariant(row !== null, "the version and table count select returns one row");
+  return { found: row.version, fresh: row.version === 0 && row.tables === 0 };
 }
 
-export function isFresh(db: Database): boolean {
-  return recordVersion(db) === 0 && holdsNoTables(db);
-}
-
-export function refuseOtherVersion(db: Database): void {
-  const found = recordVersion(db);
+export function refuseOtherVersion(found: number): void {
   if (found !== SCHEMA_VERSION) throw refuseRecord("record_version", { found, expected: SCHEMA_VERSION });
 }
 
@@ -113,6 +118,21 @@ function refusesVersion(admits: Admits, found: number): boolean {
   }
 }
 
+const WAL_RETRY_MS = 5;
+
+function enableWalRetryingBusy(db: Database, heldRecordWaitMs: number): void {
+  const deadline = Date.now() + heldRecordWaitMs;
+  for (;;) {
+    try {
+      db.run("PRAGMA journal_mode = WAL");
+      return;
+    } catch (error) {
+      if (!sqliteBusy(error) || Date.now() >= deadline) throw error;
+      Bun.sleepSync(WAL_RETRY_MS);
+    }
+  }
+}
+
 function openRecord(path: string, opts: RecordOpening): OpenedRecord {
   const admits = opts.admits ?? "current";
   mkdirSync(dirname(path), { recursive: true });
@@ -121,22 +141,21 @@ function openRecord(path: string, opts: RecordOpening): OpenedRecord {
     heldRecordWaitMs: opts.heldRecordWaitMs,
   });
   try {
-    const found = recordVersion(db);
-    const fresh = found === 0 && holdsNoTables(db);
+    const { found, fresh } = versionAndFreshnessInOneSnapshot(db);
     if (!fresh && refusesVersion(admits, found))
       throw refuseRecord("record_version", { found, expected: SCHEMA_VERSION });
     const older = !fresh && found < SCHEMA_VERSION ? found : null;
-    db.run("PRAGMA journal_mode = WAL");
+    enableWalRetryingBusy(db, opts.heldRecordWaitMs);
     db.run("PRAGMA foreign_keys = ON");
     if (fresh) {
       writeTransaction(db, () => {
-        if (!isFresh(db)) return;
+        if (!versionAndFreshnessInOneSnapshot(db).fresh) return;
         db.run(SCHEMA_SQL);
         db.run(`PRAGMA user_version = ${SCHEMA_VERSION}`);
       });
     }
     if (admits === "any" || older !== null) return { db, older };
-    refuseOtherVersion(db);
+    refuseOtherVersion(versionAndFreshnessInOneSnapshot(db).found);
     db.run(SCHEMA_SQL);
     return { db, older };
   } catch (error) {
@@ -163,7 +182,7 @@ export function refusingBusy<T>(path: string, run: () => T): T {
   try {
     return run();
   } catch (error) {
-    if (sqliteCode(error)?.startsWith("SQLITE_BUSY")) throw refuseRecord("record_busy", { path }, error);
+    if (sqliteBusy(error)) throw refuseRecord("record_busy", { path }, error);
     throw error;
   }
 }

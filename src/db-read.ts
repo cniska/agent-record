@@ -1,6 +1,12 @@
 import type { Database } from "bun:sqlite";
 import { existsSync } from "node:fs";
-import { type HeldRecordWait, isFresh, openRecordFile, refuseOtherVersion, refusingBusy } from "./db";
+import {
+  type HeldRecordWait,
+  openRecordFile,
+  refuseOtherVersion,
+  refusingBusy,
+  versionAndFreshnessInOneSnapshot,
+} from "./db";
 import { refuseRecord } from "./db-contract";
 
 export function readingRecord<T>(
@@ -13,8 +19,9 @@ export function readingRecord<T>(
     const db = openRecordFile(path, { readwrite: true, create: false, heldRecordWaitMs });
     try {
       db.run("PRAGMA query_only = ON");
-      if (isFresh(db)) throw refuseRecord("no_database", { path });
-      refuseOtherVersion(db);
+      const { found, fresh } = versionAndFreshnessInOneSnapshot(db);
+      if (fresh) throw refuseRecord("no_database", { path });
+      refuseOtherVersion(found);
       return use(db);
     } finally {
       db.close();

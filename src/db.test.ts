@@ -9,6 +9,7 @@ import { openDb, readRows, recordVersion, SqlFlag, withDb } from "./db";
 import { refuseRecord } from "./db-contract";
 import { NO_WAIT_MS } from "./db-read.test-support";
 import { SCHEMA_VERSION } from "./db-schema";
+import type { WriterMode } from "./db-writer.test-support";
 
 const WRITER = join(import.meta.dir, "db-writer.test-support.ts");
 const HOLD_MS = 500;
@@ -33,11 +34,7 @@ type Writer = {
   send(): void;
 };
 
-function spawnWriter(
-  mode: "hold" | "write" | "read-write" | "open" | "close" | "initialize",
-  path: string,
-  who: string,
-): Writer {
+function spawnWriter(mode: WriterMode, path: string, who: string): Writer {
   const proc = Bun.spawn(["bun", WRITER, mode, path, who], { stdin: "pipe", stdout: "pipe", stderr: "pipe" });
   const reader = proc.stdout.pipeThrough(new TextDecoderStream()).getReader();
   let buffered = "";
@@ -82,9 +79,6 @@ function committed(path: string): string[] {
 describe("concurrent writers", () => {
   test("two first opens both succeed and stamp the version", async () => {
     const path = scratchPath();
-    const empty = new Database(path, { create: true });
-    empty.run("PRAGMA journal_mode = WAL");
-    empty.close();
     const first = spawnWriter("initialize", path, "first");
     const second = spawnWriter("initialize", path, "second");
     await Promise.all([first.expectLine("ready"), second.expectLine("ready")]);
@@ -92,6 +86,24 @@ describe("concurrent writers", () => {
     second.send();
 
     expect(await exited(first)).toEqual({ code: 0, stderr: "" });
+    expect(await exited(second)).toEqual({ code: 0, stderr: "" });
+    const initialized = new Database(path, { readonly: true });
+    expect(initialized.query("PRAGMA user_version").get()).toEqual({ user_version: SCHEMA_VERSION });
+    initialized.close();
+  });
+
+  test("a first open beside another first open's held write lock waits for it and stamps the version", async () => {
+    const path = scratchPath();
+    const holder = new Database(path, { create: true });
+    holder.run("BEGIN IMMEDIATE");
+    const second = spawnWriter("initialize-contended", path, "second");
+    try {
+      await second.expectLine("busy");
+      await Bun.sleep(HOLD_MS);
+    } finally {
+      holder.run("ROLLBACK");
+      holder.close();
+    }
     expect(await exited(second)).toEqual({ code: 0, stderr: "" });
     const initialized = new Database(path, { readonly: true });
     expect(initialized.query("PRAGMA user_version").get()).toEqual({ user_version: SCHEMA_VERSION });
@@ -140,7 +152,7 @@ describe("concurrent writers", () => {
     expect(committed(path)).toEqual(["closer", "writer"]);
   });
 
-  test("a writer opening while another holds the write lock waits for it and both commit", async () => {
+  test("an open under another's held write lock completes without waiting and its write waits", async () => {
     const path = scratchPath();
     const setup = openDb(path, { heldRecordWaitMs: NO_WAIT_MS });
     setup.run("CREATE TABLE probe (who TEXT NOT NULL)");
@@ -149,7 +161,7 @@ describe("concurrent writers", () => {
     const holder = spawnWriter("hold", path, "holder");
     await holder.expectLine("held");
     const opener = spawnWriter("open", path, "opener");
-    await opener.expectLine("opening");
+    await opener.expectLine("busy");
     await Bun.sleep(HOLD_MS);
     holder.send();
 
@@ -169,7 +181,7 @@ describe("concurrent writers", () => {
     const holder = spawnWriter("hold", path, "holder");
     await holder.expectLine("held");
     writer.send();
-    await writer.expectLine("writing");
+    await writer.expectLine("busy");
     await Bun.sleep(HOLD_MS);
     holder.send();
 
@@ -189,7 +201,7 @@ describe("concurrent writers", () => {
     const holder = spawnWriter("hold", path, "holder");
     await holder.expectLine("held");
     writer.send();
-    await writer.expectLine("writing");
+    await writer.expectLine("busy");
     await Bun.sleep(HOLD_MS);
     holder.send();
 
