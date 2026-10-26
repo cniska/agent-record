@@ -53,13 +53,15 @@ const SESSION_PREFIX_MARK = "session_";
 const AGENT_PREFIX_MARK = "agent_";
 
 function sessionPrefixOf(prefix: string): string {
-  return prefix.startsWith(SESSION_PREFIX_MARK) ? prefix.slice(SESSION_PREFIX_MARK.length) : prefix;
+  const marked = prefix.startsWith(SESSION_PREFIX_MARK) && prefix.length > SESSION_PREFIX_MARK.length;
+  return marked ? prefix.slice(SESSION_PREFIX_MARK.length) : prefix;
 }
 
 function agentIdOfPrefix(prefix: string): string | null {
-  return prefix.startsWith(AGENT_PREFIX_MARK)
+  const id = prefix.startsWith(AGENT_PREFIX_MARK)
     ? prefix.slice(AGENT_PREFIX_MARK.length)
     : agentIdOfFileName(prefix);
+  return id === "" ? null : id;
 }
 
 export function sessionByPrefix(db: Database, query: string, prefix: string): string | null {

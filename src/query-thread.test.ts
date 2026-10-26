@@ -254,6 +254,21 @@ describe("thread", () => {
     }
   });
 
+  test("reads a mark with no id after it as written, so it names no session", () => {
+    const db = new Database(":memory:");
+    try {
+      db.run(SCHEMA_SQL);
+      db.run("INSERT INTO session (id, tool) VALUES ('root', 'claude'), ('ab12@root', 'claude')");
+      const run = (arg: string) => thread.run(db, { ...ctx, arg });
+
+      expect(run("session_").note).toBe("no session starts with session_");
+      expect(run("agent_").note).toBe("no session starts with agent_");
+      expect(run("agent-").note).toBe("no session starts with agent-");
+    } finally {
+      db.close();
+    }
+  });
+
   test("reads what was said, and centers on a timestamp when given one", () => {
     const root = mkdtempSync(join(tmpdir(), "agent-record-q-"));
     try {
