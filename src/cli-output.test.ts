@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { decode } from "@toon-format/toon";
 import { writeError } from "./cli-output";
 import { CodedError } from "./coded-error";
 
@@ -8,7 +9,7 @@ afterEach(() => {
   for (const spy of spies.splice(0)) spy.mockRestore();
 });
 
-function printed(error: unknown): unknown {
+function printedText(error: unknown): string {
   const lines: string[] = [];
   spies.push(
     spyOn(process.stderr, "write").mockImplementation((chunk: string | Uint8Array) => {
@@ -17,10 +18,36 @@ function printed(error: unknown): unknown {
     }),
   );
   writeError("query", error);
-  return JSON.parse(lines.join(""));
+  return lines.join("");
+}
+
+function printed(error: unknown): unknown {
+  return decode(printedText(error));
 }
 
 describe("an error on stderr", () => {
+  test("prints as one TOON document ending in a newline", () => {
+    const refused = new CodedError("unknown_query", "no query named nope", {
+      meta: { name: "nope" },
+      resolve: "agent-record query list",
+      kind: "refusal",
+    });
+    expect(printedText(refused)).toBe(
+      [
+        "command: query",
+        "ok: false",
+        "error:",
+        "  kind: refusal",
+        "  code: unknown_query",
+        "  message: no query named nope",
+        "  meta:",
+        "    name: nope",
+        "  resolve: agent-record query list",
+        "",
+      ].join("\n"),
+    );
+  });
+
   test("carries a refusal's code, facts and the command that resolves it beside its message", () => {
     const refused = new CodedError("no_session", "no session k7m2qx4d is on record", {
       meta: { session: "k7m2qx4d" },

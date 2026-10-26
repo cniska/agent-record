@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { decode } from "@toon-format/toon";
 import { withLock } from "./db-lock";
 import { runCli, scratchEnv } from "./fixtures.test-support";
 import { syncStampPath } from "./paths";
@@ -17,7 +18,7 @@ describe("agent-record sync", () => {
       expect(stamp).toMatchObject({ kind: "finished", failures: null });
       expect(Date.parse(stamp.at)).toBeGreaterThanOrEqual(before - 1000);
       const ran = runCli(env, ["doctor"]);
-      expect(JSON.parse(ran.stdout)).toMatchObject({ command: "doctor", ok: true, result: { failing: 0 } });
+      expect(decode(ran.stdout)).toMatchObject({ command: "doctor", ok: true, result: { failing: 0 } });
       expect(ran.exitCode).toBe(0);
     } finally {
       rmSync(root, { recursive: true, force: true });
@@ -30,7 +31,7 @@ describe("agent-record sync", () => {
       const env = scratchEnv(root);
       const ran = withLock(env, () => runCli(env, ["sync"]));
       expect(ran.exitCode).toBe(1);
-      expect(JSON.parse(ran.stderr)).toMatchObject({ error: { code: "lock_held" } });
+      expect(decode(ran.stderr)).toMatchObject({ error: { code: "lock_held" } });
       expect(existsSync(syncStampPath(env))).toBe(false);
     } finally {
       rmSync(root, { recursive: true, force: true });

@@ -11,7 +11,7 @@ import {
 } from "./ingest-event-kinds";
 import { subagentSessionIdSql } from "./ingest-ids";
 import { HOWS } from "./ingest-skill-load";
-import { callFailureSql, sessionByPrefix } from "./query";
+import { callFailureSql, cellOf, sessionByPrefix } from "./query";
 import { type Query, refuseQuery } from "./query-contract";
 import {
   type RootRow,
@@ -23,7 +23,18 @@ import {
   taskByPrefix,
 } from "./query-task";
 
-type LineKey = "at" | "session" | "parent" | "task" | "seq" | "step" | "phase" | "ms" | "outcome";
+type LineKey =
+  | "at"
+  | "session"
+  | "parent"
+  | "task"
+  | "seq"
+  | "step"
+  | "phase"
+  | "ms"
+  | "outcome"
+  | "code"
+  | "error";
 
 type Fields<T> = Extract<keyof T, LineKey> extends never ? T : never;
 
@@ -56,7 +67,7 @@ type Steps = {
       readonly call: string;
       readonly name: string | null;
       readonly target: string | null;
-      readonly git: readonly string[] | null;
+      readonly git: string | null;
     },
     Called
   >;
@@ -225,8 +236,13 @@ function callStep(call: CallRow): Taken {
       ? null
       : { at: call.returned, outcome: callOutcome(call), result: { call: call.id, name: call.name } };
   const { id, session, called: at } = call;
-  const git = call.git === null ? null : call.git.split(GIT_RUN_SEPARATOR);
-  return { step: "tool", session, at, start: { call: id, name: call.name, target: call.target, git }, ended };
+  return {
+    step: "tool",
+    session,
+    at,
+    start: { call: id, name: call.name, target: call.target, git: call.git },
+    ended,
+  };
 }
 
 function verdictStep(row: VerdictRow): Taken {
@@ -290,6 +306,19 @@ function orderOf(t: Taken, index: number): { readonly started: number; readonly 
   return { started: 2 * index, ended: 2 * index + 1 };
 }
 
+function outcomeFields(outcome: Outcome): Readonly<Record<"outcome" | "code" | "error", string | null>> {
+  switch (outcome.kind) {
+    case "ok":
+      return { outcome: outcome.kind, code: null, error: null };
+    case "refused":
+      return { outcome: outcome.kind, code: outcome.code, error: null };
+    case "failed":
+      return { outcome: outcome.kind, code: null, error: outcome.error };
+    default:
+      return unreachable(outcome);
+  }
+}
+
 function placed(t: Taken, index: number, parent: string | null, task: string): readonly Placed[] {
   const head = { session: t.session, parent, task, step: t.step };
   const order = orderOf(t, index);
@@ -302,7 +331,10 @@ function placed(t: Taken, index: number, parent: string | null, task: string): r
   const ms = Date.parse(at) - Date.parse(t.at);
   return [
     started,
-    { order: order.ended, line: { at, ...head, phase: "ended" as const, ms, outcome, ...result } },
+    {
+      order: order.ended,
+      line: { at, ...head, phase: "ended" as const, ms, ...outcomeFields(outcome), ...result },
+    },
   ];
 }
 
@@ -468,10 +500,42 @@ function describe(traced: string, picked: Picked, subagents: number): string {
   }
 }
 
+type TraceField = LineKey | { [N in StepName]: keyof Steps[N]["start"] | keyof Steps[N]["result"] }[StepName];
+
+const TRACE_FIELDS: Readonly<Record<TraceField, null>> = {
+  at: null,
+  session: null,
+  parent: null,
+  task: null,
+  seq: null,
+  step: null,
+  phase: null,
+  ms: null,
+  outcome: null,
+  code: null,
+  error: null,
+  name: null,
+  call: null,
+  agentType: null,
+  model: null,
+  target: null,
+  git: null,
+  how: null,
+  repo: null,
+  verdict: null,
+  gate: null,
+  inputTokens: null,
+  cacheReadTokens: null,
+  cacheWriteTokens: null,
+  outputTokens: null,
+};
+
+const TRACE_COLUMNS: readonly string[] = Object.keys(TRACE_FIELDS);
+
 export const trace: Query<"task"> = {
   name: "trace",
   summary:
-    "trace the steps of one task of a session, or of a subagent and every subagent under it, each row one JSON line",
+    "trace the steps of one task of a session, or of a subagent and every subagent under it, one row per step start or end",
   usage: "agent-record query trace <id-prefix> [--task <id-prefix>] [--rows <n>]",
   flags: ["task"],
   run: (db, ctx) => {
@@ -480,7 +544,7 @@ export const trace: Query<"task"> = {
     if (traced === null) {
       return {
         denominator: "0 sessions",
-        columns: ["line"],
+        columns: TRACE_COLUMNS,
         rows: [],
         note: `no session starts with ${prefix}`,
       };
@@ -489,7 +553,7 @@ export const trace: Query<"task"> = {
     if (placement === null) {
       return {
         denominator: `session ${traced}: 0 steps`,
-        columns: ["line"],
+        columns: TRACE_COLUMNS,
         rows: [],
         note: `session ${traced}, or the branch of its top-level session it runs in, has no timed line, so it falls in no task`,
       };
@@ -500,10 +564,10 @@ export const trace: Query<"task"> = {
     const running = taken.filter((t) => t.ended === null).length;
     return {
       denominator: `${describe(traced, picked, sessions.size - 1)}: ${taken.length} steps, ${running} still running`,
-      columns: ["line"],
-      rows: lines.map((line) => [JSON.stringify(line)]),
+      columns: TRACE_COLUMNS,
+      rows: lines.map((line) => TRACE_COLUMNS.map((column) => cellOf(line[column] ?? null))),
       note:
-        "Each row is one JSON line, in time order. A top-level session's task runs from one task prompt to the " +
+        "Each row is a step's start or end, in time order, with null in each column its step does not fill. A top-level session's task runs from one task prompt to the " +
         "next, with the subagents started in it; the latest is traced unless --task names another, as query tasks " +
         "lists them. An agent has ended, at its last line, once every tool call it " +
         "made has returned. A refused tool call's code is the tool's denial kind, or host when Claude Code refused " +

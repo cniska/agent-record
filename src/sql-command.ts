@@ -1,5 +1,6 @@
 import type { Database } from "bun:sqlite";
 import { z } from "zod";
+import { unreachable } from "./assert";
 import type { Command, CommandResult } from "./cli-contract";
 import { parseArg } from "./cli-flags";
 import { AnyRow, type HeldRecordWait, readRows } from "./db";
@@ -10,6 +11,7 @@ import { dbPath } from "./paths";
 import { cellOf } from "./query";
 import type { Cell, Rows } from "./query-contract";
 import { capResult, rowsOf, rowsToRead } from "./query-row-cap";
+import { type UnprintableColumn, unprintableColumn } from "./query-table";
 import { refuseSql } from "./sql-contract";
 
 const SQL_DENOMINATOR = "the rows the statement returned, in the order SQLite returned them";
@@ -57,12 +59,23 @@ function sqlCellOf(statement: string, column: string, value: unknown): Cell {
   return cellOf(value);
 }
 
+function refuseUnprintable(statement: string, { kind, column }: UnprintableColumn): Error {
+  switch (kind) {
+    case "repeated":
+      return refuseSql("sql_columns_repeated", { statement, column });
+    case "reordered":
+      return refuseSql("sql_columns_reordered", { statement, column });
+    default:
+      return unreachable(kind);
+  }
+}
+
 function readStatement(db: Database, statement: string, maxRows: number): Rows {
   try {
     const read = readRows(db, statement);
     const { columns } = read;
-    const repeated = columns.find((column, at) => columns.indexOf(column) !== at);
-    if (repeated !== undefined) throw refuseSql("sql_columns_repeated", { statement, column: repeated });
+    const unprintable = unprintableColumn(columns);
+    if (unprintable !== null) throw refuseUnprintable(statement, unprintable);
     const toRead = rowsToRead(maxRows);
     const rows: Cell[][] = [];
     for (const row of read.iterate(AnyRow)) {

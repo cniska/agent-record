@@ -10,7 +10,12 @@ export type Rows = { readonly columns: readonly string[]; readonly rows: readonl
 
 export type QueryResult = Rows & { readonly denominator: string; readonly note: string | null };
 
-export type CappedResult = QueryResult & { readonly more: string | null };
+export type Row = Readonly<Record<string, Cell>>;
+
+export type CappedResult = Omit<QueryResult, "rows"> & {
+  readonly more: string | null;
+  readonly rows: readonly Row[];
+};
 
 export type QueryContext<Flag extends string = string> = {
   readonly arg: string;

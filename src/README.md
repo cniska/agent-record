@@ -27,7 +27,7 @@ The rest are named by the step they take (`ingest-parse-claude.ts`, `ingest-arch
 | `spec` | Tie the IDs in `SPEC.md` to the acceptance suite's test names |
 | `modules` | Hold each module to the files it publishes |
 | `casts` | Hold `src/` to building every object schema strict or loose, never a bare `z.object`, and to claiming no row type on a statement |
-| `cli` | Dispatch a command and print its result or error (a refusal or a fault) as one JSON line; `cli.ts` starts it from a checkout and `cli-release.ts` from a compiled release, each naming how the launchd agent runs `sync` |
+| `cli` | Dispatch a command and print its result or error (a refusal or a fault) as one TOON document; `cli.ts` starts it from a checkout and `cli-release.ts` from a compiled release, each naming how the launchd agent runs `sync` |
 | `coded-error`, `error`, `assert`, `env`, `paths`, `file`, `timestamp` | Coded errors, refusals and faults; reading a code, a message or an errno off a thrown value; `unreachable` and `invariant`; the environment, parsed once by `cli.ts`; where every file lives; copying a file aside before it is replaced, listing those copies and removing all but one, and copying one over a stale copy; parsing a time into its canonical UTC text |
 
 ## Terms

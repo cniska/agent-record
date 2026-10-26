@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { decode } from "@toon-format/toon";
 import { agentLoaded, agentPlistPath, installAgent } from "./agent-launchd";
 import { openDb } from "./db";
 import { refuseRecord } from "./db-contract";
@@ -268,7 +269,7 @@ describe("agent-record doctor through the CLI", () => {
     const ran = runCli(newEnv(), ["doctor"]);
     expect(ran.exitCode).toBe(1);
     expect(ran.stderr).toBe("");
-    expect(JSON.parse(ran.stdout)).toMatchObject({ command: "doctor", ok: true, result: { failing: 2 } });
+    expect(decode(ran.stdout)).toMatchObject({ command: "doctor", ok: true, result: { failing: 2 } });
   });
 
   test("warns when the last sync finished with failures, naming the first", () => {

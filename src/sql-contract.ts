@@ -9,6 +9,7 @@ export const refuseSql = refuser<{
   };
   readonly sql_writes: { readonly statement: string };
   readonly sql_columns_repeated: { readonly statement: string; readonly column: string };
+  readonly sql_columns_reordered: { readonly statement: string; readonly column: string };
   readonly sql_blob: { readonly statement: string; readonly column: string };
 }>({
   sql_invalid: {
@@ -31,6 +32,11 @@ export const refuseSql = refuser<{
     message: ({ statement, column }) =>
       `${JSON.stringify(statement)} names the column ${column} more than once, so one of them would be lost`,
     resolve: () => "name each column once, with AS",
+  },
+  sql_columns_reordered: {
+    message: ({ statement, column }) =>
+      `${JSON.stringify(statement)} names the column ${column}, which reads as a whole number and would print ahead of the columns named before it`,
+    resolve: () => "name the column with AS so it does not read as a whole number",
   },
   sql_blob: {
     message: ({ statement, column }) =>

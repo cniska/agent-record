@@ -1,6 +1,7 @@
 import { type Cell, type Query, refuseQuery } from "./query-contract";
 import { described, repoShown, scoped, skillScope, viewRecord } from "./query-signal-view";
 import { type Signal, type SignalEvent, signalNamed } from "./query-signals";
+import { unprintableColumn } from "./query-table";
 
 type Grouped = {
   readonly columns: readonly string[];
@@ -45,7 +46,9 @@ const DATE_CHARS = 10;
 function groupingOf(by: string | undefined, tagKeys: readonly string[]): Grouped {
   if (by === undefined) return BUILT_IN.week;
   if (isBuiltIn(by)) return BUILT_IN[by];
-  const tagGroupings = tagKeys.filter((key) => !isBuiltIn(key) && !RATE_COLUMNS.includes(key));
+  const tagGroupings = tagKeys.filter(
+    (key) => !isBuiltIn(key) && unprintableColumn([...taggedBy(key).columns, ...RATE_COLUMNS]) === null,
+  );
   if (tagGroupings.includes(by)) return taggedBy(by);
   throw refuseQuery("unknown_grouping", { by, groupings: [...BUILT_INS, ...tagGroupings] });
 }

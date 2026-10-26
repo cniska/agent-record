@@ -14,6 +14,7 @@ import {
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative } from "node:path";
+import { decode } from "@toon-format/toon";
 import type { SyncSubprocess } from "bun";
 import { z } from "zod";
 
@@ -362,13 +363,20 @@ export const SYNC_COMMAND_RESULT = SYNC_RESULT.extend({
 
 type SyncCommandResult = z.infer<typeof SYNC_COMMAND_RESULT>;
 
-export const QUERY_RESULT = z.strictObject({
-  denominator: z.string(),
-  columns: z.array(z.string()),
-  rows: z.array(z.array(z.union([z.string(), z.number(), z.null()]))),
-  note: z.string().nullable(),
-  more: z.string().nullable(),
-});
+const CELL = z.union([z.string(), z.number(), z.null()]);
+
+export const QUERY_RESULT = z
+  .strictObject({
+    denominator: z.string(),
+    note: z.string().nullable(),
+    more: z.string().nullable(),
+    columns: z.array(z.string()),
+    rows: z.array(z.record(z.string(), CELL)),
+  })
+  .transform(({ rows, ...result }) => {
+    for (const row of rows) expect(Object.keys(row)).toEqual(result.columns);
+    return { ...result, rows: rows.map((row) => result.columns.map((column) => row[column] ?? null)) };
+  });
 
 type QueryResult = z.infer<typeof QUERY_RESULT>;
 
@@ -394,7 +402,7 @@ export function doctor(home: Home): { readonly exitCode: number; readonly report
 
 export const USAGE_ENTRY = z.strictObject({ name: z.string(), usage: z.string(), summary: z.string() });
 
-const ONE_LINE = /^[^\n]+\n$/;
+const ONE_DOCUMENT = /^[^\n][\s\S]*[^\n]\n$/;
 
 export function succeeded<T extends z.ZodType>(ran: Ran, command: string, result: T): z.infer<T> {
   expect({ exitCode: ran.exitCode, stderr: ran.stderr }).toEqual({ exitCode: 0, stderr: "" });
@@ -402,19 +410,19 @@ export function succeeded<T extends z.ZodType>(ran: Ran, command: string, result
 }
 
 export function okLine<T extends z.ZodType>(ran: Ran, command: string, result: T): z.infer<T> {
-  expect(ran.stdout).toMatch(ONE_LINE);
+  expect(ran.stdout).toMatch(ONE_DOCUMENT);
   const line = z
     .strictObject({ command: z.literal(command), ok: z.literal(true), result: z.unknown() })
-    .parse(JSON.parse(ran.stdout));
+    .parse(decode(ran.stdout));
   return result.parse(line.result);
 }
 
 function errorLine(ran: Ran, command: string, kind: CliError["kind"]): CliError {
   expect({ exitCode: ran.exitCode, stdout: ran.stdout }).toEqual({ exitCode: 1, stdout: "" });
-  expect(ran.stderr).toMatch(ONE_LINE);
+  expect(ran.stderr).toMatch(ONE_DOCUMENT);
   const { error } = z
     .strictObject({ command: z.literal(command), ok: z.literal(false), error: ERROR })
-    .parse(JSON.parse(ran.stderr));
+    .parse(decode(ran.stderr));
   expect(error.kind).toBe(kind);
   return error;
 }

@@ -3,6 +3,8 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Node } from "@babel/types";
+import { decode } from "@toon-format/toon";
+import { z } from "zod";
 import { allCommands, findCommand } from "./cli-commands";
 import { runCli, scratchEnv } from "./fixtures.test-support";
 import { SYNCED_SESSION, syncedRecord } from "./query.test-support";
@@ -16,7 +18,10 @@ function refused(args: readonly string[]): { exitCode: number; error: unknown } 
   const root = mkdtempSync(join(tmpdir(), "agent-record-refused-"));
   try {
     const run = runCli(scratchEnv(root), args);
-    return { exitCode: run.exitCode, error: JSON.parse(run.stderr).error };
+    return {
+      exitCode: run.exitCode,
+      error: z.looseObject({ error: z.unknown() }).parse(decode(run.stderr)).error,
+    };
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -223,7 +228,7 @@ describe("the command contract", () => {
     const root = mkdtempSync(join(tmpdir(), "agent-record-help-"));
     try {
       const alone = runCli(scratchEnv(root), []);
-      expect(JSON.parse(alone.stdout)).toMatchObject({ command: "agent-record", ok: true });
+      expect(decode(alone.stdout)).toMatchObject({ command: "agent-record", ok: true });
       for (const help of ["--help", "-h", "help"]) {
         const asked = runCli(scratchEnv(root), [help]);
         expect({ help, ...asked }).toEqual({ help, exitCode: 0, stdout: alone.stdout, stderr: "" });
@@ -274,7 +279,9 @@ describe("the command contract", () => {
         "2026-09-16T10:04:00Z",
       ]);
       expect(run.exitCode).toBe(0);
-      expect(JSON.parse(run.stdout).result.denominator).toContain("centered on 2026-09-16T10:04:00.000Z");
+      expect(decode(run.stdout)).toMatchObject({
+        result: { denominator: expect.stringContaining("centered on 2026-09-16T10:04:00.000Z") },
+      });
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

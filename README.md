@@ -69,7 +69,7 @@ An agent reading the record finds the friction that repeats; a change to a skill
 
 ## Commands
 
-Each command prints one JSON line. The essentials:
+Each command prints [TOON](https://toonformat.dev), with rows as a table. The essentials:
 
 | Command | Does |
 | --- | --- |

@@ -5,7 +5,7 @@
 ## What they show
 
 - **Tasks:** `query tasks <id-prefix>` lists a top-level session's tasks, latest last. A task runs from one task prompt to the next, with the subagents started in it. Its id is the turn id of the message that opens it. `SPEC.md` defines a task prompt (§2.12) and both queries (FR-92).
-- **Steps:** `query trace <id-prefix>` prints one task's steps, one JSON line per row in time order: the session and each subagent as `agent` steps with their tokens, each tool call with its target and `git` subcommands, skill loads, compactions, and hook gates and verdicts. Each step prints a `started` line and, once it ends, an `ended` line with its `ms`. A top-level session traces its latest task, or the one `--task <id-prefix>` names.
+- **Steps:** `query trace <id-prefix>` prints one task's steps as a table, one row per step start or end in time order: the session and each subagent as `agent` steps with their tokens, each tool call with its target and `git` subcommands, skill loads, compactions, and hook gates and verdicts. Each step prints a `started` row and, once it ends, an `ended` row with its `ms`. A top-level session traces its latest task, or the one `--task <id-prefix>` names.
 - **Subagents:** a subagent traces itself and every subagent under it, in the task it started in. Name it by its session id `<id>@<root>`, by `<id>`, by its transcript file's name `agent-<id>`, or as `agent_<id>`.
 
 What one session's work holds:
@@ -18,22 +18,28 @@ flowchart LR
   sub -- "its steps" --> steps
 ```
 
-From a session in the record: its task ids, then four of the task's lines: the start of an `Agent` call, the start of the subagent it started, the end of one of that subagent's tool calls and the subagent's end, each cut to a few fields by `jq`, with lines left out where `…` stands. The task holds the session's own steps and a subagent it started, named `<id>@<root>`:
+From a session in the record: the task table of `query tasks`, then the columns of `query trace` and four of the task's rows: the start of an `Agent` call, the start of the subagent it started, the end of one of that subagent's tool calls and the subagent's end, with the prompts and lines left out where `…` stands. The task holds the session's own steps and a subagent it started, named `<id>@<root>`:
 
 ```text
-$ agent-record query tasks 3aeacb3c | jq -r '.result.rows[][0][0:8]'
-9368bfa1
-628e6df2
-8e88bf3b
+$ agent-record query tasks 3aeacb3c
+…
+  rows[3]{task,at,prompt}:
+    9368bfa1-c871-47f1-93d9-a27916f7c010,"2026-10-11T10:49:52.384Z",…
+    628e6df2-fb1a-44f5-b8b5-ad6ece6b9d90,"2026-10-11T11:09:18.335Z",…
+    8e88bf3b-6763-4f76-80e4-8205004ba263,"2026-10-11T11:39:30.701Z",…
 
-$ agent-record query trace 3aeacb3c --task 9368bfa1 --rows 200 | jq -c '.result.rows[][0] | fromjson | {session, step, phase, name, ms} | del(.[] | nulls)'
+$ agent-record query trace 3aeacb3c --task 9368bfa1 --rows 200
 …
-{"session":"3aeacb3c-2a9a-497a-afa4-d2c05b805f95","step":"tool","phase":"started","name":"Agent"}
-{"session":"a1c0d48dc2343637e@3aeacb3c-2a9a-497a-afa4-d2c05b805f95","step":"agent","phase":"started"}
+  rows[192]{at,session,parent,task,seq,step,phase,ms,outcome,code,error,name,call,agentType,model,target,git,how,repo,verdict,gate,inputTokens,cacheReadTokens,cacheWriteTokens,outputTokens}:
 …
-{"session":"a1c0d48dc2343637e@3aeacb3c-2a9a-497a-afa4-d2c05b805f95","step":"tool","phase":"ended","name":"Bash","ms":3186}
+    "2026-10-11T10:55:10.791Z",3aeacb3c-2a9a-497a-afa4-d2c05b805f95,null,9368bfa1-c871-47f1-93d9-a27916f7c010,20,tool,started,null,null,null,null,Agent,toolu_01QwmYZC9NByTe1cAU2w8Se8,null,null,null,null,null,null,null,null,null,null,null,null
 …
-{"session":"a1c0d48dc2343637e@3aeacb3c-2a9a-497a-afa4-d2c05b805f95","step":"agent","phase":"ended","ms":386032}
+    "2026-10-11T10:55:11.297Z",a1c0d48dc2343637e@3aeacb3c-2a9a-497a-afa4-d2c05b805f95,3aeacb3c-2a9a-497a-afa4-d2c05b805f95,9368bfa1-c871-47f1-93d9-a27916f7c010,1,agent,started,null,null,null,null,null,null,Plan,claude-fable-5-1,null,null,null,null,null,null,null,null,null,null
+…
+    "2026-10-11T10:55:16.994Z",a1c0d48dc2343637e@3aeacb3c-2a9a-497a-afa4-d2c05b805f95,3aeacb3c-2a9a-497a-afa4-d2c05b805f95,9368bfa1-c871-47f1-93d9-a27916f7c010,3,tool,ended,3186,ok,null,null,Bash,toolu_01LytkRP1W7NZupFusBj6pUH,null,null,null,null,null,null,null,null,null,null,null,null
+…
+    "2026-10-11T11:01:37.329Z",a1c0d48dc2343637e@3aeacb3c-2a9a-497a-afa4-d2c05b805f95,3aeacb3c-2a9a-497a-afa4-d2c05b805f95,9368bfa1-c871-47f1-93d9-a27916f7c010,24,agent,ended,386032,ok,null,null,null,null,null,null,null,null,null,null,null,null,322,762477,111078,89
+…
 ```
 
 ## What older transcripts lack

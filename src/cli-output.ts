@@ -1,8 +1,9 @@
+import { encode } from "@toon-format/toon";
 import type { Command } from "./cli-contract";
 import { codedOf, errorRecord } from "./coded-error";
 
 export function writeResult(command: string, value: unknown): void {
-  process.stdout.write(`${JSON.stringify({ command, ok: true, result: value ?? null })}\n`);
+  process.stdout.write(`${encode({ command, ok: true, result: value ?? null })}\n`);
 }
 
 export function writeVersion(version: string): void {
@@ -10,7 +11,7 @@ export function writeVersion(version: string): void {
 }
 
 export function writeError(command: string, error: unknown): number {
-  process.stderr.write(`${JSON.stringify({ command, ok: false, error: errorRecord(codedOf(error)) })}\n`);
+  process.stderr.write(`${encode({ command, ok: false, error: errorRecord(codedOf(error)) })}\n`);
   return 1;
 }
 

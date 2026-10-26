@@ -1,5 +1,6 @@
 import { countFlag } from "./query";
 import type { CappedResult, QueryResult } from "./query-contract";
+import { recordsOf } from "./query-table";
 
 export const DEFAULT_MAX_ROWS = 40;
 
@@ -13,10 +14,13 @@ export function rowsToRead(maxRows: number): number {
 }
 
 export function capResult(result: QueryResult, maxRows: number): CappedResult {
-  const shown = result.rows.slice(0, maxRows);
+  const { denominator, note, columns, rows } = result;
+  const shown = rows.slice(0, maxRows);
   return {
-    ...result,
-    rows: shown,
-    more: result.rows.length > shown.length ? `more rows than ${maxRows}; --rows <n> to widen` : null,
+    denominator,
+    note,
+    more: rows.length > shown.length ? `more rows than ${maxRows}; --rows <n> to widen` : null,
+    columns,
+    rows: recordsOf(columns, shown),
   };
 }

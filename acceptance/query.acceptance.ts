@@ -95,6 +95,40 @@ test("AC-17 sql answers a SELECT with columns and rows in a query's shape", () =
   });
 });
 
+test("AC-17 sql prints its rows as a TOON table of every column it selects, in SELECT order", () => {
+  const ran = runCli(syncedHome(), [
+    "sql",
+    "select 1 as n, 'x, y' as s, null as z union all select 2, '', 'z'",
+  ]);
+  expect({ exitCode: ran.exitCode, stdout: ran.stdout }).toEqual({
+    exitCode: 0,
+    stdout: [
+      "command: sql",
+      "ok: true",
+      "result:",
+      '  denominator: "the rows the statement returned, in the order SQLite returned them"',
+      "  note: null",
+      "  more: null",
+      "  columns[3]: n,s,z",
+      "  rows[2]{n,s,z}:",
+      '    1,"x, y",null',
+      '    2,"",z',
+      "",
+    ].join("\n"),
+  });
+});
+
+test("AC-17 sql refuses a column that reads as a whole number after another, naming it", () => {
+  const home = syncedHome();
+  const error = refused(runCli(home, ["sql", "select 'x' as a, 2"]), "sql");
+  expect({ code: error.code, column: error.meta.column, resolve: error.resolve }).toEqual({
+    code: "sql_columns_reordered",
+    column: "2",
+    resolve: "name the column with AS so it does not read as a whole number",
+  });
+  expect(succeeded(runCli(home, ["sql", "select 1"]), "sql", QUERY_RESULT).rows).toEqual([[1]]);
+});
+
 test("AC-17 sql refuses a write, leaving the record unchanged", () => {
   const home = syncedFixtureHome();
   const count = ["sql", "select count(*) as n from session"];
@@ -366,25 +400,58 @@ const tracedHome = (): Home =>
     ],
   );
 
-test("AC-61 trace prints a worker's steps and the checker it started, one JSON line per step, a running one with no end", () => {
+const TRACE_COLUMNS = [
+  "at",
+  "session",
+  "parent",
+  "task",
+  "seq",
+  "step",
+  "phase",
+  "ms",
+  "outcome",
+  "code",
+  "error",
+  "name",
+  "call",
+  "agentType",
+  "model",
+  "target",
+  "git",
+  "how",
+  "repo",
+  "verdict",
+  "gate",
+  "inputTokens",
+  "cacheReadTokens",
+  "cacheWriteTokens",
+  "outputTokens",
+];
+
+const filledOf = (result: {
+  readonly columns: readonly string[];
+  readonly rows: readonly (readonly unknown[])[];
+}) =>
+  result.rows.map((row) =>
+    Object.fromEntries(
+      result.columns.map((column, at) => [column, row[at]]).filter(([, cell]) => cell !== null),
+    ),
+  );
+
+test("AC-61 trace prints a worker's steps and the checker it started, one row per step start or end, a running one with no end", () => {
   const home = tracedHome();
   sync(home);
 
   const result = query(home, ["trace", "coord", "--task", "coordinator-0", "--rows", "100"]);
-  const lines = result.rows.map(([line]) => JSON.parse(String(line)));
-  const shape = (line: Record<string, unknown>) => {
-    const outcome = z
-      .object({ kind: z.string(), code: z.string().optional() })
-      .optional()
-      .parse(line.outcome);
-    return [
-      String(line.session).split("@")[0],
-      line.seq,
-      line.step,
-      line.phase,
-      outcome?.code ?? outcome?.kind ?? "-",
-    ];
-  };
+  expect(result.columns).toEqual(TRACE_COLUMNS);
+  const lines = filledOf(result);
+  const shape = (line: Record<string, unknown>) => [
+    String(line.session).split("@")[0],
+    line.seq,
+    line.step,
+    line.phase,
+    line.code ?? line.outcome ?? "-",
+  ];
   const first = "coordinator-0-prompt";
   const worker = { session: "worker@coordinator", parent: "coordinator", task: first };
 
@@ -443,7 +510,6 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
       call: "coordinator-worker-1-tool",
       name: "Skill",
       target: "acme:build",
-      git: null,
     },
     {
       at: "2026-09-16T10:01:10.000Z",
@@ -462,7 +528,8 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
     name: "Read",
     target: `${KIT}/build/references/slices.md`,
   });
-  expect(lines[11]).toMatchObject({ seq: 10, step: "tool", name: "Bash", target: null });
+  expect(lines[11]).toMatchObject({ seq: 10, step: "tool", name: "Bash" });
+  expect(lines[11]).not.toHaveProperty("target");
   expect(lines[15]).toMatchObject({
     session: "checker@coordinator",
     seq: 2,
@@ -470,8 +537,8 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
     phase: "started",
     name: "judge",
     how: "preload",
-    call: null,
   });
+  expect(lines[15]).not.toHaveProperty("call");
   expect(lines[14]).toEqual({
     at: "2026-09-16T10:03:01.000Z",
     session: "checker@coordinator",
@@ -481,7 +548,6 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
     step: "agent",
     phase: "started",
     agentType: "acme:checker",
-    model: null,
   });
   expect(lines[18]).toEqual({
     at: "2026-09-16T10:04:00.000Z",
@@ -492,7 +558,7 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
     step: "verdict",
     phase: "ended",
     ms: 0,
-    outcome: { kind: "ok" },
+    outcome: "ok",
     verdict: "accept",
   });
   expect(lines[19]).toEqual({
@@ -504,7 +570,8 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
     step: "agent",
     phase: "ended",
     ms: 59000,
-    outcome: { kind: "failed", error: "error" },
+    outcome: "failed",
+    error: "error",
     inputTokens: 0,
     cacheReadTokens: 0,
     cacheWriteTokens: 0,
@@ -517,7 +584,8 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
     step: "tool",
     phase: "ended",
     ms: 0,
-    outcome: { kind: "refused", code: "user-rejected" },
+    outcome: "refused",
+    code: "user-rejected",
     call: "coordinator-worker-5-tool",
     name: "Bash",
   });
@@ -529,7 +597,8 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
     step: "gate",
     phase: "ended",
     ms: 0,
-    outcome: { kind: "refused", code: "changed_since_accept" },
+    outcome: "refused",
+    code: "changed_since_accept",
   });
   expect(lines[29]).toEqual({
     at: "2026-09-16T10:07:00.000Z",
@@ -539,13 +608,12 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
     phase: "started",
     call: "coordinator-worker-9-tool",
     name: "Bash",
-    target: null,
-    git: ["push"],
+    git: "push",
   });
-  expect(lines.filter((line) => Array.isArray(line.git)).map((line) => [line.seq, line.git])).toEqual([
-    [14, ["commit"]],
-    [18, ["add", "commit"]],
-    [22, ["push"]],
+  expect(lines.filter((line) => line.git !== undefined).map((line) => [line.seq, line.git])).toEqual([
+    [14, "commit"],
+    [18, "add commit"],
+    [22, "push"],
   ]);
   expect(lines[31]).toEqual({
     at: "2026-09-16T10:08:00.000Z",
@@ -554,7 +622,7 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
     step: "agent",
     phase: "ended",
     ms: 419000,
-    outcome: { kind: "ok" },
+    outcome: "ok",
     inputTokens: 10,
     cacheReadTokens: 2000,
     cacheWriteTokens: 300,
@@ -581,16 +649,14 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
   expect(latest.denominator).toBe(
     `task ${later} of session coordinator, from 2026-09-16T10:30:00.000Z, and the 0 subagents started in it: 2 steps, 0 still running`,
   );
-  const root = { session: "coordinator", parent: null, task: later };
-  expect(latest.rows.map(([line]) => JSON.parse(String(line)))).toEqual([
+  const root = { session: "coordinator", task: later };
+  expect(filledOf(latest)).toEqual([
     {
       at: "2026-09-16T10:30:00.000Z",
       ...root,
       seq: 1,
       step: "agent",
       phase: "started",
-      agentType: null,
-      model: null,
     },
     {
       at: "2026-09-16T10:30:10.000Z",
@@ -600,8 +666,6 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
       phase: "started",
       call: "coordinator-5-tool",
       name: "Bash",
-      target: null,
-      git: null,
     },
     {
       at: "2026-09-16T10:30:11.000Z",
@@ -610,7 +674,7 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
       step: "tool",
       phase: "ended",
       ms: 1000,
-      outcome: { kind: "ok" },
+      outcome: "ok",
       call: "coordinator-5-tool",
       name: "Bash",
     },
@@ -621,7 +685,7 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
       step: "agent",
       phase: "ended",
       ms: 11000,
-      outcome: { kind: "ok" },
+      outcome: "ok",
       inputTokens: 0,
       cacheReadTokens: 0,
       cacheWriteTokens: 0,
@@ -632,7 +696,7 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
   expect(subagent.denominator).toBe(
     `session worker@coordinator and the 1 subagents under it, in task ${first} of coordinator: 15 steps, 0 still running`,
   );
-  expect(new Set(subagent.rows.map(([line]) => JSON.parse(String(line)).task))).toEqual(new Set([first]));
+  expect(new Set(filledOf(subagent).map((line) => line.task))).toEqual(new Set([first]));
   expect(query(home, ["trace", "agent-worker", "--rows", "100"])).toEqual(subagent);
   expect(query(home, ["trace", "agent_worker", "--rows", "100"])).toEqual(subagent);
   const refusal = (args: readonly string[]) => {

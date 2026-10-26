@@ -143,10 +143,10 @@ describe("agent-record sql", () => {
       const { value } = sqlCommand.run(["SELECT sha FROM repo_commit"], testRuntime(env));
       expect(value).toEqual({
         denominator: "the rows the statement returned, in the order SQLite returned them",
-        columns: ["sha"],
-        rows: [["abc123"]],
-        more: null,
         note: null,
+        more: null,
+        columns: ["sha"],
+        rows: [{ sha: "abc123" }],
       });
     } finally {
       rmSync(home, { recursive: true, force: true });

@@ -433,6 +433,7 @@ test("AC-44 signal splits each week by repo or a tag's key, newest first, and re
     { ts: "2026-09-16T09:02:00Z", event: "tag", key: "route", value: "review" },
     { ts: "2026-09-16T09:03:00Z", event: "tag", key: "repo", value: "elsewhere" },
     { ts: "2026-09-16T09:04:00Z", event: "tag", key: "count", value: "3" },
+    { ts: "2026-09-16T09:05:00Z", event: "tag", key: "2", value: "second" },
   ]);
   sync(home);
 
@@ -460,7 +461,7 @@ test("AC-44 signal splits each week by repo or a tag's key, newest first, and re
       "one of: owner-interrupts, time-to-land, stranded-work, review-findings, false-stops, review-returns, blocks, " +
       "skill-usage, lost-context, escaped-defects, step-cost, second-read-asks",
   });
-  for (const by of ["day", "count"]) {
+  for (const by of ["day", "count", "2"]) {
     const grouping = refused(runCli(home, ["query", "signal", "stranded-work", "--by", by]), "query");
     expect({ code: grouping.code, resolve: grouping.resolve }).toEqual({
       code: "unknown_grouping",

@@ -5,13 +5,13 @@ builds='__BUILDS__'
 name=agent-record
 scope=@cniska
 
-json_string() {
-  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+toon_string() {
+  printf '"%s"' "$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')"
 }
 
 refuse() {
-  printf '{"command":"%s","ok":false,"error":{"kind":"refusal","code":"%s","message":"%s","meta":{},"resolve":"%s"}}\n' \
-    "$name" "$1" "$(json_string "$2")" "$(json_string "$3")" >&2
+  printf 'command: %s\nok: false\nerror:\n  kind: refusal\n  code: %s\n  message: %s\n  meta:\n  resolve: %s\n' \
+    "$name" "$1" "$(toon_string "$2")" "$(toon_string "$3")" >&2
   exit 1
 }
 

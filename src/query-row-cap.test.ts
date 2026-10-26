@@ -22,10 +22,10 @@ describe("capping the rows an agent is handed", () => {
   test("names the flag that widens it when rows were cut", () => {
     expect(capResult(numbered([1, 2, 3, 4, 5]), 2)).toEqual({
       denominator: "5 numbers",
-      columns: ["n"],
-      rows: [[1], [2]],
-      more: "more rows than 2; --rows <n> to widen",
       note: "counted",
+      more: "more rows than 2; --rows <n> to widen",
+      columns: ["n"],
+      rows: [{ n: 1 }, { n: 2 }],
     });
   });
 

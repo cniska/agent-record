@@ -27,7 +27,7 @@ const PUBLIC: Readonly<Record<string, readonly string[]>> = {
   modules: [],
   paths: ["paths"],
   plugin: [],
-  query: ["query", "query-row-cap"],
+  query: ["query", "query-row-cap", "query-table"],
   rebuild: [],
   repo: ["repo-files"],
   spec: [],
