@@ -63,7 +63,7 @@ test("AC-46 a sync archives and reads the event log of every plugin, reports its
 
   const synced = sync(home);
   expect(synced.eventLogs).toBe(2);
-  expect(synced.dropped).toEqual([{ path: archivedEventLog(home), lines: [5, 6, 9] }]);
+  expect(synced.dropped).toEqual([{ path: archivedEventLog(home), lines: "5 6 9" }]);
   for (const install of [undefined, OTHER_PLUGIN]) {
     const copy = archivedEventLog(home, install);
     expect(readFileSync(copy, "utf8")).toBe(readFileSync(eventLogPath(home, install), "utf8"));

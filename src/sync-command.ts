@@ -1,5 +1,5 @@
 import type { Command, Runtime } from "./cli-contract";
-import { parseFlags } from "./cli-flags";
+import { parseSwitches } from "./cli-flags";
 import { withDb } from "./db";
 import { withLock } from "./db-lock";
 import { SCHEMA_VERSION } from "./db-schema";
@@ -7,6 +7,7 @@ import { rebuild, type SyncReport, sync } from "./ingest-sync";
 import { type MirrorPass, mirrorArchive } from "./mirror";
 import { dbPath } from "./paths";
 import { stampingOutcome } from "./sync-stamp";
+import { printedSync } from "./sync-view";
 
 type Rebuilt = {
   readonly from: number;
@@ -28,10 +29,10 @@ function syncRecord(runtime: Runtime): RecordSync {
 
 export const syncCommand: Command = {
   name: "sync",
-  usage: "agent-record sync",
+  usage: "agent-record sync [--full]",
   summary: "archive every new byte of every tool's session files, read them, and mirror the archive",
   run(args, runtime) {
-    parseFlags(args, [], syncCommand.usage);
+    const switches = parseSwitches(args, ["full"], syncCommand.usage);
     const { env, now } = runtime;
     const report = withLock(env, () =>
       stampingOutcome(runtime, () => {
@@ -49,6 +50,6 @@ export const syncCommand: Command = {
         };
       }),
     );
-    return { value: report, exitCode: 0 };
+    return { value: printedSync(report, switches.has("full")), exitCode: 0 };
   },
 };

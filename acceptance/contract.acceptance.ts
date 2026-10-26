@@ -27,8 +27,8 @@ import { CLAUDE } from "./fixture-names";
 afterEach(removeScratchDirs);
 
 const USAGE = {
-  sync: "agent-record sync",
-  rebuild: "agent-record rebuild",
+  sync: "agent-record sync [--full]",
+  rebuild: "agent-record rebuild [--full]",
   query: "agent-record query <name> <arg> [--rows <n>] | agent-record query list",
   search: 'agent-record query search "<words>" [--rows <n>]',
   sql: 'agent-record sql "<select>" [--rows <n>]',

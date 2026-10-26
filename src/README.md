@@ -16,7 +16,7 @@ The rest are named by the step they take (`ingest-parse-claude.ts`, `ingest-arch
 | Prefix | Responsibility |
 | --- | --- |
 | `ingest` | Copy session files into the archive, and read them from there and git history into the record |
-| `sync`, `rebuild` | The commands that run ingest, and the stamp a sync leaves |
+| `sync`, `rebuild` | The commands that run ingest, the report they print, and the stamp a sync leaves |
 | `agent` | Install the launchd agent that syncs on a schedule, and read whether it is loaded |
 | `db` | Open, lock and read the SQLite record, and its schema; every row read is parsed through a schema |
 | `doctor` | Judge the record's readability and freshness, name the backup a rebuild left, and judge the launchd agent and the mirror |

@@ -43,6 +43,7 @@ import {
   setSchemaVersion,
   succeeded,
   sync,
+  syncFailuresInFull,
   withCodexTitle,
   withFixtures,
   withICloudDrive,
@@ -318,23 +319,25 @@ test("AC-7 a sync over a malformed line from each tool, an unreadable file and a
 
   const result = sync(home);
   expect(result.dropped).toEqual([
-    { path: archivedPath(home, CLAUDE), lines: [10] },
-    { path: archivedPath(home, CODEX), lines: [9] },
-    { path: archivedPath(home, GROK_UPDATES), lines: [5] },
-    { path: archivedPath(home, PI), lines: [5] },
-    { path: archivedPath(home, OMP), lines: [5] },
+    { path: archivedPath(home, CLAUDE), lines: "10" },
+    { path: archivedPath(home, CODEX), lines: "9" },
+    { path: archivedPath(home, GROK_UPDATES), lines: "5" },
+    { path: archivedPath(home, PI), lines: "5" },
+    { path: archivedPath(home, OMP), lines: "5" },
   ]);
-  expect(result.failures).toMatchObject([
+  expect(result.failures).toEqual([
     {
       path: unreadable,
-      error: {
-        kind: "refusal",
-        code: "source_unreadable",
-        resolve: `make ${unreadable} readable, then run agent-record sync`,
-      },
+      kind: "refusal",
+      code: "source_unreadable",
+      message: expect.stringContaining(unreadable),
+      resolve: `make ${unreadable} readable, then run agent-record sync`,
     },
   ]);
   expect(result.orphanSubagents).toEqual(["orphan@gone-parent"]);
+  expect(syncFailuresInFull(home)).toMatchObject([
+    { path: unreadable, error: { kind: "refusal", code: "source_unreadable", meta: { path: unreadable } } },
+  ]);
 });
 
 test("AC-8 a sync records a session repo's commits, label and files, skips a temp repo, and rereads neither", () => {
@@ -398,7 +401,7 @@ test("AC-25 a Codex token record with more cached input than input is reported a
   const home = withFixtures(scratchHome(), [CODEX_OVERCACHED]);
   const result = sync(home);
 
-  expect(result.dropped).toEqual([{ path: archivedPath(home, CODEX_OVERCACHED), lines: [7] }]);
+  expect(result.dropped).toEqual([{ path: archivedPath(home, CODEX_OVERCACHED), lines: "7" }]);
   expect(rowsOf(home, "select count(*) from usage")).toEqual([[0]]);
 });
 

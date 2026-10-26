@@ -6,8 +6,8 @@ Each command prints one [TOON](https://toonformat.dev) document: its result on s
 
 | Command | Does |
 | --- | --- |
-| `agent-record sync` | Copy every new byte of every tool's session files and of every plugin's hook event log into the archive and read them from there, then the commits and files of the checkouts they name that changed since the last sync, then mirror the archive; a record of an older schema version is rebuilt first |
-| `agent-record rebuild` | Drop the record and read it again from the archive, naming each checkout no longer on disk whose history it lost, after copying the record to the `backup` it names; once it succeeds, that copy is the only backup of the record kept, and `doctor` names it with its size |
+| `agent-record sync [--full]` | Copy every new byte of every tool's session files and of every plugin's hook event log into the archive and read them from there, then the commits and files of the checkouts they name that changed since the last sync, then mirror the archive; a record of an older schema version is rebuilt first. Each file it could not read is listed with its refusal's code, message and fix, and with `--full` its meta too |
+| `agent-record rebuild [--full]` | Drop the record and read it again from the archive, naming each checkout no longer on disk whose history it lost, after copying the record to the `backup` it names; once it succeeds, that copy is the only backup of the record kept, and `doctor` names it with its size; its failures print as `sync`'s do |
 | `agent-record agent install` | Write a launchd agent that runs `sync` every 15 minutes |
 | `agent-record doctor [--full]` | Judge whether the record is current and readable: the number of checks in each state, then each that warns or fails with its fix, or every check with `--full`; exits 1 when a check fails |
 | `agent-record query list` | Name the queries |

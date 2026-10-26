@@ -142,13 +142,10 @@ test("AC-36 a mirror copy that cannot be written is listed with its fix, the res
   expect(result.failures).toEqual([
     {
       path: mirrorCopy(home, CLAUDE),
-      error: {
-        kind: "refusal",
-        code: "mirror_unwritable",
-        message: expect.stringContaining(`cannot write the mirror copy ${mirrorCopy(home, CLAUDE)}: `),
-        meta: { path: mirrorCopy(home, CLAUDE), detail: expect.any(String) },
-        resolve: `free space in or fix the permissions of ${blocked}, then run agent-record sync; until then the mirror keeps the copy made before`,
-      },
+      kind: "refusal",
+      code: "mirror_unwritable",
+      message: expect.stringContaining(`cannot write the mirror copy ${mirrorCopy(home, CLAUDE)}: `),
+      resolve: `free space in or fix the permissions of ${blocked}, then run agent-record sync; until then the mirror keeps the copy made before`,
     },
   ]);
   expect(readFileSync(mirrorCopy(home, CODEX), "utf8")).toBe(readFileSync(archivedPath(home, CODEX), "utf8"));

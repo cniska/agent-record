@@ -187,8 +187,8 @@ describe("the command contract", () => {
 
   test("a command that takes no arguments refuses one, resolving with its usage", () => {
     for (const [name, usage] of [
-      ["sync", "agent-record sync"],
-      ["rebuild", "agent-record rebuild"],
+      ["sync", "agent-record sync [--full]"],
+      ["rebuild", "agent-record rebuild [--full]"],
       ["doctor", "agent-record doctor [--full]"],
     ] as const) {
       expect(refused([name, "extra"])).toEqual({

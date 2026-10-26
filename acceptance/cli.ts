@@ -341,8 +341,16 @@ const SYNC_RESULT = z.strictObject({
   filesRead: COUNT,
   orphanSubagents: z.array(z.string()),
   unlinkedSubagents: COUNT,
-  failures: z.array(z.strictObject({ path: z.string(), error: ERROR })),
-  dropped: z.array(z.strictObject({ path: z.string(), lines: z.array(COUNT) })),
+  failures: z.array(
+    z.strictObject({
+      path: z.string(),
+      kind: z.string(),
+      code: z.string(),
+      message: z.string(),
+      resolve: z.string(),
+    }),
+  ),
+  dropped: z.array(z.strictObject({ path: z.string(), lines: z.string() })),
   git: z.strictObject({ repos: COUNT, commits: COUNT, files: COUNT, unchanged: COUNT }),
   repoFiles: z.strictObject({ repos: COUNT, files: COUNT, unchanged: COUNT }),
 });
@@ -362,6 +370,14 @@ export const SYNC_COMMAND_RESULT = SYNC_RESULT.extend({
 });
 
 type SyncCommandResult = z.infer<typeof SYNC_COMMAND_RESULT>;
+
+const FULL_FAILURES = z.looseObject({
+  failures: z.array(z.strictObject({ path: z.string(), error: ERROR })),
+});
+
+export function syncFailuresInFull(home: Home): z.infer<typeof FULL_FAILURES>["failures"] {
+  return succeeded(runCli(home, ["sync", "--full"]), "sync", FULL_FAILURES).failures;
+}
 
 const CELL = z.union([z.string(), z.number(), z.null()]);
 

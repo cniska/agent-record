@@ -32,7 +32,7 @@ const PUBLIC: Readonly<Record<string, readonly string[]>> = {
   repo: ["repo-files"],
   spec: [],
   sql: [],
-  sync: ["sync-stamp"],
+  sync: ["sync-stamp", "sync-view"],
   timestamp: ["timestamp"],
   worktree: ["worktree"],
 };
