@@ -102,3 +102,11 @@ flowchart LR
 - [Uninstall](docs/uninstall.md): how to remove the CLI, the plugin, the launchd agent and the data.
 - [Development](docs/development.md): setup, checks and layout, for working on this repo.
 - [Releasing](docs/releasing.md): the release workflow, the owner's one-time setup and each release's steps.
+
+## Related
+
+agent-record works on its own in any agent workflow, and is one of the optional add-ons to [agent-skills](https://github.com/cniska/agent-skills), engineering skills for coding agents. The other add-ons:
+
+- [agent-task](https://github.com/cniska/agent-task): task tracking for coding agents, the tasks running, in review and waiting to run
+- [agent-gates](https://github.com/cniska/agent-gates): commit gates for coding agents, git hooks and CI checks that refuse a bad commit
+- [agent-worktree](https://github.com/cniska/agent-worktree): task worktrees for coding agents, one checkout per task, set up and torn down by the project's own commands
