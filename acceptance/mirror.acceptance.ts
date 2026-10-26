@@ -40,7 +40,7 @@ const mirrorCopy = (home: Home, fixture: Fixture) =>
   join(home.mirror, "archive", relative(home.archive, archivedPath(home, fixture)));
 
 const mirrorCheck = (home: Home) => {
-  const { exitCode, report } = doctor(home);
+  const { exitCode, report } = doctor(home, "full");
   return { exitCode, check: report.checks.find((check) => check.name === "mirror") };
 };
 

@@ -24,14 +24,16 @@ function wholeHours(ms: number): number {
   return Math.round(ms / HOUR_MS);
 }
 
-type Health = {
-  readonly name: string;
-  readonly state: "ok" | "warn" | "fail";
-  readonly detail: string;
-  readonly fix: string | null;
-};
+type Health =
+  | { readonly name: string; readonly state: "ok"; readonly detail: string; readonly fix: null }
+  | { readonly name: string; readonly state: "warn" | "fail"; readonly detail: string; readonly fix: string };
 
-type DoctorReport = { readonly checks: readonly Health[]; readonly failing: number };
+type HealthState = Health["state"];
+
+type DoctorReport = {
+  readonly counts: Readonly<Record<HealthState, number>>;
+  readonly checks: readonly Health[];
+};
 
 export type DoctorProbes = Runtime & { readonly agentLoaded: () => boolean };
 
@@ -175,6 +177,10 @@ function mirrorHealth(mirror: MirrorState, now: Date): Health {
   }
 }
 
+function countOf(checks: readonly Health[], state: HealthState): number {
+  return checks.filter((check) => check.state === state).length;
+}
+
 export function recordDoctor(probes: DoctorProbes): DoctorReport {
   const { env, agentLoaded, now } = probes;
   const checks = [
@@ -184,5 +190,8 @@ export function recordDoctor(probes: DoctorProbes): DoctorReport {
     agentHealth(planAgent(probes), probes.command, agentLoaded),
     mirrorHealth(readMirror(env), now()),
   ];
-  return { checks, failing: checks.filter(({ state }) => state === "fail").length };
+  return {
+    counts: { ok: countOf(checks, "ok"), warn: countOf(checks, "warn"), fail: countOf(checks, "fail") },
+    checks,
+  };
 }

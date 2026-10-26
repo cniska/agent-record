@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { decode } from "@toon-format/toon";
+import { z } from "zod";
 import { agentLoaded, agentPlistPath, installAgent } from "./agent-launchd";
 import { openDb } from "./db";
 import { refuseRecord } from "./db-contract";
@@ -211,12 +212,20 @@ describe("agent-record doctor", () => {
     }
   });
 
-  test("counts the failing checks", () => {
+  test("counts the checks in each state", () => {
     const env = newEnv();
-    expect(recordDoctor({ ...testRuntime(env), agentLoaded: () => true }).failing).toBe(2);
+    expect(recordDoctor({ ...testRuntime(env), agentLoaded: () => true }).counts).toEqual({
+      ok: 1,
+      warn: 2,
+      fail: 2,
+    });
     writeRecord(env);
     syncFinishedAt(env, "2026-10-11T12:00:00Z");
-    expect(recordDoctor({ ...testRuntime(env), agentLoaded: () => true }).failing).toBe(0);
+    expect(recordDoctor({ ...testRuntime(env), agentLoaded: () => true }).counts).toEqual({
+      ok: 3,
+      warn: 2,
+      fail: 0,
+    });
   });
 
   test("warns on a mirror out of reach, never whole, unreadable or over a day old, and passes a fresh one", () => {
@@ -265,11 +274,31 @@ describe("agent-record doctor", () => {
 });
 
 describe("agent-record doctor through the CLI", () => {
+  test("leaves the passing checks out unless asked for every check", () => {
+    const env = newEnv();
+    const names = (args: readonly string[]) =>
+      z
+        .looseObject({
+          result: z.strictObject({
+            counts: z.unknown(),
+            checks: z.array(z.looseObject({ name: z.string() })),
+          }),
+        })
+        .parse(decode(runCli(env, ["doctor", ...args]).stdout))
+        .result.checks.map(({ name }) => name);
+    expect(names([])).toEqual(["record", "sync", "agent", "mirror"]);
+    expect(names(["--full"])).toEqual(["record", "backup", "sync", "agent", "mirror"]);
+  });
+
   test("exits 1 when a check fails, still printing the report on stdout", () => {
     const ran = runCli(newEnv(), ["doctor"]);
     expect(ran.exitCode).toBe(1);
     expect(ran.stderr).toBe("");
-    expect(decode(ran.stdout)).toMatchObject({ command: "doctor", ok: true, result: { failing: 2 } });
+    expect(decode(ran.stdout)).toMatchObject({
+      command: "doctor",
+      ok: true,
+      result: { counts: { fail: 2 } },
+    });
   });
 
   test("warns when the last sync finished with failures, naming the first", () => {

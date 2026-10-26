@@ -469,7 +469,7 @@ test("AC-69 a rebuild, and a sync that rebuilds an older record, name each check
     unreadCheckouts: [],
   });
   expect(existsSync(first.backup)).toBe(false);
-  const backupCheck = doctor(removed.home).report.checks.find(({ name }) => name === "backup");
+  const backupCheck = doctor(removed.home, "full").report.checks.find(({ name }) => name === "backup");
   expect({
     state: backupCheck?.state,
     detail: backupCheck?.detail.replace(/, \d+\.\d MB,/, ", <size> MB,"),

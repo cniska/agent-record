@@ -18,7 +18,11 @@ describe("agent-record sync", () => {
       expect(stamp).toMatchObject({ kind: "finished", failures: null });
       expect(Date.parse(stamp.at)).toBeGreaterThanOrEqual(before - 1000);
       const ran = runCli(env, ["doctor"]);
-      expect(decode(ran.stdout)).toMatchObject({ command: "doctor", ok: true, result: { failing: 0 } });
+      expect(decode(ran.stdout)).toMatchObject({
+        command: "doctor",
+        ok: true,
+        result: { counts: { fail: 0 } },
+      });
       expect(ran.exitCode).toBe(0);
     } finally {
       rmSync(root, { recursive: true, force: true });

@@ -43,7 +43,7 @@ const SOURCE_SYNC = [process.execPath, join(import.meta.dir, "..", "src", "cli.t
 const plistOf = (home: Home) => join(home.root, "Library", "LaunchAgents", "dev.agentrecord.sync.plist");
 
 const doctorCheck = (home: Home, name: string) => {
-  const { exitCode, report } = doctor(home);
+  const { exitCode, report } = doctor(home, "full");
   return { exitCode, check: report.checks.find((check) => check.name === name) };
 };
 
@@ -59,11 +59,12 @@ const syncRefusedOverSchemaVersion = (home: Home) => {
   return refused(runCli(home, ["sync"]), "sync");
 };
 
-test("AC-18 doctor with no record fails the record and sync checks with their fixes and exits 1", () => {
+test("AC-18 doctor with no record fails the record and sync checks with their fixes, leaves the passing check to --full and exits 1", () => {
   const home = scratchHome();
-  expect(doctor(home)).toEqual({
+  expect(doctor(home, "full")).toEqual({
     exitCode: 1,
     report: {
+      counts: { ok: 1, warn: 2, fail: 2 },
       checks: [
         {
           name: "record",
@@ -86,17 +87,27 @@ test("AC-18 doctor with no record fails the record and sync checks with their fi
           fix: expect.stringContaining("turn on iCloud Drive"),
         },
       ],
-      failing: 2,
     },
   });
+  expect(doctor(home, "default").report.checks.map(({ name }) => name)).toEqual([
+    "record",
+    "sync",
+    "agent",
+    "mirror",
+  ]);
 });
 
-test("AC-18 doctor after a sync with a loaded agent passes every check and exits 0", () => {
+test("AC-18 doctor after a sync with a loaded agent passes every check, printing them only with --full, and exits 0", () => {
   const home = withLaunchctl(syncedHome(withICloudDrive(scratchHome())), true);
   agentInstall(home);
-  expect(doctor(home)).toEqual({
+  expect(doctor(home, "default")).toEqual({
+    exitCode: 0,
+    report: { counts: { ok: 5, warn: 0, fail: 0 }, checks: [] },
+  });
+  expect(doctor(home, "full")).toEqual({
     exitCode: 0,
     report: {
+      counts: { ok: 5, warn: 0, fail: 0 },
       checks: [
         { name: "record", state: "ok", detail: `schema version ${schemaVersion(home)}`, fix: null },
         { name: "backup", state: "ok", detail: "no rebuild has left a backup of the record", fix: null },
@@ -109,7 +120,6 @@ test("AC-18 doctor after a sync with a loaded agent passes every check and exits
           fix: null,
         },
       ],
-      failing: 0,
     },
   });
 });

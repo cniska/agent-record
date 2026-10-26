@@ -4,7 +4,7 @@
 
 ## What they show
 
-- **Tasks:** `query tasks <id-prefix>` lists a top-level session's tasks, latest last. A task runs from one task prompt to the next, with the subagents started in it. Its id is the turn id of the message that opens it. `SPEC.md` defines a task prompt (§2.12) and both queries (FR-92).
+- **Tasks:** `query tasks <id-prefix>` lists a top-level session's tasks, latest last. A task runs from one task prompt to the next, with the subagents started in it. Its id is the turn id of the message that opens it. `SPEC.md` defines a task prompt (§2.12) and both queries (FR-93).
 - **Steps:** `query trace <id-prefix>` prints one task's steps as a table, one row per step start or end in time order: the session and each subagent as `agent` steps with their tokens, each tool call with its target and `git` subcommands, skill loads, compactions, and hook gates and verdicts. Each step prints a `started` row and, once it ends, an `ended` row with its `ms`. A top-level session traces its latest task, or the one `--task <id-prefix>` names.
 - **Subagents:** a subagent traces itself and every subagent under it, in the task it started in. Name it by its session id `<id>@<root>`, by `<id>`, by its transcript file's name `agent-<id>`, or as `agent_<id>`.
 
@@ -57,7 +57,7 @@ Claude Code changes what its transcripts hold from one version to the next. Meas
 ## Other limits
 
 - **One session and its subagents:** a trace never joins sessions. A `/clear`, a hand-off to a new session, a headless `claude -p` run and a scheduled routine each start a session of their own, so work that spans them is traced one session at a time.
-- **Task boundaries are judged from text:** an owner message opens a task only when the agent has said something first, it is not an interrupt, and it was not typed while a turn ran (FR-70, FR-90). A new request typed after the agent ended on a question, or opening with a push-back word, or a short one opening with a go-ahead word (FR-70), reads as an answer, correction or go-ahead, so its work folds into the task before it.
+- **Task boundaries are judged from text:** an owner message opens a task only when the agent has said something first, it is not an interrupt, and it was not typed while a turn ran (FR-71, FR-91). A new request typed after the agent ended on a question, or opening with a push-back word, or a short one opening with a go-ahead word (FR-71), reads as an answer, correction or go-ahead, so its work folds into the task before it.
 - **Claude Code first:** a Codex session traces with its tool calls, skill reads and tokens, but Codex injects `AGENTS.md` as the first user message, so its first task opens there. Hook events, host refusals and preloaded skills come from Claude Code only.
-- **Gates and verdicts need a hook log:** they appear only where a plugin's hooks write them to its event log and `sync` archives it (FR-78).
+- **Gates and verdicts need a hook log:** they appear only where a plugin's hooks write them to its event log and `sync` archives it (FR-79).
 - **The `git` field is read from the command text:** each `git` invocation the shell command names counts its subcommand, `git grep` included, and a pipe into `grep` does not. A git run inside a script, a function, `bash -c` or a `$(...)` is not seen, and a run listed in the command counts even when an earlier step failed and it never ran.

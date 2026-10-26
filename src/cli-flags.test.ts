@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { parseArg, parseFlags } from "./cli-flags";
+import { parseArg, parseFlags, parseSwitches } from "./cli-flags";
 import { refusal } from "./db-read.test-support";
 
 const usage = "agent-record review <id> [--reason <r>] [--decided <who>]";
@@ -92,5 +92,35 @@ describe("a command's arguments", () => {
         resolve: usage,
       });
     }
+  });
+});
+
+describe("a command's switches", () => {
+  const switchUsage = "agent-record doctor [--full]";
+
+  test("reads each switch given, taking no value", () => {
+    expect(parseSwitches(["--full"], ["full"], switchUsage)).toEqual(new Set(["full"]));
+    expect(parseSwitches([], ["full"], switchUsage)).toEqual(new Set());
+  });
+
+  test("refuses a switch given twice", () => {
+    expect(refusal(() => parseSwitches(["--full", "--full"], ["full"], switchUsage))).toMatchObject({
+      code: "flag_repeated",
+      meta: { usage: switchUsage, flag: "--full" },
+    });
+  });
+
+  test("refuses a value after a switch as an argument", () => {
+    expect(refusal(() => parseSwitches(["--full", "yes"], ["full"], switchUsage))).toMatchObject({
+      code: "argument_count",
+      meta: { usage: switchUsage, takes: 0, got: ["yes"] },
+    });
+  });
+
+  test("refuses a flag it does not know", () => {
+    expect(refusal(() => parseSwitches(["--rows", "5"], ["full"], switchUsage))).toMatchObject({
+      code: "unknown_flag",
+      meta: { usage: switchUsage, flag: "--rows" },
+    });
   });
 });

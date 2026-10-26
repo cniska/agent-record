@@ -186,8 +186,11 @@ describe("the command contract", () => {
   });
 
   test("a command that takes no arguments refuses one, resolving with its usage", () => {
-    for (const name of ["sync", "rebuild", "doctor"]) {
-      const usage = `agent-record ${name}`;
+    for (const [name, usage] of [
+      ["sync", "agent-record sync"],
+      ["rebuild", "agent-record rebuild"],
+      ["doctor", "agent-record doctor [--full]"],
+    ] as const) {
       expect(refused([name, "extra"])).toEqual({
         exitCode: 1,
         error: {

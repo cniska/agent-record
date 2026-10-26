@@ -33,7 +33,7 @@ const USAGE = {
   search: 'agent-record query search "<words>" [--rows <n>]',
   sql: 'agent-record sql "<select>" [--rows <n>]',
   agent: "agent-record agent install",
-  doctor: "agent-record doctor",
+  doctor: "agent-record doctor [--full]",
 } as const;
 
 const READERS = [
@@ -113,17 +113,16 @@ test("AC-11 a failing doctor still prints ok on stdout and exits 1", () => {
   expect({ exitCode: ran.exitCode, stderr: ran.stderr }).toEqual({ exitCode: 1, stderr: "" });
   const result = okLine(ran, "doctor", DOCTOR_RESULT);
   expect({
+    counts: result.counts,
     checks: result.checks.map(({ name, state }) => ({ name, state })),
-    failing: result.failing,
   }).toEqual({
+    counts: { ok: 1, warn: 2, fail: 2 },
     checks: [
       { name: "record", state: "fail" },
-      { name: "backup", state: "ok" },
       { name: "sync", state: "fail" },
       { name: "agent", state: "warn" },
       { name: "mirror", state: "warn" },
     ],
-    failing: 2,
   });
 });
 
@@ -243,7 +242,7 @@ function expectUnopenableRefusedEverywhere(home: Home): void {
       },
     );
   }
-  const { report } = doctor(home);
+  const { report } = doctor(home, "full");
   expect(report.checks.find(({ name }) => name === "record")).toMatchObject({ state: "fail", fix });
 }
 

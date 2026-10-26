@@ -381,6 +381,7 @@ export const QUERY_RESULT = z
 type QueryResult = z.infer<typeof QUERY_RESULT>;
 
 export const DOCTOR_RESULT = z.strictObject({
+  counts: z.strictObject({ ok: z.number(), warn: z.number(), fail: z.number() }),
   checks: z.array(
     z.strictObject({
       name: z.string(),
@@ -389,13 +390,15 @@ export const DOCTOR_RESULT = z.strictObject({
       fix: z.string().nullable(),
     }),
   ),
-  failing: z.number(),
 });
 
 type DoctorReport = z.infer<typeof DOCTOR_RESULT>;
 
-export function doctor(home: Home): { readonly exitCode: number; readonly report: DoctorReport } {
-  const ran = runCli(home, ["doctor"]);
+export function doctor(
+  home: Home,
+  view: "default" | "full",
+): { readonly exitCode: number; readonly report: DoctorReport } {
+  const ran = runCli(home, view === "full" ? ["doctor", "--full"] : ["doctor"]);
   expect(ran.stderr).toBe("");
   return { exitCode: ran.exitCode, report: okLine(ran, "doctor", DOCTOR_RESULT) };
 }
