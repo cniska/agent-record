@@ -6,7 +6,7 @@
 
 - **Tasks:** `query tasks <id-prefix>` lists a top-level session's tasks, latest last. A task runs from one task prompt to the next, with the subagents started in it. Its id is the turn id of the message that opens it. `SPEC.md` defines a task prompt (§2.12) and both queries (FR-92).
 - **Steps:** `query trace <id-prefix>` prints one task's steps, one JSON line per row in time order: the session and each subagent as `agent` steps with their tokens, each tool call with its target and `git` subcommands, skill loads, compactions, and hook gates and verdicts. Each step prints a `started` line and, once it ends, an `ended` line with its `ms`. A top-level session traces its latest task, or the one `--task <id-prefix>` names.
-- **Subagents:** a subagent traces itself and every subagent under it, in the task it started in. Name it by its session id `<id>@<root>`, by `<id>`, or by its transcript file's name `agent-<id>`.
+- **Subagents:** a subagent traces itself and every subagent under it, in the task it started in. Name it by its session id `<id>@<root>`, by `<id>`, by its transcript file's name `agent-<id>`, or as `agent_<id>`.
 
 What one session's work holds:
 

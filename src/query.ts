@@ -49,14 +49,28 @@ export function timeFlag(flag: string, value: string): Timestamp {
 
 const SessionRow = z.strictObject({ id: z.string() });
 
+const SESSION_PREFIX_MARK = "session_";
+const AGENT_PREFIX_MARK = "agent_";
+
+function sessionPrefixOf(prefix: string): string {
+  return prefix.startsWith(SESSION_PREFIX_MARK) ? prefix.slice(SESSION_PREFIX_MARK.length) : prefix;
+}
+
+function agentIdOfPrefix(prefix: string): string | null {
+  return prefix.startsWith(AGENT_PREFIX_MARK)
+    ? prefix.slice(AGENT_PREFIX_MARK.length)
+    : agentIdOfFileName(prefix);
+}
+
 export function sessionByPrefix(db: Database, query: string, prefix: string): string | null {
+  const sessionPrefix = sessionPrefixOf(prefix);
   const found = readRows<[string, string | null]>(
     db,
     `SELECT id FROM session
      WHERE instr(lower(id), lower(?1)) = 1
         OR (${subagentSessionSql("id")} AND instr(lower(id), lower(?2)) = 1)
      ORDER BY id LIMIT 2`,
-  ).all(SessionRow, prefix, agentIdOfFileName(prefix));
+  ).all(SessionRow, sessionPrefix, agentIdOfPrefix(sessionPrefix));
   if (found.length > 1) {
     throw refuseQuery("ambiguous_session", { query, prefix, matches: found.map((session) => session.id) });
   }

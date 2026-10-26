@@ -575,7 +575,9 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
       [later, "2026-09-16T10:30:00.000Z", "now write the docs"],
     ],
   });
+  expect(query(home, ["tasks", "session_coord"])).toEqual(listed);
   const latest = query(home, ["trace", "coord"]);
+  expect(query(home, ["trace", "session_coord"])).toEqual(latest);
   expect(latest.denominator).toBe(
     `task ${later} of session coordinator, from 2026-09-16T10:30:00.000Z, and the 0 subagents started in it: 2 steps, 0 still running`,
   );
@@ -632,6 +634,7 @@ test("AC-61 trace prints a worker's steps and the checker it started, one JSON l
   );
   expect(new Set(subagent.rows.map(([line]) => JSON.parse(String(line)).task))).toEqual(new Set([first]));
   expect(query(home, ["trace", "agent-worker", "--rows", "100"])).toEqual(subagent);
+  expect(query(home, ["trace", "agent_worker", "--rows", "100"])).toEqual(subagent);
   const refusal = (args: readonly string[]) => {
     const error = refused(runCli(home, ["query", "trace", ...args]), "query");
     return { code: error.code, meta: error.meta };
