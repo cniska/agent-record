@@ -22,6 +22,7 @@ import {
   doctor,
   type Fixture,
   failingRecordWrites,
+  failuresInFull,
   faulted,
   filesUnder,
   type Home,
@@ -43,7 +44,6 @@ import {
   setSchemaVersion,
   succeeded,
   sync,
-  syncFailuresInFull,
   withCodexTitle,
   withFixtures,
   withICloudDrive,
@@ -335,7 +335,29 @@ test("AC-7 a sync over a malformed line from each tool, an unreadable file and a
     },
   ]);
   expect(result.orphanSubagents).toEqual(["orphan@gone-parent"]);
-  expect(syncFailuresInFull(home)).toMatchObject([
+  expect(failuresInFull(home, "sync")).toMatchObject([
+    { path: unreadable, error: { kind: "refusal", code: "source_unreadable", meta: { path: unreadable } } },
+  ]);
+});
+
+test("AC-7 a rebuild over an archived file it cannot read finishes and names the failure, its meta under --full", () => {
+  const home = withFixtures(scratchHome(), [CLAUDE, LONG]);
+  sync(home);
+  const unreadable = archivedPath(home, LONG);
+  chmodSync(unreadable, 0o000);
+  const plain = rebuild(home).failures;
+  const full = failuresInFull(home, "rebuild");
+  chmodSync(unreadable, 0o644);
+  expect(plain).toEqual([
+    {
+      path: unreadable,
+      kind: "refusal",
+      code: "source_unreadable",
+      message: expect.stringContaining(unreadable),
+      resolve: expect.stringContaining(unreadable),
+    },
+  ]);
+  expect(full).toMatchObject([
     { path: unreadable, error: { kind: "refusal", code: "source_unreadable", meta: { path: unreadable } } },
   ]);
 });

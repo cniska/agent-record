@@ -375,8 +375,11 @@ const FULL_FAILURES = z.looseObject({
   failures: z.array(z.strictObject({ path: z.string(), error: ERROR })),
 });
 
-export function syncFailuresInFull(home: Home): z.infer<typeof FULL_FAILURES>["failures"] {
-  return succeeded(runCli(home, ["sync", "--full"]), "sync", FULL_FAILURES).failures;
+export function failuresInFull(
+  home: Home,
+  command: "sync" | "rebuild",
+): z.infer<typeof FULL_FAILURES>["failures"] {
+  return succeeded(runCli(home, [command, "--full"]), command, FULL_FAILURES).failures;
 }
 
 const CELL = z.union([z.string(), z.number(), z.null()]);
