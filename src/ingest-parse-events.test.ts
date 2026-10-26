@@ -67,6 +67,7 @@ describe("a hook event log", () => {
         verdict: "return",
         repo: "/h/code/demo",
         fingerprint: "fedcba98",
+        reason: null,
         counted: null,
       },
       { ...PLACE, srcLine: 9, event: "permission_prompt", tool: "Bash" },
@@ -149,6 +150,7 @@ describe("a hook event log", () => {
         verdict: "return",
         repo: "/h/code/demo",
         fingerprint: "fedcba98",
+        reason: null,
         counted: { findings, conflicts: 1, rules: ["Clear names", "Clear names"] },
       },
     ]);

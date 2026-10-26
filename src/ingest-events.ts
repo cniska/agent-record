@@ -53,6 +53,7 @@ function columnsOf(row: HookEventRow): Columns {
       return {
         ...NO_COLUMNS,
         $verdict: row.verdict,
+        $reason: row.reason,
         $repo: row.repo,
         $fingerprint: row.fingerprint,
         $counted: row.counted === null ? null : JSON.stringify(row.counted),

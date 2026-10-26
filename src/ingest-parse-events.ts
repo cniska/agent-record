@@ -35,6 +35,7 @@ const verdict = {
   verdict: z.enum(VERDICTS),
   repo: known,
   fingerprint: known,
+  reason: unknown.optional().transform((reason) => reason ?? null),
 };
 
 const CountedVerdictLine = z

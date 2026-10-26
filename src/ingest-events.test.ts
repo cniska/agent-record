@@ -49,6 +49,24 @@ describe("reading a hook event log", () => {
     ]);
   });
 
+  test("records a verdict's reason, and none for a verdict that gives none", () => {
+    const { db, log } = scratch();
+    const verdict = (reason: Record<string, unknown>): string =>
+      `${JSON.stringify({ v: 1, ts: "2026-10-14T08:00:00Z", event: "verdict", session: "s1", agent: null, cwd: "/w", verdict: "return", repo: "/w", fingerprint: "fedcba98", ...reason })}\n`;
+    writeFileSync(log, verdict({ reason: "no_diff" }) + verdict({ reason: null }) + verdict({}));
+    expect(ingestEventLog(createEventIngester(db), log)).toEqual({ read: true, dropped: [] });
+
+    expect(
+      readRows(db, "SELECT src_line, reason FROM hook_event ORDER BY src_line").all(
+        z.strictObject({ src_line: z.number(), reason: z.string().nullable() }),
+      ),
+    ).toEqual([
+      { src_line: 1, reason: "no_diff" },
+      { src_line: 2, reason: null },
+      { src_line: 3, reason: null },
+    ]);
+  });
+
   test("reports the lines it dropped by their line in the file", () => {
     const { db, log } = scratch();
     writeFileSync(log, `${prompt("2026-10-14T08:00:00Z")}{broken\n`);

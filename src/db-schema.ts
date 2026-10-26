@@ -4,7 +4,7 @@ import { HOWS } from "./ingest-skill-load";
 import { KINDS, TOOLS } from "./ingest-tools";
 
 const sqlList = (values: readonly string[]): string => values.map((value) => `'${value}'`).join(",");
-export const SCHEMA_VERSION = 25;
+export const SCHEMA_VERSION = 26;
 
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS source_file (
