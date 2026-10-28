@@ -61,8 +61,8 @@ function readThenInsertWho(db: Database): void {
   });
 }
 
-async function run(mode: WriterMode): Promise<void> {
-  switch (mode) {
+async function run(writerMode: WriterMode): Promise<void> {
+  switch (writerMode) {
     case "hold": {
       const db = new Database(path);
       db.run("BEGIN IMMEDIATE");
@@ -115,7 +115,7 @@ async function run(mode: WriterMode): Promise<void> {
       openDb(path, { heldRecordWaitMs: CONTENDED_WAIT_MS }).close();
       return;
     default:
-      return unreachable(mode);
+      return unreachable(writerMode);
   }
 }
 

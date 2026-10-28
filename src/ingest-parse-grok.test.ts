@@ -9,6 +9,38 @@ function event(update: unknown, eventId: string): unknown {
   return grokUpdate(SESSION, update, eventId, AT);
 }
 
+const toolCallLine = (id: string, name: string, target: string, sessionUpdate = "tool_call") =>
+  JSON.stringify(
+    event(
+      {
+        sessionUpdate,
+        toolCallId: id,
+        rawInput: { target_file: target },
+        _meta: { "x.ai/tool": { name } },
+      },
+      `${id}-${sessionUpdate}`,
+    ),
+  );
+
+const toolUpdateLine = (id: string, status: string, rawOutput: unknown) =>
+  JSON.stringify(
+    event({ sessionUpdate: "tool_call_update", toolCallId: id, status, rawOutput }, `${id}-${status}`),
+  );
+
+const explainedUpdateLine = (id: string, status: string, rawOutput: unknown) =>
+  JSON.stringify(
+    event(
+      {
+        sessionUpdate: "tool_call_update",
+        toolCallId: id,
+        status,
+        rawOutput,
+        content: [{ type: "content", content: { type: "text", text: `${id} said why` } }],
+      },
+      `${id}-${status}`,
+    ),
+  );
+
 describe("a grok update line", () => {
   test("drops an update line whose read field has the wrong type", () => {
     const bad = event({ sessionUpdate: "tool_call", toolCallId: 7 }, "tool-bad");
@@ -112,24 +144,12 @@ describe("a grok update line", () => {
   });
 
   test("records a load of a skill for each read_file line that names its SKILL.md, and none for another read or an edit", () => {
-    const call = (id: string, name: string, target: string, sessionUpdate = "tool_call") =>
-      JSON.stringify(
-        event(
-          {
-            sessionUpdate,
-            toolCallId: id,
-            rawInput: { target_file: target },
-            _meta: { "x.ai/tool": { name } },
-          },
-          `${id}-${sessionUpdate}`,
-        ),
-      );
     const parsed = parseGrokChunk(
       [
-        call("call-s", "read_file", "/home/dev/.agents/skills/plan/SKILL.md"),
-        call("call-s", "read_file", "/home/dev/.agents/skills/plan/SKILL.md", "tool_call_update"),
-        call("call-r", "read_file", "/home/dev/widgets/README.md"),
-        call("call-e", "search_replace", "/home/dev/skills/draft/SKILL.md"),
+        toolCallLine("call-s", "read_file", "/home/dev/.agents/skills/plan/SKILL.md"),
+        toolCallLine("call-s", "read_file", "/home/dev/.agents/skills/plan/SKILL.md", "tool_call_update"),
+        toolCallLine("call-r", "read_file", "/home/dev/widgets/README.md"),
+        toolCallLine("call-e", "search_replace", "/home/dev/skills/draft/SKILL.md"),
       ],
       1,
     );
@@ -154,17 +174,13 @@ describe("a grok update line", () => {
   });
 
   test("reads a finished shell command's exit code, and no other tool's", () => {
-    const update = (id: string, status: string, rawOutput: unknown) =>
-      JSON.stringify(
-        event({ sessionUpdate: "tool_call_update", toolCallId: id, status, rawOutput }, `${id}-${status}`),
-      );
     const parsed = parseGrokChunk(
       [
-        update("call-a", "in_progress", { type: "Bash", exit_code: 0 }),
-        update("call-a", "completed", { type: "Bash", exit_code: 2 }),
-        update("call-b", "completed", { type: "GrepSearch", exit_code: 1 }),
-        update("call-c", "completed", { type: "FileContent" }),
-        update("call-d", "completed", "plain output"),
+        toolUpdateLine("call-a", "in_progress", { type: "Bash", exit_code: 0 }),
+        toolUpdateLine("call-a", "completed", { type: "Bash", exit_code: 2 }),
+        toolUpdateLine("call-b", "completed", { type: "GrepSearch", exit_code: 1 }),
+        toolUpdateLine("call-c", "completed", { type: "FileContent" }),
+        toolUpdateLine("call-d", "completed", "plain output"),
       ],
       1,
     );
@@ -180,24 +196,11 @@ describe("a grok update line", () => {
   });
 
   test("keeps the text of a failed call or a command that exited non-zero as its error text", () => {
-    const update = (id: string, status: string, rawOutput: unknown) =>
-      JSON.stringify(
-        event(
-          {
-            sessionUpdate: "tool_call_update",
-            toolCallId: id,
-            status,
-            rawOutput,
-            content: [{ type: "content", content: { type: "text", text: `${id} said why` } }],
-          },
-          `${id}-${status}`,
-        ),
-      );
     const parsed = parseGrokChunk(
       [
-        update("call-a", "completed", { type: "Bash", exit_code: 2 }),
-        update("call-b", "failed", null),
-        update("call-c", "completed", { type: "Bash", exit_code: 0 }),
+        explainedUpdateLine("call-a", "completed", { type: "Bash", exit_code: 2 }),
+        explainedUpdateLine("call-b", "failed", null),
+        explainedUpdateLine("call-c", "completed", { type: "Bash", exit_code: 0 }),
       ],
       1,
     );

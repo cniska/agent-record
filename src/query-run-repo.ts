@@ -14,7 +14,7 @@ const SUBJECT_EDGES = new Set(['"', "'", "\n"]);
 type Covering = (path: string) => DirRepo | null;
 
 function longestCovering(dirs: readonly DirRepo[]): Covering {
-  const longestFirst = [...dirs].sort((a, b) => b.path.length - a.path.length);
+  const longestFirst = dirs.toSorted((a, b) => b.path.length - a.path.length);
   return (path) => longestFirst.find((d) => path === d.path || path.startsWith(`${d.path}/`)) ?? null;
 }
 
@@ -65,7 +65,9 @@ function committedDirs(
   covered: Covering,
 ): readonly DirRepo[] {
   const commitRuns = gitRuns.filter((run) => run.subcommand === "commit");
-  const dated = commits.map((commit) => ({ ms: Date.parse(commit.at), commit })).sort((a, b) => a.ms - b.ms);
+  const dated = commits
+    .map((commit) => ({ ms: Date.parse(commit.at), commit }))
+    .toSorted((a, b) => a.ms - b.ms);
   const times = dated.map((at) => at.ms);
   const reposByDir = new Map<string, Set<string>>();
   for (const run of commitRuns) {

@@ -28,7 +28,7 @@ const listed = (counts: ReadonlyMap<string, number>): string =>
   counts.size === 0
     ? "none"
     : [...counts]
-        .sort(([, a], [, b]) => b - a)
+        .toSorted(([, a], [, b]) => b - a)
         .map(([version, count]) => `${version} ${count}`)
         .join(", ");
 

@@ -42,7 +42,10 @@ const ascending = (a: number, b: number): number => a - b;
 
 const timesBy = (runs: readonly RunInCheckout[], keyOf: (run: RunInCheckout) => string): Times =>
   new Map(
-    [...Map.groupBy(runs, keyOf)].map(([key, group]) => [key, group.map((run) => run.ms).sort(ascending)]),
+    [...Map.groupBy(runs, keyOf)].map(([key, group]) => [
+      key,
+      group.map((run) => run.ms).toSorted(ascending),
+    ]),
   );
 
 const firstAtOrAfterIn = (times: Times, key: string, ms: number): number | null => {
@@ -72,6 +75,9 @@ function mergeTimesByWorktree(runs: readonly RunInCheckout[]): Times {
   return timesBy(merges, (run) => run.checkout);
 }
 
+const earliest = (times: readonly (number | null)[]): number | null =>
+  times.reduce((found, time) => (time !== null && (found === null || time < found) ? time : found), null);
+
 export function landingOf(runs: readonly RunInCheckout[]): Landing {
   const landingPushes = runs.filter((run) => run.subcommand === "push" && lands(run));
   const pushTimesByCheckout = timesBy(landingPushes, (run) => run.checkout);
@@ -80,8 +86,6 @@ export function landingOf(runs: readonly RunInCheckout[]): Landing {
     runs.filter((run) => run.subcommand === "commit"),
     (run) => inRepo(run.repo, run.slice),
   );
-  const earliest = (times: readonly (number | null)[]): number | null =>
-    times.reduce((found, time) => (time !== null && (found === null || time < found) ? time : found), null);
   const onOrigin = (commit: RunInCheckout): number | null => {
     const ownPush = firstAtOrAfterIn(pushTimesByCheckout, commit.checkout, commit.ms);
     if (inMainCheckout(commit)) return ownPush;

@@ -142,16 +142,17 @@ describe("counting the owner's interrupts per task", () => {
   });
 });
 
+const typed = (at: string, text: string, agentBefore: string | null, midTurn: boolean) => ({
+  id: at,
+  turnId: null,
+  sessionId: "s",
+  at,
+  text,
+  agentBefore,
+  midTurn,
+});
+
 describe("counting a message the owner typed while a turn ran", () => {
-  const typed = (at: string, text: string, agentBefore: string | null, midTurn: boolean) => ({
-    id: at,
-    turnId: null,
-    sessionId: "s",
-    at,
-    text,
-    agentBefore,
-    midTurn,
-  });
   const record = recordOf({
     sessions: [session("s", "2026-10-14T09:00:00.000Z")],
     ownerMessages: [
@@ -179,6 +180,13 @@ const treeCheckouts = [
   { path: TREE, repo: REPO },
   { path: OTHER_TREE, repo: REPO },
 ];
+
+const opening = (sessionId: string) => ({
+  id: `${sessionId}-m1`,
+  turnId: "p1",
+  sessionId,
+  text: "fix it",
+});
 
 describe("timing a task from its prompt to its last commit run on origin/main", () => {
   test("takes the first push to main in the repo at or after the last commit run, from any session", () => {
@@ -378,12 +386,6 @@ describe("timing a task from its prompt to its last commit run on origin/main", 
   });
 
   test("keeps apart the tasks of two sessions whose prompts share an id, as a fork copies it", () => {
-    const opening = (sessionId: string) => ({
-      id: `${sessionId}-m1`,
-      turnId: "p1",
-      sessionId,
-      text: "fix it",
-    });
     const record = recordOf({
       sessions: [session("a", "2026-10-14T09:00:00.000Z"), session("b", "2026-10-14T09:00:00.000Z")],
       openings: [opening("a"), opening("b")],
@@ -791,8 +793,9 @@ describe("counting files read again after a compaction", () => {
   });
 });
 
+const sha = (digit: string) => digit.repeat(40);
+
 describe("counting fix commits that point back at an earlier accepted commit", () => {
-  const sha = (digit: string) => digit.repeat(40);
   const commit = (digit: string, minute: number, subject: string, repo = REPO) => ({
     sha: sha(digit),
     repo,
@@ -938,16 +941,17 @@ describe("costing each step of every loop by its tokens and minutes", () => {
   });
 });
 
+const ownerSaid = (at: string, text: string) => ({
+  id: at,
+  turnId: null,
+  sessionId: "s",
+  at,
+  text,
+  agentBefore: TOLD,
+  midTurn: false,
+});
+
 describe("counting the owner's asks for another model's read per task", () => {
-  const said = (at: string, text: string) => ({
-    id: at,
-    turnId: null,
-    sessionId: "s",
-    at,
-    text,
-    agentBefore: TOLD,
-    midTurn: false,
-  });
   const record = recordOf({
     sessions: [session("s", "2026-10-14T09:00:00.000Z")],
     ownerMessages: [
@@ -960,13 +964,16 @@ describe("counting the owner's asks for another model's read per task", () => {
         agentBefore: null,
         midTurn: false,
       },
-      said("2026-10-14T09:10:00.000Z", "ask fable to design this"),
-      said("2026-10-14T09:20:00.000Z", "what does fable think?"),
-      said("2026-10-14T09:30:00.000Z", "what did fable's review say"),
-      said("2026-10-14T09:40:00.000Z", "get a second opinion on this"),
-      said("2026-10-14T09:50:00.000Z", "# Handoff\n\nAsk fable to plan it."),
-      said("2026-10-14T10:00:00.000Z", '<pasted_content id="1">ask fable</pasted_content id="1">\nship it'),
-      said("2026-10-14T10:10:00.000Z", "<command-name>/fable</command-name> ask fable"),
+      ownerSaid("2026-10-14T09:10:00.000Z", "ask fable to design this"),
+      ownerSaid("2026-10-14T09:20:00.000Z", "what does fable think?"),
+      ownerSaid("2026-10-14T09:30:00.000Z", "what did fable's review say"),
+      ownerSaid("2026-10-14T09:40:00.000Z", "get a second opinion on this"),
+      ownerSaid("2026-10-14T09:50:00.000Z", "# Handoff\n\nAsk fable to plan it."),
+      ownerSaid(
+        "2026-10-14T10:00:00.000Z",
+        '<pasted_content id="1">ask fable</pasted_content id="1">\nship it',
+      ),
+      ownerSaid("2026-10-14T10:10:00.000Z", "<command-name>/fable</command-name> ask fable"),
     ],
   });
 

@@ -86,7 +86,7 @@ function readsEnvironment(text: string): boolean {
 
 describe("the command contract", () => {
   test("cli.ts only runs the CLI with its runtime", () => {
-    expect([...importsOf(readFileSync(join(SRC, "cli.ts"), "utf8"))].sort()).toEqual([
+    expect([...importsOf(readFileSync(join(SRC, "cli.ts"), "utf8"))].toSorted()).toEqual([
       "../package.json",
       "./cli-main",
       "./env",
@@ -95,7 +95,7 @@ describe("the command contract", () => {
   });
 
   test("cli-release.ts only runs the CLI with a release's runtime", () => {
-    expect([...importsOf(readFileSync(join(SRC, "cli-release.ts"), "utf8"))].sort()).toEqual([
+    expect([...importsOf(readFileSync(join(SRC, "cli-release.ts"), "utf8"))].toSorted()).toEqual([
       "./cli-contract",
       "./cli-main",
       "./env",
@@ -106,7 +106,7 @@ describe("the command contract", () => {
     const readers = productionSourcesOf(SRC)
       .filter(({ text }) => readsEnvironment(text))
       .map(({ file }) => file);
-    expect(readers.sort()).toEqual(["cli-release.ts", "cli.ts", "env.ts"]);
+    expect(readers.toSorted()).toEqual(["cli-release.ts", "cli.ts", "env.ts"]);
   });
 
   test("the environment check finds each way to read it, and not one named in a string", () => {
@@ -126,7 +126,7 @@ describe("the command contract", () => {
   });
 
   test("the CLI only dispatches through the list of commands", () => {
-    expect([...importsOf(readFileSync(join(SRC, "cli-main.ts"), "utf8"))].sort()).toEqual([
+    expect([...importsOf(readFileSync(join(SRC, "cli-main.ts"), "utf8"))].toSorted()).toEqual([
       "./cli-commands",
       "./cli-contract",
       "./cli-output",
@@ -137,7 +137,7 @@ describe("the command contract", () => {
     const writers = productionSourcesOf(SRC)
       .filter(({ text }) => writesStdout(text))
       .map(({ file }) => file);
-    expect(writers.sort()).toEqual(["cli-output.ts"]);
+    expect(writers.toSorted()).toEqual(["cli-output.ts"]);
   });
 
   test("the stdout check finds a write however it is called, and not one named in a string", () => {

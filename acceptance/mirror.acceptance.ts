@@ -47,7 +47,9 @@ const mirrorCheck = (home: Home) => {
 test("AC-32 sync mirrors every archive file into iCloud Drive, again after it grows, or where AGENT_RECORD_MIRROR says", () => {
   const home = withFixtures(withICloudDrive(scratchHome()), [CLAUDE, CODEX]);
   expect(sync(home).mirror).toMatchObject({ state: "mirrored", path: home.mirror });
-  expect([...filesUnder(join(home.mirror, "archive"))].sort()).toEqual([...filesUnder(home.archive)].sort());
+  expect([...filesUnder(join(home.mirror, "archive"))].toSorted()).toEqual(
+    [...filesUnder(home.archive)].toSorted(),
+  );
   for (const fixture of [CLAUDE, CODEX])
     expect(readFileSync(mirrorCopy(home, fixture), "utf8")).toBe(
       readFileSync(archivedPath(home, fixture), "utf8"),
@@ -78,11 +80,11 @@ test("AC-33 a Codex rollout the archive moved keeps its mirror copy at the old p
   renameSync(livePath(home, CODEX), join(archivedSessions, CODEX_ROLLOUT));
   sync(home);
 
-  expect([...filesUnder(join(home.mirror, "archive", "codex"))].sort()).toEqual(
+  expect([...filesUnder(join(home.mirror, "archive", "codex"))].toSorted()).toEqual(
     [
       join("archived_sessions", CODEX_ROLLOUT),
       relative(join(home.archive, "codex"), archivedPath(home, CODEX)),
-    ].sort(),
+    ].toSorted(),
   );
 });
 

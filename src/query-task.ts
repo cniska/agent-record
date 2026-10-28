@@ -55,7 +55,7 @@ export function taskStartsOf(
     text: opening === null ? null : opening.text,
   };
   const openedLater = opening !== null && opens.some((message) => message.id === opening.id);
-  return [...(openedLater ? [] : [first]), ...later].sort((a, b) => a.ms - b.ms);
+  return [...(openedLater ? [] : [first]), ...later].toSorted((a, b) => a.ms - b.ms);
 }
 
 export function taskAt(starts: readonly TaskStart[], at: number): TaskStart {

@@ -5,6 +5,21 @@ import { parseClaudeChunk } from "./ingest-parse-claude";
 const lines = claudeTranscriptLines("s-1").map((l) => JSON.stringify(l));
 const parsed = parseClaudeChunk(lines, 1);
 
+const read = (id: string, path: string) => ({
+  type: "tool_use",
+  id,
+  name: "Read",
+  input: { file_path: path },
+});
+
+const toolResultLine = (id: string, content: unknown, isError: boolean) =>
+  JSON.stringify({
+    type: "user",
+    uuid: `u-${id}`,
+    timestamp: "2026-09-16T10:03:00.000Z",
+    message: { content: [{ type: "tool_result", tool_use_id: id, content, is_error: isError }] },
+  });
+
 describe("parseClaudeChunk", () => {
   test("writes one usage row per content-block line so the ingester can dedupe on message id", () => {
     expect(parsed.usage.filter((u) => u.responseId === "msg-1")).toHaveLength(2);
@@ -100,7 +115,7 @@ describe("parseClaudeChunk", () => {
 
   test("takes the session's last time from its latest timestamped line, whatever its type", () => {
     const times = parsed.session.flatMap(({ ts }) => (ts ? [ts] : []));
-    expect(times.sort().at(-1)).toBe<string>("2026-09-16T10:08:00.000Z");
+    expect(times.toSorted().at(-1)).toBe<string>("2026-09-16T10:08:00.000Z");
   });
 
   test("takes the session title from an ai-title line", () => {
@@ -305,12 +320,6 @@ describe("parseClaudeChunk", () => {
   });
 
   test("ties a skill file the Read tool read to that call, a skill nested in a folder of skills too", () => {
-    const read = (id: string, path: string) => ({
-      type: "tool_use",
-      id,
-      name: "Read",
-      input: { file_path: path },
-    });
     const chunk = parseClaudeChunk(
       [
         JSON.stringify({
@@ -343,24 +352,21 @@ describe("parseClaudeChunk", () => {
   });
 
   test("marks a result Claude Code refused before the call ran, and not one whose call ran and errored", () => {
-    const result = (id: string, content: unknown, isError: boolean) =>
-      JSON.stringify({
-        type: "user",
-        uuid: `u-${id}`,
-        timestamp: "2026-09-16T10:03:00.000Z",
-        message: { content: [{ type: "tool_result", tool_use_id: id, content, is_error: isError }] },
-      });
     const chunk = parseClaudeChunk(
       [
-        result("tu-1", "<tool_use_error>File has not been read yet.</tool_use_error>", true),
-        result(
+        toolResultLine("tu-1", "<tool_use_error>File has not been read yet.</tool_use_error>", true),
+        toolResultLine(
           "tu-2",
           [{ type: "text", text: "<tool_use_error>InputValidationError: bad</tool_use_error>" }],
           true,
         ),
-        result("tu-3", "<tool_use_error>Error calling tool (mcp__acme__label): </tool_use_error>", true),
-        result("tu-4", "Exit code 2\nboom", true),
-        result("tu-5", "<tool_use_error>quoted in a file</tool_use_error>", false),
+        toolResultLine(
+          "tu-3",
+          "<tool_use_error>Error calling tool (mcp__acme__label): </tool_use_error>",
+          true,
+        ),
+        toolResultLine("tu-4", "Exit code 2\nboom", true),
+        toolResultLine("tu-5", "<tool_use_error>quoted in a file</tool_use_error>", false),
       ],
       1,
     );
@@ -376,20 +382,13 @@ describe("parseClaudeChunk", () => {
   });
 
   test("reads a failed command's exit code from the result Claude Code writes for it", () => {
-    const result = (id: string, content: unknown, isError: boolean) =>
-      JSON.stringify({
-        type: "user",
-        uuid: `u-${id}`,
-        timestamp: "2026-09-16T10:03:00.000Z",
-        message: { content: [{ type: "tool_result", tool_use_id: id, content, is_error: isError }] },
-      });
     const chunk = parseClaudeChunk(
       [
-        result("tu-1", "Exit code 2\nboom", true),
-        result("tu-2", [{ type: "text", text: "Exit code 137" }], true),
-        result("tu-3", "PreToolUse:Bash hook error: denied", true),
-        result("tu-4", "Exit code 3", false),
-        result("tu-5", "error\nExit code 4", true),
+        toolResultLine("tu-1", "Exit code 2\nboom", true),
+        toolResultLine("tu-2", [{ type: "text", text: "Exit code 137" }], true),
+        toolResultLine("tu-3", "PreToolUse:Bash hook error: denied", true),
+        toolResultLine("tu-4", "Exit code 3", false),
+        toolResultLine("tu-5", "error\nExit code 4", true),
       ],
       1,
     );
@@ -405,23 +404,16 @@ describe("parseClaudeChunk", () => {
   });
 
   test("keeps a failed or refused call's result as its error text, and none for a call that succeeded", () => {
-    const result = (id: string, content: unknown, isError: boolean) =>
-      JSON.stringify({
-        type: "user",
-        uuid: `u-${id}`,
-        timestamp: "2026-09-16T10:03:00.000Z",
-        message: { content: [{ type: "tool_result", tool_use_id: id, content, is_error: isError }] },
-      });
     const chunk = parseClaudeChunk(
       [
-        result("tu-1", "Exit code 2\nboom", true),
-        result(
+        toolResultLine("tu-1", "Exit code 2\nboom", true),
+        toolResultLine(
           "tu-2",
           [{ type: "text", text: "<tool_use_error>File has not been read yet.</tool_use_error>" }],
           true,
         ),
-        result("tu-3", "SECRET FILE CONTENTS", false),
-        result("tu-4", "", true),
+        toolResultLine("tu-3", "SECRET FILE CONTENTS", false),
+        toolResultLine("tu-4", "", true),
       ],
       1,
     );

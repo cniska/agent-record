@@ -84,7 +84,7 @@ function pathsHolding(value: unknown, path: readonly string[] = []): readonly st
   return Object.entries(value).flatMap(([key, field]) => pathsHolding(field, [...path, key]));
 }
 
-const sorted = (paths: readonly string[]): readonly string[] => [...new Set(paths)].sort();
+const sorted = (paths: readonly string[]): readonly string[] => [...new Set(paths)].toSorted();
 
 describe("maskedChunk", () => {
   const chunk = ParsedChunk.parse(sample(ParsedChunk));

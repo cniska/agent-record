@@ -87,7 +87,7 @@ function read(path: string): Guarded {
 
 function guardedFiles(): readonly Guarded[] {
   const paths = [...GUARDED_DIRS.flatMap(filesUnder), ...GUARDED_FILES].filter((path) => path !== SELF);
-  return [...paths.map(read), ...filesUnder(WORKFLOWS).map(read).filter(ownWorkflow)].sort((a, b) =>
+  return [...paths.map(read), ...filesUnder(WORKFLOWS).map(read).filter(ownWorkflow)].toSorted((a, b) =>
     a.path.localeCompare(b.path),
   );
 }

@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { chmodSync, copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { version } from "../package.json";
+import { version as packageVersion } from "../package.json";
 
 export type Platform = { readonly os: "darwin" | "linux"; readonly cpu: "arm64" | "x64" };
 
@@ -77,11 +77,11 @@ function buildTree(artifactsDir: string, outDir: string): void {
     const dir = join(outDir, platformTarget(platform));
     mkdirSync(dir, { recursive: true });
     extractBinary(join(artifactsDir, platformTarball(platform)), dir);
-    writeJson(join(dir, "package.json"), platformManifest(platform, version));
+    writeJson(join(dir, "package.json"), platformManifest(platform, packageVersion));
   }
   const shim = join(outDir, NAME);
   mkdirSync(join(shim, "bin"), { recursive: true });
-  writeJson(join(shim, "package.json"), shimManifest(version, PLATFORMS));
+  writeJson(join(shim, "package.json"), shimManifest(packageVersion, PLATFORMS));
   writeFileSync(join(shim, "bin", NAME), launcher(PLATFORMS));
   chmodSync(join(shim, "bin", NAME), 0o755);
   copyFileSync(join(root, "README.md"), join(shim, "README.md"));
@@ -95,5 +95,5 @@ if (import.meta.main) {
     process.exit(2);
   }
   buildTree(artifactsDir, outDir);
-  console.log(`${outDir}: ${SCOPE}/${NAME} ${version} and ${PLATFORMS.length} platform packages`);
+  console.log(`${outDir}: ${SCOPE}/${NAME} ${packageVersion} and ${PLATFORMS.length} platform packages`);
 }

@@ -66,10 +66,11 @@ function archive(env: Env) {
   return { report, replaced, logsReplaced, failures };
 }
 
-describe("archiving hook event logs", () => {
-  const log = (env: Env, install: string) => join(pluginDataDir(env), install, "events.jsonl");
-  const copyOf = (env: Env, install: string) => join(archiveDir(env), "plugin-data", install, "events.jsonl");
+const log = (env: Env, install: string) => join(pluginDataDir(env), install, "events.jsonl");
 
+const copyOf = (env: Env, install: string) => join(archiveDir(env), "plugin-data", install, "events.jsonl");
+
+describe("archiving hook event logs", () => {
   test("copies the log of every plugin install, and no other file in its data folder", () => {
     const env = newEnv();
     write(log(env, "acme-kit"), '{"v":1}\n');

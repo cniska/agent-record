@@ -7,5 +7,5 @@ export function scan(root: string, globs: readonly string[]): string[] {
   for (const glob of globs) {
     for (const path of new Glob(glob).scanSync({ cwd: root, absolute: true })) paths.add(path);
   }
-  return [...paths].sort((a, b) => a.localeCompare(b));
+  return [...paths].toSorted((a, b) => a.localeCompare(b));
 }

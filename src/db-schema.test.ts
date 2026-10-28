@@ -45,12 +45,14 @@ type KeyColumn = Readonly<z.infer<typeof KeyColumn>>;
 
 function columnsByKey(rows: readonly KeyColumn[]): ReadonlyMap<string, readonly string[]> {
   const keys = new Map<string, string[]>();
-  for (const { table, key, column } of [...rows].sort((a, b) => a.seq - b.seq)) {
+  for (const { table, key, column } of rows.toSorted((a, b) => a.seq - b.seq)) {
     const id = `${table}:${key}`;
     keys.set(id, [...(keys.get(id) ?? []), column]);
   }
   return keys;
 }
+
+const tableOf = (id: string) => id.slice(0, id.indexOf(":"));
 
 test("every foreign key leads an index, so a delete of the rows it references does not scan its table", () => {
   const db = schema();
@@ -70,7 +72,6 @@ test("every foreign key leads an index, so a delete of the rows it references do
        WHERE m.type = 'table'`,
     ).all(KeyColumn),
   );
-  const tableOf = (id: string) => id.slice(0, id.indexOf(":"));
   const led = (id: string, columns: readonly string[]) =>
     [...indexes].some(
       ([index, indexed]) =>

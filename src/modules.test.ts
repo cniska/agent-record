@@ -48,7 +48,7 @@ function moduleOf(name: string): string | null {
   const owners = Object.keys(PUBLIC).filter(
     (module) => base === module || base.startsWith(`${module}-`) || base.startsWith(`${module}.`),
   );
-  return owners.sort((a, b) => b.length - a.length)[0] ?? null;
+  return owners.toSorted((a, b) => b.length - a.length)[0] ?? null;
 }
 
 function isPublic(owner: string, target: string): boolean {

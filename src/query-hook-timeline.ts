@@ -157,7 +157,7 @@ export function reviewRounds(rows: readonly HookRow[]): readonly Reviewed[] {
     round.accepted = false;
     round.returns = [];
   }
-  return reviewed.sort((a, b) => Date.parse(a.row.at) - Date.parse(b.row.at));
+  return reviewed.toSorted((a, b) => Date.parse(a.row.at) - Date.parse(b.row.at));
 }
 
 function sourceOf(row: HookRow): Blocked["kind"] | null {

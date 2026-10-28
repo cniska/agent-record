@@ -84,6 +84,30 @@ function snapshot(db: Database, root: string) {
   };
 }
 
+const sept16At = (minute: number): string => `2026-09-16T10:${minute}:00.000Z`;
+
+function writeSubagent(env: Env, agentId: string, lines: unknown[], meta: object): void {
+  const dir = join(claudeProjectsDir(env), "-Users-x-code-demo", SESSION, "subagents");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, `agent-${agentId}.jsonl`), `${lines.map((l) => JSON.stringify(l)).join("\n")}\n`);
+  writeFileSync(join(dir, `agent-${agentId}.meta.json`), JSON.stringify(meta));
+}
+
+const parentOf = (db: Database, agentId: string) =>
+  db.prepare("SELECT parent_id FROM session WHERE id = ?").get(`${agentId}@${SESSION}`);
+
+const spawning = (toolUseId: string, minute: number): unknown => ({
+  type: "assistant",
+  sessionId: SESSION,
+  uuid: `${toolUseId}-turn`,
+  timestamp: sept16At(minute),
+  message: {
+    id: `${toolUseId}-msg`,
+    model: "claude-opus-5",
+    content: [{ type: "tool_use", id: toolUseId, name: "Agent", input: { prompt: "review the diff" } }],
+  },
+});
+
 describe("ingest", () => {
   test("deduplicates usage on the message id, so tokens are not counted per content block", () => {
     const root = newRoot();
@@ -917,33 +941,6 @@ describe("ingest", () => {
   });
 
   describe("a subagent another subagent started", () => {
-    const at = (minute: number): string => `2026-09-16T10:${minute}:00.000Z`;
-
-    const spawning = (toolUseId: string, minute: number): unknown => ({
-      type: "assistant",
-      sessionId: SESSION,
-      uuid: `${toolUseId}-turn`,
-      timestamp: at(minute),
-      message: {
-        id: `${toolUseId}-msg`,
-        model: "claude-opus-5",
-        content: [{ type: "tool_use", id: toolUseId, name: "Agent", input: { prompt: "review the diff" } }],
-      },
-    });
-
-    function writeSubagent(env: Env, agentId: string, lines: unknown[], meta: object): void {
-      const dir = join(claudeProjectsDir(env), "-Users-x-code-demo", SESSION, "subagents");
-      mkdirSync(dir, { recursive: true });
-      writeFileSync(
-        join(dir, `agent-${agentId}.jsonl`),
-        `${lines.map((l) => JSON.stringify(l)).join("\n")}\n`,
-      );
-      writeFileSync(join(dir, `agent-${agentId}.meta.json`), JSON.stringify(meta));
-    }
-
-    const parentOf = (db: Database, agentId: string) =>
-      db.prepare("SELECT parent_id FROM session WHERE id = ?").get(`${agentId}@${SESSION}`);
-
     test("is recorded under the subagent whose Agent call started it, read before or after it", () => {
       const env = scratchEnv(newRoot());
       writeClaudeTranscript(env, "-Users-x-code-demo", SESSION, [
@@ -992,24 +989,24 @@ describe("ingest", () => {
   });
 });
 
+function claudeTranscriptPath(env: Env): string {
+  return join(claudeProjectsDir(env), "-Users-x-code-demo", `${SESSION}.jsonl`);
+}
+
+function sourcePaths(db: Database): string[] {
+  return readRows(db, "SELECT path FROM source_file ORDER BY path")
+    .all(z.strictObject({ path: z.string() }))
+    .map((row) => row.path);
+}
+
+function writeTranscript(env: Env, prompt: string): void {
+  const lines = claudeTranscriptLines(SESSION).map((line) => JSON.stringify(line));
+  const path = claudeTranscriptPath(env);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${lines.join("\n").replace("add the parser", prompt)}\n`);
+}
+
 describe("the archive", () => {
-  function claudeTranscriptPath(env: Env): string {
-    return join(claudeProjectsDir(env), "-Users-x-code-demo", `${SESSION}.jsonl`);
-  }
-
-  function writeTranscript(env: Env, prompt: string): void {
-    const lines = claudeTranscriptLines(SESSION).map((line) => JSON.stringify(line));
-    const path = claudeTranscriptPath(env);
-    mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, `${lines.join("\n").replace("add the parser", prompt)}\n`);
-  }
-
-  function sourcePaths(db: Database): string[] {
-    return readRows(db, "SELECT path FROM source_file ORDER BY path")
-      .all(z.strictObject({ path: z.string() }))
-      .map((row) => row.path);
-  }
-
   test("keeps a session whose transcript is gone, read from its archived copy", () => {
     const root = newRoot();
     const env = scratchEnv(root);
@@ -1042,7 +1039,7 @@ describe("the archive", () => {
       rmSync(codexDir(env), { recursive: true });
       expect(rebuild(db, env, "archive alone").failures).toEqual([]);
       expect(snapshot(db, root)).toEqual(before);
-      expect(before.sessions.map((s) => s.id)).toEqual([THREAD, SESSION].sort());
+      expect(before.sessions.map((s) => s.id)).toEqual([THREAD, SESSION].toSorted());
     } finally {
       db.close();
     }
@@ -1188,17 +1185,34 @@ describe("the archive", () => {
   }
 });
 
+const sept20At = (n: number) => `2026-09-20T10:0${n}:00.000Z`;
+
+const bodyText = (path: string) => `Base directory for this skill: ${path}\n\n# Body`;
+
+function writeSessionTranscript(env: Env, sessionId: string, lines: unknown[]): string {
+  const path = join(claudeProjectsDir(env), "-Users-x-code-demo", `${sessionId}.jsonl`);
+  writePrefix(path, lines, fullBytes(lines));
+  return path;
+}
+
+function skillLoads(db: Database) {
+  return db
+    .prepare(
+      `SELECT session_id, message_id, tool_call_id, ts, model, skill_name, how, body_chars, skill_path, install
+       FROM skill_load ORDER BY session_id, ts, tool_call_id`,
+    )
+    .all();
+}
+
 describe("skill loads", () => {
   const COPY = "66666666-7777-8888-9999-000000000000";
-  const at = (n: number) => `2026-09-20T10:0${n}:00.000Z`;
   const base = { sessionId: SESSION, cwd: "/Users/x/code/demo", isSidechain: false };
-  const bodyText = (path: string) => `Base directory for this skill: ${path}\n\n# Body`;
 
   const skillCall = {
     ...base,
     type: "assistant",
     uuid: "a-skill",
-    timestamp: at(1),
+    timestamp: sept20At(1),
     message: {
       id: "msg-skill",
       role: "assistant",
@@ -1211,16 +1225,21 @@ describe("skill loads", () => {
     type: "user",
     uuid: "u-skill-body",
     parentUuid: "a-skill",
-    timestamp: at(2),
+    timestamp: sept20At(2),
     isMeta: true,
     sourceToolUseID: "toolu-skill",
     message: { role: "user", content: bodyText("/Users/x/code/acme/plugin/skills/plan") },
   };
+  const call = (id: string, name: string, input: unknown) => ({
+    ...skillCall,
+    uuid: `a-${id}`,
+    message: { ...skillCall.message, id: `msg-${id}`, content: [{ type: "tool_use", id, name, input }] },
+  });
   const typed = (uuid: string, command: string) => ({
     ...base,
     type: "user",
     uuid,
-    timestamp: at(3),
+    timestamp: sept20At(3),
     message: { role: "user", content: `<command-name>/${command}</command-name>` },
   });
   const typedBody = (uuid: string, parentUuid: string, path: string) => ({
@@ -1228,31 +1247,16 @@ describe("skill loads", () => {
     type: "user",
     uuid,
     parentUuid,
-    timestamp: at(4),
+    timestamp: sept20At(4),
     isMeta: true,
     message: { role: "user", content: bodyText(path) },
   });
-
-  function writeTranscript(env: Env, sessionId: string, lines: unknown[]): string {
-    const path = join(claudeProjectsDir(env), "-Users-x-code-demo", `${sessionId}.jsonl`);
-    writePrefix(path, lines, fullBytes(lines));
-    return path;
-  }
-
-  function skillLoads(db: Database) {
-    return db
-      .prepare(
-        `SELECT session_id, message_id, tool_call_id, ts, model, skill_name, how, body_chars, skill_path, install
-         FROM skill_load ORDER BY session_id, ts, tool_call_id`,
-      )
-      .all();
-  }
 
   const calledLoad = {
     session_id: SESSION,
     message_id: null,
     tool_call_id: "toolu-skill",
-    ts: at(1),
+    ts: sept20At(1),
     model: "claude-opus-5-5",
     skill_name: "plan",
     how: "model",
@@ -1263,7 +1267,7 @@ describe("skill loads", () => {
 
   test("stores a Skill call and the body it injected as one load", () => {
     const env = scratchEnv(newRoot());
-    writeTranscript(env, SESSION, [skillCall, skillBody]);
+    writeSessionTranscript(env, SESSION, [skillCall, skillBody]);
     const db = run(env);
     try {
       expect(skillLoads(db)).toEqual([calledLoad]);
@@ -1284,7 +1288,7 @@ describe("skill loads", () => {
         ],
       },
     };
-    writeTranscript(env, SESSION, [twice]);
+    writeSessionTranscript(env, SESSION, [twice]);
     const db = run(env);
     try {
       expect(skillLoads(db)).toMatchObject([
@@ -1299,7 +1303,7 @@ describe("skill loads", () => {
   test("stores one load when the body arrives in a later sync than its call", () => {
     const env = scratchEnv(newRoot());
     const lines = [skillCall, skillBody];
-    const path = writeTranscript(env, SESSION, lines);
+    const path = writeSessionTranscript(env, SESSION, lines);
     writePrefix(path, lines, bytesThroughLine(lines, 0));
     const db = run(env);
     try {
@@ -1318,7 +1322,7 @@ describe("skill loads", () => {
       typed("u-plugin", "acme:plan"),
       typedBody("u-plugin-body", "u-plugin", "/Users/x/code/acme/plugin/skills/plan"),
     ];
-    const path = writeTranscript(env, SESSION, lines);
+    const path = writeSessionTranscript(env, SESSION, lines);
     writePrefix(path, lines, bytesThroughLine(lines, 0));
     const db = run(env);
     try {
@@ -1330,7 +1334,7 @@ describe("skill loads", () => {
           session_id: SESSION,
           message_id: "u-plugin",
           tool_call_id: null,
-          ts: at(3),
+          ts: sept20At(3),
           model: null,
           skill_name: "plan",
           how: "user",
@@ -1346,7 +1350,7 @@ describe("skill loads", () => {
 
   test("stores a typed skill and its body as one load the user chose", () => {
     const env = scratchEnv(newRoot());
-    writeTranscript(env, SESSION, [
+    writeSessionTranscript(env, SESSION, [
       typed("u-typed", "review"),
       typedBody("u-typed-body", "u-typed", "/Users/x/.claude/skills/review"),
     ]);
@@ -1357,7 +1361,7 @@ describe("skill loads", () => {
           session_id: SESSION,
           message_id: "u-typed",
           tool_call_id: null,
-          ts: at(3),
+          ts: sept20At(3),
           model: null,
           skill_name: "review",
           how: "user",
@@ -1373,7 +1377,7 @@ describe("skill loads", () => {
 
   test("keeps the body's name when the typed command names a different skill", () => {
     const env = scratchEnv(newRoot());
-    writeTranscript(env, SESSION, [
+    writeSessionTranscript(env, SESSION, [
       typed("u-other", "acme:other"),
       typedBody("u-other-body", "u-other", "/Users/x/code/acme/plugin/skills/plan"),
     ]);
@@ -1389,7 +1393,7 @@ describe("skill loads", () => {
 
   test("stores a typed plugin skill the command form misses as one load the user chose", () => {
     const env = scratchEnv(newRoot());
-    writeTranscript(env, SESSION, [
+    writeSessionTranscript(env, SESSION, [
       typed("u-plugin", "acme:plan"),
       typedBody("u-plugin-body", "u-plugin", "/Users/x/code/acme/plugin/skills/plan"),
     ]);
@@ -1400,7 +1404,7 @@ describe("skill loads", () => {
           session_id: SESSION,
           message_id: "u-plugin",
           tool_call_id: null,
-          ts: at(3),
+          ts: sept20At(3),
           model: null,
           skill_name: "plan",
           how: "user",
@@ -1416,8 +1420,8 @@ describe("skill loads", () => {
 
   test("stores a Skill call copied into a second session file once in each session", () => {
     const env = scratchEnv(newRoot());
-    writeTranscript(env, SESSION, [skillCall, skillBody]);
-    writeTranscript(env, COPY, [skillCall, skillBody]);
+    writeSessionTranscript(env, SESSION, [skillCall, skillBody]);
+    writeSessionTranscript(env, COPY, [skillCall, skillBody]);
     const db = run(env);
     try {
       expect(skillLoads(db)).toEqual([calledLoad, { ...calledLoad, session_id: COPY }]);
@@ -1446,7 +1450,7 @@ describe("skill loads", () => {
       "",
       "/Users/x/.claude/skills/review",
     );
-    writeTranscript(env, SESSION, [
+    writeSessionTranscript(env, SESSION, [
       untimed,
       typedBody("u-untimed-body", "u-untimed", "/Users/x/code/acme/plugin/skills/plan"),
       parentless,
@@ -1462,12 +1466,7 @@ describe("skill loads", () => {
 
   test("stores nothing for a body pointing at a call that names no skill or is not a Skill call", () => {
     const env = scratchEnv(newRoot());
-    const call = (id: string, name: string, input: unknown) => ({
-      ...skillCall,
-      uuid: `a-${id}`,
-      message: { ...skillCall.message, id: `msg-${id}`, content: [{ type: "tool_use", id, name, input }] },
-    });
-    writeTranscript(env, SESSION, [
+    writeSessionTranscript(env, SESSION, [
       call("toolu-unnamed", "Skill", {}),
       { ...skillBody, uuid: "u-unnamed-body", sourceToolUseID: "toolu-unnamed" },
       call("toolu-agent", "Agent", { skill: "acme:plan" }),
@@ -1488,14 +1487,14 @@ describe("skill loads", () => {
       ...base,
       type: "user",
       uuid: "u-skill-result",
-      timestamp: at(1),
+      timestamp: sept20At(1),
       message: {
         role: "user",
         content: [{ type: "tool_result", tool_use_id: "toolu-skill", content: "Launching" }],
       },
     };
     const lines = [result, skillBody];
-    const path = writeTranscript(env, SESSION, lines);
+    const path = writeSessionTranscript(env, SESSION, lines);
     writePrefix(path, lines, bytesThroughLine(lines, 0));
     const db = run(env);
     try {
@@ -1519,7 +1518,7 @@ describe("skill loads", () => {
       type: "user",
       uuid: "u-preload",
       parentUuid: "u-prompt",
-      timestamp: at(5),
+      timestamp: sept20At(5),
       isMeta: true,
       message: {
         role: "user",
@@ -1532,7 +1531,7 @@ describe("skill loads", () => {
         ],
       },
     };
-    writeTranscript(env, SESSION, [preload]);
+    writeSessionTranscript(env, SESSION, [preload]);
     const db = run(env);
     try {
       expect(skillLoads(db)).toEqual([
@@ -1540,7 +1539,7 @@ describe("skill loads", () => {
           session_id: SESSION,
           message_id: "u-preload",
           tool_call_id: null,
-          ts: at(5),
+          ts: sept20At(5),
           model: null,
           skill_name: "plan",
           how: "preload",

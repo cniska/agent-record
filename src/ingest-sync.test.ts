@@ -195,7 +195,7 @@ describe("absorbing a schema change", () => {
     expect(
       readdirSync(dirname(record))
         .filter((name) => name.includes("agent-record-backup"))
-        .sort(),
+        .toSorted(),
     ).toEqual([
       "other.db.agent-record-backup",
       "sessions.db.agent-record-backup",

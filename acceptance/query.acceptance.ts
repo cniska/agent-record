@@ -224,14 +224,15 @@ test("AC-14 search ranks said messages by matched words, skips skill bodies, nam
   expect(hit.rows).toEqual([["2026-09-16T10:01:00.000Z", "user", "", "add the parser"]]);
 });
 
+const step = (n: number) => [
+  `2026-09-16T10:${String(n).padStart(2, "0")}:00.000Z`,
+  "user",
+  "",
+  `parser step ${n}`,
+];
+
 test("AC-15 thread reads a session whole or around a time with the counts outside, refuses an ambiguous prefix and answers an unknown one empty", () => {
   const home = syncedHome(withFixtures(scratchHome(), [LONG, CODEX, CODEX_OVERCACHED]));
-  const step = (n: number) => [
-    `2026-09-16T10:${String(n).padStart(2, "0")}:00.000Z`,
-    "user",
-    "",
-    `parser step ${n}`,
-  ];
 
   const whole = query(home, ["thread", "long", "--rows", "45"]);
   expect({ columns: whole.columns, rows: whole.rows, more: whole.more }).toEqual({
@@ -438,6 +439,14 @@ const filledOf = (result: {
     ),
   );
 
+const shape = (line: Record<string, unknown>) => [
+  String(line.session).split("@")[0],
+  line.seq,
+  line.step,
+  line.phase,
+  line.code ?? line.outcome ?? "-",
+];
+
 test("AC-61 trace prints a worker's steps and the checker it started, one row per step start or end, a running one with no end", () => {
   const home = tracedHome();
   sync(home);
@@ -445,13 +454,6 @@ test("AC-61 trace prints a worker's steps and the checker it started, one row pe
   const result = query(home, ["trace", "coord", "--task", "coordinator-0", "--rows", "100"]);
   expect(result.columns).toEqual(TRACE_COLUMNS);
   const lines = filledOf(result);
-  const shape = (line: Record<string, unknown>) => [
-    String(line.session).split("@")[0],
-    line.seq,
-    line.step,
-    line.phase,
-    line.code ?? line.outcome ?? "-",
-  ];
   const first = "coordinator-0-prompt";
   const worker = { session: "worker@coordinator", parent: "coordinator", task: first };
 

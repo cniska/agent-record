@@ -211,15 +211,15 @@ export function timelineOf(record: SignalRecord): Timeline {
       const slice = inMainCheckout({ checkout, repo }) ? taskKey(root, at) : checkout;
       return [{ ...run, repo, checkout, slice, root, ms: at }];
     })
-    .sort((a, b) => a.ms - b.ms);
+    .toSorted((a, b) => a.ms - b.ms);
   const { onOrigin, supersededBeforeLanding } = landingOf(runs);
   const commits = runs.filter((run) => run.subcommand === "commit");
   const lastOfRoot = new Map(commits.map((run) => [run.root, run]));
   const lastOfTask = new Map(commits.map((run) => [taskKey(run.root, run.ms), run]));
 
-  const interrupts: Interrupt[] = pending.map((said) => {
-    const root = rootOf(said.sessionId);
-    return { ...said, sessionId: root, repo: repoOfRoot(root), ...inTask(root, ms(said.at)) };
+  const interrupts: Interrupt[] = pending.map((waiting) => {
+    const root = rootOf(waiting.sessionId);
+    return { ...waiting, sessionId: root, repo: repoOfRoot(root), ...inTask(root, ms(waiting.at)) };
   });
 
   const secondReadAsks: Ask[] = said.flatMap((message) => {
@@ -357,7 +357,7 @@ export function timelineOf(record: SignalRecord): Timeline {
     compactions,
     acceptedCommits,
     escapes,
-    tagKeys: [...new Set(record.tags.map((tag) => tag.key))].sort(),
+    tagKeys: [...new Set(record.tags.map((tag) => tag.key))].toSorted(),
     newest: record.newest,
   };
 }

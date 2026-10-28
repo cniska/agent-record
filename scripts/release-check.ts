@@ -32,17 +32,17 @@ export function schemaOf(source: string): number {
 }
 
 export function releaseProblems(candidate: Candidate, previous: Release | null): readonly string[] {
-  const version = parseVersion(candidate.version);
-  if (version === null) return [`package.json's version ${candidate.version} is not of the form x.y.z`];
+  const next = parseVersion(candidate.version);
+  if (next === null) return [`package.json's version ${candidate.version} is not of the form x.y.z`];
   const problems: string[] = [];
   if (candidate.tag !== `${TAG_PREFIX}${candidate.version}`)
     problems.push(`the tag ${candidate.tag} does not name package.json's version ${candidate.version}`);
   if (previous === null) return problems;
   const before = parseVersion(previous.tag.slice(TAG_PREFIX.length));
   if (before === null) return [...problems, `the previous tag ${previous.tag} names no x.y.z version`];
-  if (compareVersions(version, before) <= 0)
+  if (compareVersions(next, before) <= 0)
     problems.push(`${candidate.version} is not newer than the previous release ${previous.tag}`);
-  const patchOnly = version.major === before.major && version.minor === before.minor;
+  const patchOnly = next.major === before.major && next.minor === before.minor;
   if (candidate.schema !== previous.schema && patchOnly)
     problems.push(
       `the schema version changed from ${previous.schema} to ${candidate.schema} since ${previous.tag}, so this is a minor or major release, not a patch`,

@@ -44,7 +44,7 @@ export function backupsOf(source: string): readonly Backup[] {
       const stats = statSync(path, { throwIfNoEntry: false });
       return stats === undefined ? [] : [{ path, bytes: stats.size, number }];
     })
-    .sort((a, b) => a.number - b.number)
+    .toSorted((a, b) => a.number - b.number)
     .map(({ path, bytes }) => ({ path, bytes }));
 }
 

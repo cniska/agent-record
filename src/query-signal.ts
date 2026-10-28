@@ -63,7 +63,7 @@ function kindsOf(signal: Signal, events: readonly SignalEvent[]): string {
   return [...new Set([...signal.kinds, ...events.map((event) => event.kind)])]
     .map((kind) => ({ kind, count: events.filter((event) => event.kind === kind).length }))
     .filter(({ count }) => count > 0)
-    .sort((a, b) => b.count - a.count)
+    .toSorted((a, b) => b.count - a.count)
     .map(({ kind, count }) => `${kind} ${count}`)
     .join(", ");
 }
@@ -99,7 +99,7 @@ export const signal: Query<"by" | "skill"> = {
           .filter((part) => part !== null)
           .join("; "),
       }))
-      .sort(
+      .toSorted(
         (a, b) =>
           String(b.key[0]).localeCompare(String(a.key[0])) ||
           b.rate.of - a.rate.of ||

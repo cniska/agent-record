@@ -76,8 +76,9 @@ function unreachableDetail(env: Env): string | null {
 
 export function mirrorArchive(env: Env, now: Date): MirrorPass {
   const path = env.mirrorDir;
-  const detail = unreachableDetail(env);
-  if (detail !== null) return { report: { state: "unreachable", path, detail }, failures: [] };
+  const whyUnreachable = unreachableDetail(env);
+  if (whyUnreachable !== null)
+    return { report: { state: "unreachable", path, detail: whyUnreachable }, failures: [] };
 
   const failures: PathFailure[] = [];
   const attempt = (target: string, refusal: (detail: string) => CodedError, write: () => void): void => {

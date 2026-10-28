@@ -32,6 +32,9 @@ const rows = (db: Database) =>
     .all(z.strictObject({ src_line: z.number(), ts: z.string() }))
     .map(({ src_line, ts }) => [src_line, ts]);
 
+const verdict = (reason: Record<string, unknown>): string =>
+  `${JSON.stringify({ v: 1, ts: "2026-10-14T08:00:00Z", event: "verdict", session: "s1", agent: null, cwd: "/w", verdict: "return", repo: "/w", fingerprint: "fedcba98", ...reason })}\n`;
+
 describe("reading a hook event log", () => {
   test("reads only the complete lines added since the last read", () => {
     const { db, log } = scratch();
@@ -51,8 +54,6 @@ describe("reading a hook event log", () => {
 
   test("records a verdict's reason, and none for a verdict that gives none", () => {
     const { db, log } = scratch();
-    const verdict = (reason: Record<string, unknown>): string =>
-      `${JSON.stringify({ v: 1, ts: "2026-10-14T08:00:00Z", event: "verdict", session: "s1", agent: null, cwd: "/w", verdict: "return", repo: "/w", fingerprint: "fedcba98", ...reason })}\n`;
     writeFileSync(log, verdict({ reason: "no_diff" }) + verdict({ reason: null }) + verdict({}));
     expect(ingestEventLog(createEventIngester(db), log)).toEqual({ read: true, dropped: [] });
 

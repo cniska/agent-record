@@ -15,7 +15,7 @@ function toolsTheRecordReads(home: Home): string[] {
   return listed
     .split(",")
     .map((tool) => tool.trim().replaceAll("'", ""))
-    .sort();
+    .toSorted();
 }
 
 const ROWS_BY_SOURCE: Readonly<Record<string, string>> = {

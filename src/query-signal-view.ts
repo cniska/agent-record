@@ -33,7 +33,7 @@ export function skillScope(timeline: Timeline, skill: string | undefined): Skill
   if (skill === undefined) return null;
   const loads = timeline.skillLoads.filter((load) => load.skill === skill);
   if (loads.length === 0) {
-    const skills = [...new Set(timeline.skillLoads.map((load) => load.skill))].sort();
+    const skills = [...new Set(timeline.skillLoads.map((load) => load.skill))].toSorted();
     throw refuseQuery("unknown_skill", { skill, skills });
   }
   return {

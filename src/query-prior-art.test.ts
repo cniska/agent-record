@@ -16,6 +16,10 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
+const fail = (path: string, error: unknown) => {
+  throw new Error(`${path}: ${String(error)}`);
+};
+
 test("dates a file found only through a worktree by the commits of its repository", () => {
   const root = mkdtempSync(join(tmpdir(), "agent-record-prior-art-"));
   roots.push(root);
@@ -23,9 +27,6 @@ test("dates a file found only through a worktree by the commits of its repositor
   const db = new Database(":memory:");
   try {
     db.run(SCHEMA_SQL);
-    const fail = (path: string, error: unknown) => {
-      throw new Error(`${path}: ${String(error)}`);
-    };
     recordCommits(db, [worktree, repo], fail);
     indexRepoFiles(db, [probeCheckout(worktree)], fail);
 
@@ -56,11 +57,12 @@ test("matches a path holding SQL wildcard characters as written", () => {
   }
 });
 
+const repo = (n: string) => `/h/code/${n}`;
+
 test("ranks by recency, caps one repo, and folds its worktrees together", () => {
   const db = new Database(":memory:");
   try {
     db.run(SCHEMA_SQL);
-    const repo = (n: string) => `/h/code/${n}`;
     const addFile = (r: string, p: string) =>
       db.run("INSERT INTO repo_file (checkout, path) VALUES (?, ?)", [repo(r), `${repo(r)}/${p}`]);
     const addCommit = (sha: string, r: string, p: string, ts: string) => {

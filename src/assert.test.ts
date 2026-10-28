@@ -2,15 +2,17 @@ import { expect, test } from "bun:test";
 import { invariant, unreachable } from "./assert";
 import { isRefusal } from "./coded-error";
 
+function thrownBy(run: () => void): unknown {
+  try {
+    run();
+  } catch (error) {
+    return error;
+  }
+  throw new Error("expected the call to throw");
+}
+
 test("a broken assertion is a fault, never a refusal a caller would answer", () => {
-  const thrown = (() => {
-    try {
-      invariant(false, "the row exists");
-    } catch (error) {
-      return error;
-    }
-  })();
-  expect(isRefusal(thrown)).toBe(false);
+  expect(isRefusal(thrownBy(() => invariant(false, "the row exists")))).toBe(false);
 });
 
 test("unreachable faults with its code, naming the value that reached it", () => {

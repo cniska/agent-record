@@ -8,7 +8,7 @@ const tagsShown = (tags: ReadonlyMap<string, string>): string | null =>
   tags.size === 0 ? null : [...tags].map(([key, value]) => `${key}=${value}`).join(", ");
 
 const newestFirst = (events: readonly SignalEvent[]): readonly SignalEvent[] =>
-  [...events].sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  events.toSorted((a, b) => Date.parse(b.at) - Date.parse(a.at));
 
 const cut = (text: string | null): string | null =>
   text === null ? null : text.slice(0, TEXT_CHARS).replaceAll("\n", " ");

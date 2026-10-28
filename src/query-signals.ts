@@ -52,7 +52,7 @@ const RATE_DECIMALS = 100;
 
 const SHA_SHOWN = 8;
 
-function signalOf<Kind extends string, Details extends object = Record<never, never>>(
+function signalOf<Kind extends string, Details extends object = object>(
   definition: Definition<Kind, Details>,
 ): Signal {
   const { events: eventsOf, rate, detail, ...described } = definition;
@@ -62,13 +62,13 @@ function signalOf<Kind extends string, Details extends object = Record<never, ne
       const events = eventsOf(timeline);
       const kept = (subset: readonly SignalEvent[]) => {
         const members = new Set<SignalEvent>(subset);
-        return events.filter((event) => members.has(event));
+        return events.filter((member) => members.has(member));
       };
       return {
         events,
         rate: (subset) => {
           const picked = kept(subset);
-          return rate((kind) => picked.filter((event) => event.kind === kind).length, picked);
+          return rate((kind) => picked.filter((member) => member.kind === kind).length, picked);
         },
         detail: (subset) => (detail === undefined ? null : detail(kept(subset))),
       };
@@ -83,7 +83,7 @@ const ratio = (count: number, of: number): number | null =>
   of === 0 ? null : Math.round((count / of) * RATE_DECIMALS) / RATE_DECIMALS;
 
 function median(values: readonly number[]): number | null {
-  const sorted = [...values].sort((a, b) => a - b);
+  const sorted = values.toSorted((a, b) => a - b);
   const middle = Math.floor(sorted.length / 2);
   const upper = sorted[middle];
   if (upper === undefined) return null;
@@ -395,7 +395,7 @@ const stepCost = signalOf<string, StepSpend>({
     const tasks = new Set(events.map((e) => e.task)).size;
     const steps = [...Map.groupBy(events, (e) => e.kind)]
       .map(([step, list]) => ({ step, input: summed(list).input }))
-      .sort((a, b) => b.input - a.input)
+      .toSorted((a, b) => b.input - a.input)
       .slice(0, STEPS_SHOWN)
       .map(({ step, input }) => `${step} ${perCommit(input, of)}`)
       .join(", ");

@@ -4,6 +4,35 @@ import { parsePiChunk } from "./ingest-parse-pi";
 
 const LINES = piSessionLines().map((line) => JSON.stringify(line));
 
+const textResult = (id: string, isError: boolean, text: string, details?: unknown) =>
+  JSON.stringify({
+    type: "message",
+    id: `r-${id}`,
+    timestamp: "2026-01-01T10:05:00.000Z",
+    message: {
+      role: "toolResult",
+      toolCallId: id,
+      toolName: "bash",
+      isError,
+      content: [{ type: "text", text }],
+      details,
+    },
+  });
+
+const textsResult = (id: string, isError: boolean, texts: readonly string[]) =>
+  JSON.stringify({
+    type: "message",
+    id: `r-${id}`,
+    timestamp: "2026-01-01T10:05:00.000Z",
+    message: {
+      role: "toolResult",
+      toolCallId: id,
+      toolName: "bash",
+      isError,
+      content: [...texts.map((text) => ({ type: "text", text })), { type: "image", data: "AAAA" }],
+    },
+  });
+
 describe("a Pi or omp session", () => {
   test("records the session's directory and title", () => {
     const { session } = parsePiChunk(LINES, 1);
@@ -28,7 +57,7 @@ describe("a Pi or omp session", () => {
 
   test("takes the session's last time from its latest timestamped line, not its header", () => {
     const times = parsePiChunk(LINES, 1).session.flatMap(({ ts }) => (ts ? [ts] : []));
-    expect(times.sort().at(-1)).toBe<string>("2026-01-01T10:02:00.000Z");
+    expect(times.toSorted().at(-1)).toBe<string>("2026-01-01T10:02:00.000Z");
   });
 
   test("records what the owner and the agent said, not its thinking or the harness's reminders", () => {
@@ -200,31 +229,17 @@ describe("a Pi or omp session", () => {
   });
 
   test("reads a failed command's exit code from omp's details, or else from the line pi ends its output with", () => {
-    const result = (id: string, isError: boolean, text: string, details?: unknown) =>
-      JSON.stringify({
-        type: "message",
-        id: `r-${id}`,
-        timestamp: "2026-01-01T10:05:00.000Z",
-        message: {
-          role: "toolResult",
-          toolCallId: id,
-          toolName: "bash",
-          isError,
-          content: [{ type: "text", text }],
-          details,
-        },
-      });
     const parsed = parsePiChunk(
       [
-        result("call_a", true, "boom\n\nCommand exited with code 2"),
-        result("call_b", true, "boom\n\nWall time: 0.54 seconds\n\nCommand exited with code 1", {
+        textResult("call_a", true, "boom\n\nCommand exited with code 2"),
+        textResult("call_b", true, "boom\n\nWall time: 0.54 seconds\n\nCommand exited with code 1", {
           timeoutSeconds: 120,
           exitCode: 1,
         }),
-        result("call_c", true, "boom", { exitCode: 3 }),
-        result("call_d", true, "Command exited with code 4\nthen more"),
-        result("call_e", false, "Command exited with code 5"),
-        result("call_f", true, "Skipped due to queued user message.", { __synthetic: true }),
+        textResult("call_c", true, "boom", { exitCode: 3 }),
+        textResult("call_d", true, "Command exited with code 4\nthen more"),
+        textResult("call_e", false, "Command exited with code 5"),
+        textResult("call_f", true, "Skipped due to queued user message.", { __synthetic: true }),
       ],
       1,
     );
@@ -242,24 +257,11 @@ describe("a Pi or omp session", () => {
   });
 
   test("keeps a failed call's result as its error text, and none for a call that succeeded", () => {
-    const result = (id: string, isError: boolean, texts: readonly string[]) =>
-      JSON.stringify({
-        type: "message",
-        id: `r-${id}`,
-        timestamp: "2026-01-01T10:05:00.000Z",
-        message: {
-          role: "toolResult",
-          toolCallId: id,
-          toolName: "bash",
-          isError,
-          content: [...texts.map((text) => ({ type: "text", text })), { type: "image", data: "AAAA" }],
-        },
-      });
     const parsed = parsePiChunk(
       [
-        result("call_a", true, ["boom", "Command exited with code 2"]),
-        result("call_b", false, ["SECRET OUTPUT"]),
-        result("call_c", true, []),
+        textsResult("call_a", true, ["boom", "Command exited with code 2"]),
+        textsResult("call_b", false, ["SECRET OUTPUT"]),
+        textsResult("call_c", true, []),
       ],
       1,
     );

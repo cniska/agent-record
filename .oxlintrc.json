@@ -15,12 +15,6 @@
     "typescript/switch-exhaustiveness-check": "error",
     "typescript/no-unsafe-type-assertion": "error",
     "oxc/no-barrel-file": "error",
-    "unicorn/no-array-sort": "off",
-    "unicorn/consistent-function-scoping": "off",
-    "eslint/no-shadow": "off",
-    "eslint/no-underscore-dangle": "off",
-    "typescript/consistent-return": "off",
-    "typescript/no-generated-empty-object-type": "off",
-    "typescript/no-unnecessary-type-parameters": "off"
+    "eslint/no-underscore-dangle": ["error", { "allow": ["_meta", "_zod"] }]
   }
 }

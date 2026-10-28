@@ -288,15 +288,15 @@ describe("a record of another version", () => {
   }
 });
 
-describe("opening a database an older schema wrote", () => {
-  function stampedOld(): string {
-    const path = scratchPath();
-    const db = openDb(path, { heldRecordWaitMs: NO_WAIT_MS });
-    db.run(`PRAGMA user_version = ${SCHEMA_VERSION - 1}`);
-    db.close();
-    return path;
-  }
+function stampedOld(): string {
+  const path = scratchPath();
+  const db = openDb(path, { heldRecordWaitMs: NO_WAIT_MS });
+  db.run(`PRAGMA user_version = ${SCHEMA_VERSION - 1}`);
+  db.close();
+  return path;
+}
 
+describe("opening a database an older schema wrote", () => {
   test("opening for a rebuild leaves the old version in place", () => {
     const db = openDb(stampedOld(), { admits: "any", heldRecordWaitMs: NO_WAIT_MS });
 
@@ -313,16 +313,16 @@ describe("opening a database an older schema wrote", () => {
   });
 });
 
-describe("reading rows through a schema", () => {
-  const read = (use: (db: Database) => unknown): unknown => {
-    const db = new Database(":memory:");
-    try {
-      return use(db);
-    } finally {
-      db.close();
-    }
-  };
+const read = (use: (db: Database) => unknown): unknown => {
+  const db = new Database(":memory:");
+  try {
+    return use(db);
+  } finally {
+    db.close();
+  }
+};
 
+describe("reading rows through a schema", () => {
   test("gives back each row as its schema parses it", () => {
     const Row = z.strictObject({ n: z.number(), flag: SqlFlag });
     expect(read((db) => readRows<[number]>(db, "SELECT ? AS n, 1 AS flag").all(Row, 7))).toEqual([

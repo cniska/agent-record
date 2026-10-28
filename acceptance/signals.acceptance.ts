@@ -529,9 +529,10 @@ test("AC-45 before-after compares every signal on either side of a commit, from 
   expect(codes).toEqual(["unknown_commit", "not_a_count", "from_before_commit", "not_a_time"]);
 });
 
+const installedSkillPath = (install: string, name: string) =>
+  `/Users/x/.claude/plugins/cache/m/acme/${install}/skills/${name}`;
+
 test("AC-50 skill-usage counts each skill version loaded per task, an agent's preload too", () => {
-  const cache = (install: string, name: string) =>
-    `/Users/x/.claude/plugins/cache/m/acme/${install}/skills/${name}`;
   const plan = "# Plan\n\nWrite the plan.";
   const home = synced([
     {
@@ -542,10 +543,15 @@ test("AC-50 skill-usage counts each skill version loaded per task, an agent's pr
         {
           skill: "acme:plan",
           at: "2026-09-16T09:01:00Z",
-          dir: cache("aaa", "plan"),
+          dir: installedSkillPath("aaa", "plan"),
           body: `${plan}\n\n\nARGUMENTS: the parser`,
         },
-        { skill: "plan", at: "2026-09-16T09:02:00Z", dir: cache("aaa", "plan"), body: `${plan}\n` },
+        {
+          skill: "plan",
+          at: "2026-09-16T09:02:00Z",
+          dir: installedSkillPath("aaa", "plan"),
+          body: `${plan}\n`,
+        },
       ],
       subagents: [
         {
@@ -556,7 +562,7 @@ test("AC-50 skill-usage counts each skill version loaded per task, an agent's pr
             {
               preload: "acme:review",
               at: "2026-09-16T09:03:01Z",
-              dir: cache("aaa", "review"),
+              dir: installedSkillPath("aaa", "review"),
               body: "# Review\n\nJudge the change.",
             },
           ],
@@ -571,7 +577,7 @@ test("AC-50 skill-usage counts each skill version loaded per task, an agent's pr
         {
           skill: "acme:plan",
           at: "2026-09-22T09:01:00Z",
-          dir: cache("bbb", "plan"),
+          dir: installedSkillPath("bbb", "plan"),
           body: "# Plan\n\nWrite the plan, then ask.",
         },
       ],
@@ -707,26 +713,27 @@ test("AC-54 lost-context counts the files a session read again after a compactio
   expect(counted()).toEqual([["2026-09-14", 0.33, 1, 3, "compaction 3, re-read 1"]]);
 });
 
+const timeAt = (minute: number, second = 0) =>
+  `2026-09-16T09:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}Z`;
+
 test("AC-55 escaped-defects counts the fixes that share a file with, or name, an earlier accepted commit", () => {
-  const at = (minute: number, second = 0) =>
-    `2026-09-16T09:${String(minute).padStart(2, "0")}:${String(second).padStart(2, "0")}Z`;
   const repo = scratchRepo(join(scratchDirOutsideTemp(), "app"), ORIGIN, [
     { subject: "start", file: "f0.txt", at: "2026-09-01T00:00:00Z" },
-    { subject: "feat: add the parser", file: "src/parser.ts", at: at(1) },
-    { subject: "docs: describe the parser", file: "docs/parser.md", at: at(3) },
-    { subject: "fix: parse empty input", file: "src/parser.ts", at: at(5) },
-    { subject: "fix: correct the docs", file: "docs/parser.md", at: at(7) },
+    { subject: "feat: add the parser", file: "src/parser.ts", at: timeAt(1) },
+    { subject: "docs: describe the parser", file: "docs/parser.md", at: timeAt(3) },
+    { subject: "fix: parse empty input", file: "src/parser.ts", at: timeAt(5) },
+    { subject: "fix: correct the docs", file: "docs/parser.md", at: timeAt(7) },
   ]);
   const session = "build";
   const home = withClaudeSessions(scratchHome(), [
-    { id: session, cwd: repo, steps: [{ owner: "add the parser", at: at(0) }] },
+    { id: session, cwd: repo, steps: [{ owner: "add the parser", at: timeAt(0) }] },
   ]);
   const allowed = (
     minute: number,
     reason: string,
     agent: string,
     more: Record<string, string | null> = { repo },
-  ) => gate(at(minute, 30), { decision: "allow", reason, agent, ...more });
+  ) => gate(timeAt(minute, 30), { decision: "allow", reason, agent, ...more });
   withEventLog(home, session, [
     allowed(0, "accepted", "w1"),
     allowed(2, "accepted", "w1"),
@@ -744,7 +751,7 @@ test("AC-55 escaped-defects counts the fixes that share a file with, or name, an
     return sha;
   };
   const feat = shaOf("feat: add the parser").slice(0, 8);
-  commitTo(repo, { subject: `fix: undo ${feat}`, file: "src/other.ts", at: at(9) });
+  commitTo(repo, { subject: `fix: undo ${feat}`, file: "src/other.ts", at: timeAt(9) });
   withEventLog(home, session, [
     allowed(8, "accepted", "w2", { repo: null, head: shaOf("fix: correct the docs") }),
   ]);
@@ -776,41 +783,44 @@ test("AC-55 escaped-defects counts the fixes that share a file with, or name, an
   expect(counted()).toEqual([["2026-09-14", 0.5, 2, 4, "accepted commit 4, names commit 1, shared file 1"]]);
 });
 
+const cachedSkillPath = (name: string) => `/Users/x/.claude/plugins/cache/m/acme/aaa/skills/${name}`;
+
+const minuteAt = (minute: number) => `2026-09-16T09:${String(minute).padStart(2, "0")}:00Z`;
+
+const spent = (input: number) => ({
+  input_tokens: input / 4,
+  cache_read_input_tokens: input / 2,
+  cache_creation_input_tokens: input / 4,
+  output_tokens: input / 100,
+});
+
 test("AC-56 step-cost gives each step's tokens and minutes per accepted commit, split by version", () => {
-  const cache = (name: string) => `/Users/x/.claude/plugins/cache/m/acme/aaa/skills/${name}`;
-  const at = (minute: number) => `2026-09-16T09:${String(minute).padStart(2, "0")}:00Z`;
-  const spent = (input: number) => ({
-    input_tokens: input / 4,
-    cache_read_input_tokens: input / 2,
-    cache_creation_input_tokens: input / 4,
-    output_tokens: input / 100,
-  });
   const loaded = (skill: string, minute: number): Step => ({
     skill: `acme:${skill}`,
-    at: at(minute),
-    dir: cache(skill),
+    at: minuteAt(minute),
+    dir: cachedSkillPath(skill),
     body: `# ${skill}\n\nDo the ${skill} step.`,
   });
   const answered = (minute: number, input: number): Step => ({
     agent: "Done.",
-    at: at(minute),
+    at: minuteAt(minute),
     usage: spent(input),
   });
   const repo = scratchRepo(join(scratchDirOutsideTemp(), "app"), ORIGIN, [
     { subject: "start", file: "f0.txt", at: "2026-09-01T00:00:00Z" },
-    { subject: "feat: add the parser", file: "src/parser.ts", at: at(40) },
+    { subject: "feat: add the parser", file: "src/parser.ts", at: minuteAt(40) },
   ]);
   const home = withClaudeSessions(scratchHome(), [
     {
       id: "lead",
       cwd: repo,
-      steps: [{ owner: "add the parser", at: at(0) }, loaded("plan", 1), answered(2, 4000)],
+      steps: [{ owner: "add the parser", at: minuteAt(0) }, loaded("plan", 1), answered(2, 4000)],
       subagents: [
         {
           id: "w1",
           agentType: "general-purpose",
           steps: [
-            { owner: "write the parser", at: at(10) },
+            { owner: "write the parser", at: minuteAt(10) },
             loaded("deploy", 11),
             answered(12, 1000),
             loaded("lint", 13),
@@ -821,11 +831,11 @@ test("AC-56 step-cost gives each step's tokens and minutes per accepted commit, 
           id: "r1",
           agentType: "acme:checker",
           steps: [
-            { owner: "check the change", at: at(20) },
+            { owner: "check the change", at: minuteAt(20) },
             {
               preload: "acme:style",
-              at: at(20),
-              dir: cache("style"),
+              at: minuteAt(20),
+              dir: cachedSkillPath("style"),
               body: "# Style\n\nKeep the style.",
             },
             answered(23, 800),
@@ -834,7 +844,7 @@ test("AC-56 step-cost gives each step's tokens and minutes per accepted commit, 
         {
           id: "e1",
           agentType: "Explore",
-          steps: [{ owner: "find the parser", at: at(25) }, answered(26, 400)],
+          steps: [{ owner: "find the parser", at: minuteAt(25) }, answered(26, 400)],
         },
       ],
     },

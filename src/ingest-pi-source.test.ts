@@ -18,6 +18,8 @@ const SESSION_LINE = JSON.stringify({
   cwd: "/home/dev/widgets",
 });
 
+const list = (at: string) => listSource(SESSION_SOURCES.pi, at, () => {});
+
 describe("listing sessions", () => {
   test("names each session file by the id in its file name", () => {
     const root = mkdtempSync(join(tmpdir(), "agent-record-pi-"));
@@ -29,7 +31,6 @@ describe("listing sessions", () => {
       `${SESSION_LINE}\n`,
     );
 
-    const list = (at: string) => listSource(SESSION_SOURCES.pi, at, () => {});
     expect(list(root).map(({ kind, sessionId }) => ({ kind, sessionId }))).toEqual<object[]>([
       { kind: "transcript", sessionId: "aaaaaaaa-0000-4000-8000-000000000001" },
     ]);

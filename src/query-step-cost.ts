@@ -38,7 +38,7 @@ function namespacedAgent(session: SessionRow): string | null {
 }
 
 const preloadVersion = (preloads: readonly LoadRow[]): string | null =>
-  preloads.length === 0 ? null : [...new Set(preloads.map(bodyVersion))].sort().join(", ");
+  preloads.length === 0 ? null : [...new Set(preloads.map(bodyVersion))].toSorted().join(", ");
 
 const latestAtOrBefore = <Item extends TimedRow>(items: readonly Item[], at: number): Item | null =>
   items.findLast((item) => ms(item.at) <= at) ?? null;
@@ -65,6 +65,11 @@ function stepper(
   };
 }
 
+const timeAtOrBefore = (rows: readonly TimedRow[], at: number): number | null => {
+  const row = latestAtOrBefore(rows, at);
+  return row === null ? null : ms(row.at);
+};
+
 function priced(
   session: SessionRow,
   responses: readonly ResponseRow[],
@@ -72,10 +77,6 @@ function priced(
   resets: { readonly owner: readonly TimedRow[]; readonly returns: readonly TimedRow[] },
 ): readonly Priced[] {
   const stepAt = stepper(session, loads);
-  const timeAtOrBefore = (rows: readonly TimedRow[], at: number): number | null => {
-    const row = latestAtOrBefore(rows, at);
-    return row === null ? null : ms(row.at);
-  };
   return responses.map((response, index) => {
     const at = ms(response.at);
     const previousAt = responses[index - 1]?.at ?? session.start;
@@ -125,6 +126,12 @@ function stretchesOf(sessionId: string, responses: readonly Priced[]): readonly 
   return stretches;
 }
 
+const inTimeOrder = (rows: readonly TimedRow[]): ReadonlyMap<string, readonly TimedRow[]> =>
+  Map.groupBy(
+    rows.toSorted((x, y) => ms(x.at) - ms(y.at)),
+    (row) => row.sessionId,
+  );
+
 export function stepStretches(
   sessions: readonly SessionRow[],
   responses: readonly ResponseRow[],
@@ -133,11 +140,6 @@ export function stepStretches(
 ): readonly Stretch[] {
   const responsesOf = Map.groupBy(responses, (response) => response.sessionId);
   const loadsOf = Map.groupBy(loads, (load) => load.sessionId);
-  const inTimeOrder = (rows: readonly TimedRow[]): ReadonlyMap<string, readonly TimedRow[]> =>
-    Map.groupBy(
-      [...rows].sort((x, y) => ms(x.at) - ms(y.at)),
-      (row) => row.sessionId,
-    );
   const ownerOf = inTimeOrder(ownerMessages);
   const returnsOf = inTimeOrder(subagentReturns);
   return sessions.flatMap((session) => {

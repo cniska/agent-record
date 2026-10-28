@@ -1,5 +1,6 @@
 import { constants, copyFileSync, mkdirSync, renameSync, type Stats, statSync, utimesSync } from "node:fs";
 import { dirname } from "node:path";
+import { unreachable } from "./assert";
 
 export const PART_SUFFIX = ".part";
 
@@ -14,6 +15,8 @@ export function sameStamp(copy: Stats, source: Stats, time: SourceTime): boolean
       return Math.trunc(copy.mtimeMs) === Math.trunc(source.mtimeMs);
     case "changed":
       return Math.abs(copy.mtimeMs - source.ctimeMs) < STAMP_ROUND_TRIP_MS;
+    default:
+      return unreachable(time);
   }
 }
 

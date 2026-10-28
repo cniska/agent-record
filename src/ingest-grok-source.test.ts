@@ -145,6 +145,18 @@ function seed(env: Env): string {
   return path;
 }
 
+const read = (sessionUpdate: string, eventId: string, ms: number) =>
+  event(
+    {
+      sessionUpdate,
+      toolCallId: "call-4",
+      rawInput: { target_file: "/Users/x/.agents/skills/plan/SKILL.md" },
+      _meta: { "x.ai/tool": { name: "read_file" } },
+    },
+    eventId,
+    ms,
+  );
+
 describe("grok sessions", () => {
   test("takes the session's first time from its transcript", () => {
     const env = scratchEnv(newRoot());
@@ -223,17 +235,6 @@ describe("grok sessions", () => {
 
   test("a read of a skill's SKILL.md named again by its updates is one load, at the call's time", () => {
     const env = scratchEnv(newRoot());
-    const read = (sessionUpdate: string, eventId: string, ms: number) =>
-      event(
-        {
-          sessionUpdate,
-          toolCallId: "call-4",
-          rawInput: { target_file: "/Users/x/.agents/skills/plan/SKILL.md" },
-          _meta: { "x.ai/tool": { name: "read_file" } },
-        },
-        eventId,
-        ms,
-      );
     writeSession(
       env,
       PARENT,

@@ -10,15 +10,15 @@ import { repoWithWorktree, runFixtureGit } from "./git-fixtures.test-support";
 import { ingestCommits, probeCheckouts, repoRoots } from "./ingest-git";
 import { indexRepoFiles } from "./repo-files";
 
-const roots: string[] = [];
+const scratchRoots: string[] = [];
 
 afterEach(() => {
-  for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
+  for (const root of scratchRoots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
 function dir(name: string): string {
   const made = realpathSync(mkdtempSync(join(tmpdir(), `agent-record-ingest-git-${name}-`)));
-  roots.push(made);
+  scratchRoots.push(made);
   return made;
 }
 
@@ -146,7 +146,7 @@ describe("reading the repos the sessions ran in", () => {
     expect(failed).toEqual([{ path: breaking, code: "git_failed" }]);
     expect(ingestCommits(db, checkouts, fail)).toEqual({ repos: 1, commits: 1, files: 1, unchanged: 0 });
     expect(db.query("SELECT path FROM checkout ORDER BY path").all()).toEqual(
-      [breaking, healthy].sort().map((path) => ({ path })),
+      [breaking, healthy].toSorted().map((path) => ({ path })),
     );
     db.close();
   });
@@ -166,23 +166,24 @@ describe("reading the repos the sessions ran in", () => {
     expect(probeCheckouts([removed, healthy], fail).map((checkout) => checkout.path)).toEqual([healthy]);
     expect(failed).toEqual([]);
     expect(db.query("SELECT repo, subject FROM repo_commit ORDER BY repo").all()).toEqual(
-      [healthy, removed].sort().map((repo) => ({ repo, subject: "feat: a" })),
+      [healthy, removed].toSorted().map((repo) => ({ repo, subject: "feat: a" })),
     );
     db.close();
   });
 });
 
+const rootsOf = (cwds: readonly string[]): readonly string[] => {
+  const db = freshDb();
+  cwds.forEach((cwd, i) => {
+    db.run("INSERT INTO session (id, tool, cwd) VALUES (?, 'claude', ?)", [`s${i}`, cwd]);
+  });
+  const roots = repoRoots(db, scratchEnv(tmpdir()));
+  db.close();
+  return roots;
+};
+
 describe("finding the checkouts the sessions ran in", () => {
   const thisCheckout = dirname(import.meta.dir);
-  const rootsOf = (cwds: readonly string[]): readonly string[] => {
-    const db = freshDb();
-    cwds.forEach((cwd, i) => {
-      db.run("INSERT INTO session (id, tool, cwd) VALUES (?, 'claude', ?)", [`s${i}`, cwd]);
-    });
-    const roots = repoRoots(db, scratchEnv(tmpdir()));
-    db.close();
-    return roots;
-  };
 
   test("climbs from each cwd to its checkout, once per checkout", () => {
     expect(rootsOf([thisCheckout, import.meta.dir, join(import.meta.dir, "..", "plugin")])).toEqual([

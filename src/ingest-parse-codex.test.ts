@@ -18,6 +18,23 @@ const commandItem = (id: string, fields: Record<string, unknown>) =>
     },
   });
 
+const assistantLine = (id: unknown) =>
+  JSON.stringify({
+    type: "response_item",
+    timestamp: "2026-09-16T10:09:00.000Z",
+    payload: { type: "message", role: "assistant", id, content: [{ type: "output_text", text: "ok" }] },
+  });
+
+const completed = (exitCode: unknown) =>
+  JSON.stringify({
+    type: "event_msg",
+    timestamp: "2026-09-16T10:00:00.000Z",
+    payload: {
+      type: "item_completed",
+      item: { id: "item-1", type: "CommandExecution", exit_code: exitCode },
+    },
+  });
+
 describe("parseCodexChunk", () => {
   test("attributes each message to the model of the turn it belongs to", () => {
     const parsed = parseCodexChunk(modern, 1, FRESH);
@@ -111,13 +128,7 @@ describe("parseCodexChunk", () => {
   });
 
   test("drops a message line whose id is empty, and names an id-less one by its line", () => {
-    const message = (id: unknown) =>
-      JSON.stringify({
-        type: "response_item",
-        timestamp: "2026-09-16T10:09:00.000Z",
-        payload: { type: "message", role: "assistant", id, content: [{ type: "output_text", text: "ok" }] },
-      });
-    const parsed = parseCodexChunk([message(""), message(null)], 5, FRESH);
+    const parsed = parseCodexChunk([assistantLine(""), assistantLine(null)], 5, FRESH);
     expect(parsed.dropped).toEqual([5]);
     expect(parsed.messages.map((m) => m.id)).toEqual<string[]>([`${THREAD}:6`]);
   });
@@ -129,14 +140,14 @@ describe("parseCodexChunk", () => {
 
   test("takes the session's last time from its latest timestamped line, not its last turn's start", () => {
     const times = parseCodexChunk(modern, 1, FRESH).session.flatMap(({ ts }) => (ts ? [ts] : []));
-    expect(times.sort().at(-1)).toBe<string>("2026-09-16T10:09:00.000Z");
+    expect(times.toSorted().at(-1)).toBe<string>("2026-09-16T10:09:00.000Z");
   });
 
   test("counts a timestamped line that carries no payload toward the session's last time", () => {
     const bare = JSON.stringify({ timestamp: "2026-09-16T11:00:00.000Z", type: "event_msg" });
     const parsed = parseCodexChunk([...modern, bare], 1, FRESH);
     const times = parsed.session.flatMap(({ ts }) => (ts ? [ts] : []));
-    expect({ latest: times.sort().at(-1), dropped: parsed.dropped }).toEqual<object>({
+    expect({ latest: times.toSorted().at(-1), dropped: parsed.dropped }).toEqual<object>({
       latest: "2026-09-16T11:00:00.000Z",
       dropped: [],
     });
@@ -191,15 +202,6 @@ describe("parseCodexChunk", () => {
   });
 
   test("drops a line whose read field has the wrong type, and writes no row from it", () => {
-    const completed = (exitCode: unknown) =>
-      JSON.stringify({
-        type: "event_msg",
-        timestamp: "2026-09-16T10:00:00.000Z",
-        payload: {
-          type: "item_completed",
-          item: { id: "item-1", type: "CommandExecution", exit_code: exitCode },
-        },
-      });
     const parsed = parseCodexChunk([completed("1"), completed(1)], 1, FRESH);
     expect(parsed.dropped).toEqual([1]);
     expect(parsed.toolCalls).toMatchObject([

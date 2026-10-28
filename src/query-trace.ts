@@ -38,7 +38,7 @@ type LineKey =
 
 type Fields<T> = Extract<keyof T, LineKey> extends never ? T : never;
 
-type Step<Start, Result = Readonly<Record<never, never>>> = {
+type Step<Start, Result = object> = {
   readonly start: Fields<Start>;
   readonly result: Fields<Result>;
 };
@@ -77,7 +77,7 @@ type Steps = {
   >;
   readonly verdict: Step<{ readonly repo: string }, { readonly verdict: Verdict }>;
   readonly gate: Step<{ readonly gate: Gate; readonly repo: string | null }>;
-  readonly compact: Step<Readonly<Record<never, never>>>;
+  readonly compact: Step<object>;
 };
 
 type StepName = keyof Steps;

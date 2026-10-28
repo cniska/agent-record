@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-const idOf = <Brand extends string>() => z.string().min(1).brand<Brand>();
+const nonEmptyId = () => z.string().min(1);
 
-export const SessionId = idOf<"SessionId">();
+export const SessionId = nonEmptyId().brand<"SessionId">();
 export type SessionId = z.infer<typeof SessionId>;
 
 const SUBAGENT_OF = "@";
@@ -38,14 +38,14 @@ export function topLevelSessionSql(column: string): string {
   return `CASE WHEN ${at} = 0 THEN ${column} ELSE substr(${column}, ${at} + 1) END`;
 }
 
-export const MessageId = idOf<"MessageId">();
+export const MessageId = nonEmptyId().brand<"MessageId">();
 export type MessageId = z.infer<typeof MessageId>;
 
-export const ToolCallId = idOf<"ToolCallId">();
+export const ToolCallId = nonEmptyId().brand<"ToolCallId">();
 export type ToolCallId = z.infer<typeof ToolCallId>;
 
-export const TurnId = idOf<"TurnId">();
+export const TurnId = nonEmptyId().brand<"TurnId">();
 export type TurnId = z.infer<typeof TurnId>;
 
-export const ResponseId = idOf<"ResponseId">();
+export const ResponseId = nonEmptyId().brand<"ResponseId">();
 export type ResponseId = z.infer<typeof ResponseId>;
