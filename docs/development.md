@@ -28,7 +28,8 @@ mise trust && mise install
 - `scripts/release.sh patch|minor|major` bumps the version and tags it; `.github/workflows/release.yml` builds the tag into a GitHub release, the npm packages and a Homebrew bump, as [Releasing](releasing.md) says.
 - `bun run format` formats `src/`, `acceptance/` and `scripts/` with Biome, and the format gate runs it with the linter off before each commit and stages what it changes in the staged files.
 - `bun run search-recall` rebuilds the search recall fixture from the live record, as [`src/query-recall.md`](../src/query-recall.md) describes.
-- `.github/workflows/check.yml` runs the check, actionlint over `.github/workflows/` and the acceptance suite on each push and pull request, and `commits.yml`, `format.yml` and `no-comments.yml` run the gates.
+- `.github/workflows/check.yml` runs the check and actionlint on each push and pull request; `commits.yml`, `format.yml` and `no-comments.yml` run the gates.
+- `.github/workflows/acceptance.yml` runs the acceptance suite on macOS on `workflow_dispatch` and as the first job of `release.yml`, so a release builds only after it passes.
 
 ## Layout
 

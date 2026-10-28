@@ -14,8 +14,13 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  acceptance:
+    name: Acceptance
+    uses: ./.github/workflows/acceptance.yml
+
   build:
     name: Build (${{ matrix.target }})
+    needs: acceptance
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
 
