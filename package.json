@@ -9,8 +9,8 @@
   },
   "scripts": {
     "agent-record": "bun run src/cli.ts",
-    "format": "bunx biome check --write src acceptance scripts",
-    "lint": "bunx biome check --error-on-warnings src acceptance scripts",
+    "format": "oxfmt 'src/**/*.ts' 'acceptance/**/*.ts' 'scripts/**/*.ts'",
+    "lint": "oxlint --type-aware --deny-warnings src acceptance scripts && oxfmt --check 'src/**/*.ts' 'acceptance/**/*.ts' 'scripts/**/*.ts' && actionlint",
     "typecheck": "bunx tsc --noEmit",
     "test": "bun test",
     "acceptance": "bun test --timeout 20000 ./acceptance/*.acceptance.ts",
@@ -22,9 +22,11 @@
   "devDependencies": {
     "@babel/parser": "^7.29.9",
     "@babel/types": "^7.29.8",
-    "@biomejs/biome": "^2.5.14",
     "@types/bun": "^1.4.2",
     "knip": "6.39.0",
+    "oxfmt": "0.75.0",
+    "oxlint": "1.90.0",
+    "oxlint-tsgolint": "7.0.2005",
     "typescript": "^7.0.2"
   },
   "dependencies": {

@@ -1,8 +1,0 @@
-#!/bin/sh
-# agent-gate:githooks:1
-set -eu
-
-setup='curl -fsSL https://mise.run | sh && echo "$HOME/.local/bin" >> "$GITHUB_PATH" && echo "$HOME/.local/share/mise/shims" >> "$GITHUB_PATH" && "$HOME/.local/bin/mise" install'
-
-[ -n "$setup" ] || exit 0
-sh -c "$setup"

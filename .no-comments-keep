@@ -1,0 +1,3 @@
+shell # agent-gate:[a-z-]+:[0-9]+
+yaml # agent-gate:[a-z-]+:[0-9]+
+yaml # v?[0-9]+(\.[0-9]+)*(-[0-9A-Za-z.]+)?

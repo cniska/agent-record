@@ -1,0 +1,26 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "import", "oxc", "unicorn"],
+  "categories": { "correctness": "error", "suspicious": "error" },
+  "rules": {
+    "eslint/no-console": ["error", { "allow": ["log"] }],
+    "eslint/no-unused-vars": ["error", { "ignoreRestSiblings": true }],
+    "typescript/no-explicit-any": "error",
+    "typescript/no-non-null-assertion": "error",
+    "typescript/no-namespace": "error",
+    "typescript/parameter-properties": "error",
+    "typescript/consistent-type-imports": "error",
+    "typescript/consistent-type-definitions": ["error", "type"],
+    "typescript/no-floating-promises": "error",
+    "typescript/switch-exhaustiveness-check": "error",
+    "typescript/no-unsafe-type-assertion": "error",
+    "oxc/no-barrel-file": "error",
+    "unicorn/no-array-sort": "off",
+    "unicorn/consistent-function-scoping": "off",
+    "eslint/no-shadow": "off",
+    "eslint/no-underscore-dangle": "off",
+    "typescript/consistent-return": "off",
+    "typescript/no-generated-empty-object-type": "off",
+    "typescript/no-unnecessary-type-parameters": "off"
+  }
+}

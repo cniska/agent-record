@@ -1,2 +1,3 @@
-# agent-gate:githooks:2
-* linguist-generated eol=lf
+# agent-gate:githooks:3
+* eol=lf
+*.cjs linguist-generated

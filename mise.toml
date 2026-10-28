@@ -1,6 +1,7 @@
 [tools]
 actionlint = "1.7.12"
 bun = "1.4.2"
+node = "24.21.0"
 
 [hooks]
 postinstall = "{ bun install --frozen-lockfile && if [ \"$(git rev-parse --path-format=absolute --git-dir)\" = \"$(git rev-parse --path-format=absolute --git-common-dir)\" ]; then bun link --silent; fi; } >&2"

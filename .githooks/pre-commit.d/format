@@ -1,8 +1,8 @@
 #!/bin/sh
-# agent-gate:format:2
+# agent-gate:format:3
 set -eu
 
-command='bun run format --linter-enabled=false'
+command='bun run format'
 
 paths() {
   git "$@" -z | od -An -v -to1 | tr -s ' \n' '\n\n' | awk 'NF { if ($0 == "000") { print path; path = "" } else path = path "\\" $0 }'
@@ -63,13 +63,10 @@ run_command() {
   fi
 }
 
-if [ "${1:-}" = --check ]; then
-  run_command
-  unformatted=$(paths diff --name-only)
-  [ -n "$unformatted" ] || exit 0
-  printf 'format: `%s` changes these files; run it and commit the result:\n' "$command" >&2
-  shown "$unformatted"
-  exit 1
+if [ "${1:-}" = --run ]; then
+  root=$(git rev-parse --show-toplevel)
+  cd "$root"
+  exec sh -c "$command"
 fi
 
 [ ! -f "$(git rev-parse --git-path MERGE_HEAD)" ] || exit 0
