@@ -17,3 +17,12 @@ jobs:
       - uses: jdx/mise-action@v5
       - run: bun run check
       - run: actionlint
+
+  acceptance:
+    name: Acceptance
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+      - run: bun run acceptance
