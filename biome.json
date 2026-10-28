@@ -1,7 +1,7 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
   "files": { "includes": ["src/**/*.ts", "acceptance/**/*.ts", "scripts/**/*.ts"] },
-  "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 110 },
+  "formatter": { "enabled": false, "indentStyle": "space", "indentWidth": 2, "lineWidth": 110 },
   "linter": {
     "enabled": true,
     "rules": {
@@ -27,5 +27,5 @@
       }
     }
   },
-  "assist": { "actions": { "source": { "organizeImports": "on" } } }
+  "assist": { "actions": { "source": { "organizeImports": "off" } } }
 }
