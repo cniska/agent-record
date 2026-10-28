@@ -200,7 +200,7 @@ describe("a Pi or omp session", () => {
   });
 
   test("reads a failed command's exit code from omp's details, or else from the line pi ends its output with", () => {
-    const result = (id: string, isError: boolean, text: string, details: unknown = undefined) =>
+    const result = (id: string, isError: boolean, text: string, details?: unknown) =>
       JSON.stringify({
         type: "message",
         id: `r-${id}`,

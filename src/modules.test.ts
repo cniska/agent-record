@@ -41,7 +41,7 @@ const LIST_OF_COMMANDS = "cli-commands.ts";
 
 const isTestSupport = (name: string) => /\.test-support(\.ts)?$/.test(name);
 
-const isTest = (name: string) => /\.test\.ts$/.test(name);
+const isTest = (name: string) => name.endsWith(".test.ts");
 
 function moduleOf(name: string): string | null {
   const base = name.replace(/\.ts$/, "");

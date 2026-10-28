@@ -56,7 +56,9 @@ export const search: Query<never> = {
       denominator:
         `keywords over ${said} of ${all} messages that carry text anyone said; ` +
         `ranked by how many of the ${quoted.length} terms matched, ties broken by relevance then recency.` +
-        `${dropped > 0 ? ` Only the first ${MAX_TERMS} words were searched; ${dropped} more were dropped.` : ""}` +
+        (dropped > 0
+          ? ` Only the first ${MAX_TERMS} words were searched; ${dropped} more were dropped.`
+          : "") +
         (missing.length > 0
           ? ` ${missing.length === 1 ? "This term matched" : "These terms matched"} nothing anyone said: ${missing.join(", ")}.`
           : "") +

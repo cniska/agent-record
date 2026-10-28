@@ -74,15 +74,11 @@ describe("launchd agent", () => {
     mkdirSync(join(dir, "Library", "LaunchAgents"), { recursive: true });
     writeFileSync(agentPlistPath(e.env), "<plist>old</plist>");
     installAgent(e);
-    await expect(Bun.file(`${agentPlistPath(e.env)}.agent-record-backup`).text()).resolves.toBe(
-      "<plist>old</plist>",
-    );
+    expect(await Bun.file(`${agentPlistPath(e.env)}.agent-record-backup`).text()).toBe("<plist>old</plist>");
     writeFileSync(agentPlistPath(e.env), "<plist>changed</plist>");
     installAgent(e);
-    await expect(Bun.file(`${agentPlistPath(e.env)}.agent-record-backup`).text()).resolves.toBe(
-      "<plist>old</plist>",
-    );
-    await expect(Bun.file(`${agentPlistPath(e.env)}.agent-record-backup-2`).text()).resolves.toBe(
+    expect(await Bun.file(`${agentPlistPath(e.env)}.agent-record-backup`).text()).toBe("<plist>old</plist>");
+    expect(await Bun.file(`${agentPlistPath(e.env)}.agent-record-backup-2`).text()).toBe(
       "<plist>changed</plist>",
     );
   });

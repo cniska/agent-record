@@ -80,7 +80,7 @@ test("every foreign key leads an index, so a delete of the rows it references do
   expect(
     [...foreignKeys]
       .filter(([id, columns]) => !led(id, columns))
-      .map(([id, columns]) => `${tableOf(id)}(${columns})`),
+      .map(([id, columns]) => `${tableOf(id)}(${columns.join(",")})`),
   ).toEqual([]);
 });
 

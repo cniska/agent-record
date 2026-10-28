@@ -31,7 +31,7 @@ function scratchPath(): string {
 type Writer = {
   proc: Bun.Subprocess<"pipe", "pipe", "pipe">;
   expectLine(line: string): Promise<void>;
-  send(): void;
+  send(): Promise<void>;
 };
 
 function spawnWriter(mode: WriterMode, path: string, who: string): Writer {
@@ -51,9 +51,9 @@ function spawnWriter(mode: WriterMode, path: string, who: string): Writer {
       expect(buffered.slice(0, end)).toBe(line);
       buffered = buffered.slice(end + 1);
     },
-    send() {
-      proc.stdin.write("go\n");
-      proc.stdin.flush();
+    async send() {
+      await proc.stdin.write("go\n");
+      await proc.stdin.flush();
     },
   };
   children.push(writer);
@@ -82,8 +82,7 @@ describe("concurrent writers", () => {
     const first = spawnWriter("initialize", path, "first");
     const second = spawnWriter("initialize", path, "second");
     await Promise.all([first.expectLine("ready"), second.expectLine("ready")]);
-    first.send();
-    second.send();
+    await Promise.all([first.send(), second.send()]);
 
     expect(await exited(first)).toEqual({ code: 0, stderr: "" });
     expect(await exited(second)).toEqual({ code: 0, stderr: "" });
@@ -163,7 +162,7 @@ describe("concurrent writers", () => {
     const opener = spawnWriter("open", path, "opener");
     await opener.expectLine("busy");
     await Bun.sleep(HOLD_MS);
-    holder.send();
+    await holder.send();
 
     expect(await exited(holder)).toEqual({ code: 0, stderr: "" });
     expect(await exited(opener)).toEqual({ code: 0, stderr: "" });
@@ -180,10 +179,10 @@ describe("concurrent writers", () => {
     await writer.expectLine("opened");
     const holder = spawnWriter("hold", path, "holder");
     await holder.expectLine("held");
-    writer.send();
+    await writer.send();
     await writer.expectLine("busy");
     await Bun.sleep(HOLD_MS);
-    holder.send();
+    await holder.send();
 
     expect(await exited(holder)).toEqual({ code: 0, stderr: "" });
     expect(await exited(writer)).toEqual({ code: 0, stderr: "" });
@@ -200,10 +199,10 @@ describe("concurrent writers", () => {
     await writer.expectLine("opened");
     const holder = spawnWriter("hold", path, "holder");
     await holder.expectLine("held");
-    writer.send();
+    await writer.send();
     await writer.expectLine("busy");
     await Bun.sleep(HOLD_MS);
-    holder.send();
+    await holder.send();
 
     expect(await exited(holder)).toEqual({ code: 0, stderr: "" });
     expect(await exited(writer)).toEqual({ code: 0, stderr: "" });
