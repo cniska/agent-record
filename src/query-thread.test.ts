@@ -7,9 +7,9 @@ import { invariant } from "./assert";
 import { readingRecord } from "./db-read";
 import { NO_WAIT } from "./db-read.test-support";
 import { SCHEMA_SQL } from "./db-schema";
-import { ctx, SYNCED_SESSION, seeded, syncedRecord } from "./query.test-support";
 import type { QueryResult } from "./query-contract";
 import { findQuery } from "./query-registry";
+import { ctx, SYNCED_SESSION, seeded, syncedRecord } from "./query.test-support";
 
 const found = findQuery("thread");
 invariant(found !== undefined, "the thread query is registered");

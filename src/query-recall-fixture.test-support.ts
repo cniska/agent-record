@@ -7,9 +7,9 @@ import { readRows } from "./db";
 import { SCHEMA_SQL } from "./db-schema";
 import { ROLES } from "./ingest-session-records";
 import { SAID } from "./query";
-import { type Ranked, RecallCase } from "./query-recall.test-support";
 import { openedHits } from "./query-recall-pairs.test-support";
 import { docOf, gramOf, textOf, withTokenizer } from "./query-recall-scrub.test-support";
+import { type Ranked, RecallCase } from "./query-recall.test-support";
 import { termsOf } from "./query-search";
 
 const CANDIDATES_PER_CASE = 10;

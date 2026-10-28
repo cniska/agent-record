@@ -1,8 +1,8 @@
 import type { Database } from "bun:sqlite";
 import { describe, expect, test } from "bun:test";
-import { seeded } from "./query.test-support";
-import { rankedCases, recallOf } from "./query-recall.test-support";
 import { fixtureOf, fixtureRecord, liveCases } from "./query-recall-fixture.test-support";
+import { rankedCases, recallOf } from "./query-recall.test-support";
+import { seeded } from "./query.test-support";
 
 const SESSION = "0a1b2c3d-4e5f";
 

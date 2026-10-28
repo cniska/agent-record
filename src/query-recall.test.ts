@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { rankOf, recallAt5, recallOf } from "./query-recall.test-support";
 import { fixtureRecord, readFixture } from "./query-recall-fixture.test-support";
+import { rankOf, recallAt5, recallOf } from "./query-recall.test-support";
 
 const BASELINE = { found: 30, cases: 55 };
 

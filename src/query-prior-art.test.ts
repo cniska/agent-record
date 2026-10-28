@@ -6,8 +6,8 @@ import { dirname, join } from "node:path";
 import { SCHEMA_SQL } from "./db-schema";
 import { repoWithWorktree } from "./git-fixtures.test-support";
 import { probeCheckout } from "./git-probe";
-import { ctx, recordCommits } from "./query.test-support";
 import { priorArt } from "./query-prior-art";
+import { ctx, recordCommits } from "./query.test-support";
 import { indexRepoFiles } from "./repo-files";
 
 const roots: string[] = [];

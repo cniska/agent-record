@@ -6,9 +6,9 @@ import { join } from "node:path";
 import { invariant } from "./assert";
 import { readingRecord } from "./db-read";
 import { NO_WAIT } from "./db-read.test-support";
-import { ctx, seeded, syncedRecord } from "./query.test-support";
 import type { QueryContext, QueryResult } from "./query-contract";
 import { findQuery } from "./query-registry";
+import { ctx, seeded, syncedRecord } from "./query.test-support";
 
 const found = findQuery("search");
 invariant(found !== undefined, "the search query is registered");

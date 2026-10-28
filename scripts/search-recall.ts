@@ -2,7 +2,6 @@ import { HELD_RECORD_WAIT_MS } from "../src/cli-main";
 import { readingRecord } from "../src/db-read";
 import { parseEnv } from "../src/env";
 import { dbPath } from "../src/paths";
-import { type Recall, rankedCases, recallAt5, recallOf } from "../src/query-recall.test-support";
 import {
   fixtureOf,
   fixtureRecord,
@@ -10,6 +9,7 @@ import {
   RECALL_FIXTURE,
   writeFixture,
 } from "../src/query-recall-fixture.test-support";
+import { type Recall, rankedCases, recallAt5, recallOf } from "../src/query-recall.test-support";
 
 const rate = (recall: Recall): string => `${recall.found}/${recall.cases}`;
 

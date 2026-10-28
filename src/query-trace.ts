@@ -414,7 +414,7 @@ function pick(db: Database, traced: string, picked: string | undefined, placemen
 function topChildOf(sessions: ReadonlyMap<string, SessionRow>, root: string): (id: string) => string {
   return (id) => {
     let at = id;
-    for (let parent = sessions.get(at)?.parent ?? null; parent !== null && parent !== root; ) {
+    for (let parent = sessions.get(at)?.parent ?? null; parent !== null && parent !== root;) {
       at = parent;
       parent = sessions.get(at)?.parent ?? null;
     }
