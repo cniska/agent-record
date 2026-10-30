@@ -93,7 +93,7 @@ The record is what agent workflows improve from. Its first use is search: an age
 
 - **FR-52** — `agent install` writes a launchd agent that runs this agent-record's `sync` every 15 minutes and at login, logging to the state directory, and prints the command that loads it. A release runs its `sync` by the absolute path of the command it was run as, never the file a symlink in that path leads to, so an upgrade that replaces the build behind the command leaves the agent running the new one: the npm package's command (FR-97); else the command as typed, made absolute against the working directory when it holds a `/`, or the first executable of that name on PATH when it does not; and the running binary only when neither finds one; a checkout runs Bun and its `src/cli.ts` by absolute path. A run with nothing to change says so.
 - **FR-53** — Replacing an existing, different launchd agent first keeps a backup copy of it.
-- **FR-54** — The Claude Code plugin starts `sync` in the background whenever a session starts, resumes, clears or compacts, and adds a note telling the agent to search the record before acting on a handoff or plan.
+- **FR-54** — The Claude Code plugin starts `sync` in the background whenever a session starts, resumes, clears or compacts, and adds a note to the session. The note tells the agent to search the record before acting on a handoff or plan, and which queries find what. It also tells the agent to run `sync` before its first query, and to search without retrying when that sync is refused `lock_held`.
 - **FR-55** — The plugin does nothing when `agent-record` is not on PATH.
 
 ### 2.10 Edge cases
