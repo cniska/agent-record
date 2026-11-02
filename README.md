@@ -55,7 +55,7 @@ claude plugin install cniska-record@cniska
 
 Each channel updates the way it installed: `brew upgrade agent-record`, `npm update -g @cniska/agent-record`, `bun update -g @cniska/agent-record`, or the curl line run again.
 
-Once a day, on the first command it runs, a release asks the channel it was installed through for its latest version, waiting about a second at most. While a newer one is out, every command ends its stderr with one line for the agent running it, such as:
+Once a day, on its first command, a release asks the channel it was installed through for the latest version, waiting at most about a second. While a newer one is out, every command ends its stderr with one line for the agent running it, such as:
 
 ```text
 agent-record 0.3.1 is out (running 0.3.0): run brew upgrade agent-record; if you cannot, tell the user.

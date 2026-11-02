@@ -2,7 +2,6 @@ import { realpathSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import type { Env } from "./env";
-import { errorCode } from "./error-read";
 
 export const Channel = z.enum(["homebrew", "npm", "bun", "curl"]);
 export type Channel = z.infer<typeof Channel>;
@@ -68,19 +67,16 @@ const NPM_GLOBAL_MODULES = /\/lib\/node_modules\/(.+)$/;
 
 type Install = { readonly execPath: string; readonly env: Env };
 
-const GONE: ReadonlySet<unknown> = new Set(["ENOENT", "ENOTDIR"]);
-
-function realOrSelf(path: string): string {
+function realOrAsGiven(path: string): string {
   try {
     return realpathSync(path);
-  } catch (error) {
-    if (GONE.has(errorCode(error))) return path;
-    throw error;
+  } catch {
+    return path;
   }
 }
 
 function inBunGlobal(build: string, env: Env): boolean {
-  const modules = `${realOrSelf(join(env.bunInstall, "install", "global", "node_modules"))}/`;
+  const modules = `${realOrAsGiven(join(env.bunInstall, "install", "global", "node_modules"))}/`;
   return build.startsWith(modules) && PACKAGED_BUILD.test(build.slice(modules.length));
 }
 
@@ -90,10 +86,10 @@ function inNpmGlobal(build: string): boolean {
 }
 
 export function installChannel({ execPath, env }: Install): Channel | null {
-  const build = realOrSelf(execPath);
+  const build = realOrAsGiven(execPath);
   if (HOMEBREW_BUILD.test(build)) return "homebrew";
   if (inBunGlobal(build, env)) return "bun";
   if (inNpmGlobal(build)) return "npm";
-  if (build === realOrSelf(join(env.home, ".local", "bin", "agent-record"))) return "curl";
+  if (build === realOrAsGiven(join(env.home, ".local", "bin", "agent-record"))) return "curl";
   return null;
 }

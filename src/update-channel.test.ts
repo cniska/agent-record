@@ -1,14 +1,17 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { Env } from "./env";
-import { scratchEnv } from "./fixtures.test-support";
+import { asUnprivileged, scratchEnv } from "./fixtures.test-support";
 import { type Channel, installChannel, upgradeAdvice } from "./update-channel";
 
 const roots: string[] = [];
 
+const locked: string[] = [];
+
 afterEach(() => {
+  for (const dir of locked.splice(0)) chmodSync(dir, 0o755);
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true });
 });
 
@@ -100,6 +103,19 @@ describe("the channel a release was installed through", () => {
         segments,
         channel: null,
       });
+  });
+});
+
+describe("a channel path the release cannot resolve", () => {
+  test("is not that channel, rather than a failure", () => {
+    const machine = scratchMachine();
+    const sealed = join(machine.home, "sealed");
+    const env = { ...machine, bunInstall: join(sealed, ".bun") };
+    mkdirSync(join(sealed, ".bun", "install", "global", "node_modules"), { recursive: true });
+    const curl = build(join(env.home, ".local", "bin", "agent-record"));
+    chmodSync(sealed, 0);
+    locked.push(sealed);
+    expect(asUnprivileged(env, () => installChannel({ execPath: curl, env }))).toBe("curl");
   });
 });
 
