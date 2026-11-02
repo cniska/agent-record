@@ -1,4 +1,5 @@
 import { BUG, faulter, refuser } from "./coded-error";
+import { type Channel, upgradeAdvice } from "./update-channel";
 
 export const faultRecord = faulter<{
   readonly row_mismatch: { readonly sql: string; readonly detail: string };
@@ -9,11 +10,12 @@ export const faultRecord = faulter<{
   },
 });
 
-const UPGRADE =
-  "upgrade agent-record the way it was installed: brew upgrade agent-record, npm update -g @cniska/agent-record, or curl -fsSL https://github.com/cniska/agent-record/releases/latest/download/install.sh | sh";
-
 export const refuseRecord = refuser<{
-  readonly record_version: { readonly found: number; readonly expected: number };
+  readonly record_version: {
+    readonly found: number;
+    readonly expected: number;
+    readonly channel: Channel | null;
+  };
   readonly no_database: { readonly path: string };
   readonly record_unopenable: { readonly path: string };
   readonly lock_held: { readonly path: string; readonly pid: number };
@@ -26,8 +28,10 @@ export const refuseRecord = refuser<{
       found > expected
         ? `the record is schema version ${found}, newer than the version ${expected} this agent-record reads`
         : `the record is schema version ${found} and this agent-record reads version ${expected}; the next \`agent-record sync\` rebuilds it, or run \`agent-record rebuild\``,
-    resolve: ({ found, expected }) =>
-      found > expected ? UPGRADE : "the next agent-record sync rebuilds it, or run agent-record rebuild",
+    resolve: ({ found, expected, channel }) =>
+      found > expected
+        ? upgradeAdvice(channel)
+        : "the next agent-record sync rebuilds it, or run agent-record rebuild",
   },
   no_database: {
     message: ({ path }) => `no database at ${path}; run \`agent-record sync\` first`,

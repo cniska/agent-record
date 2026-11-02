@@ -12,7 +12,7 @@ export function listQueries() {
 export function runQuery(
   query: Query,
   asked: Omit<QueryContext, "home">,
-  runtime: Pick<Runtime, "env" | "heldRecordWaitMs">,
+  runtime: Pick<Runtime, "env" | "heldRecordWaitMs" | "channel">,
 ): CappedResult {
   return readingRecord(dbPath(runtime.env), runtime, (db) =>
     capResult(query.run(db, { ...asked, home: runtime.env.home }), asked.maxRows),

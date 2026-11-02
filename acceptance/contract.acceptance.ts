@@ -88,7 +88,7 @@ test("AC-10 a record of a newer schema version is refused by sync, query and sql
   expectVersionRefused(
     home,
     READERS_AND_WRITER,
-    "upgrade agent-record the way it was installed: brew upgrade agent-record, npm update -g @cniska/agent-record, or curl -fsSL https://github.com/cniska/agent-record/releases/latest/download/install.sh | sh",
+    "upgrade agent-record the way it was installed: brew upgrade agent-record, npm update -g @cniska/agent-record, bun update -g @cniska/agent-record, or curl -fsSL https://github.com/cniska/agent-record/releases/latest/download/install.sh | sh",
   );
   expect(schemaVersion(home)).toBe(newer);
 });

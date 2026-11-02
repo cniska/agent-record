@@ -15,7 +15,7 @@ const rate = (recall: Recall): string => `${recall.found}/${recall.cases}`;
 
 const { cases, live, fixture } = readingRecord(
   dbPath(parseEnv(process.env)),
-  { heldRecordWaitMs: HELD_RECORD_WAIT_MS },
+  { heldRecordWaitMs: HELD_RECORD_WAIT_MS, channel: null },
   (db) => {
     const found = liveCases(db);
     const ranked = rankedCases(db, found);

@@ -9,6 +9,7 @@ export type Env = {
   readonly stateHome: string;
   readonly tmpDir: string;
   readonly mirrorDir: string;
+  readonly bunInstall: string;
 };
 
 export type RawEnv = Readonly<Record<string, string | undefined>>;
@@ -84,5 +85,6 @@ export function parseEnv(raw: RawEnv): Env {
     stateHome: absoluteOr(raw, "XDG_STATE_HOME", home, [".local", "state"]),
     tmpDir: tempOf(raw),
     mirrorDir: absoluteOr(raw, "AGENT_RECORD_MIRROR", home, ICLOUD_DRIVE_MIRROR),
+    bunInstall: absoluteOr(raw, "BUN_INSTALL", home, [".bun"]),
   };
 }

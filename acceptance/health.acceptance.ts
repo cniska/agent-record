@@ -146,7 +146,7 @@ test("AC-18 doctor fails a failed sync with the refusal's fix and warns of faile
       name: "sync",
       state: "fail",
       detail: `the last sync failed: ${error.message}`,
-      fix: "upgrade agent-record the way it was installed: brew upgrade agent-record, npm update -g @cniska/agent-record, or curl -fsSL https://github.com/cniska/agent-record/releases/latest/download/install.sh | sh",
+      fix: "upgrade agent-record the way it was installed: brew upgrade agent-record, npm update -g @cniska/agent-record, bun update -g @cniska/agent-record, or curl -fsSL https://github.com/cniska/agent-record/releases/latest/download/install.sh | sh",
     },
   });
 

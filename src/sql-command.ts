@@ -3,7 +3,7 @@ import { z } from "zod";
 import { unreachable } from "./assert";
 import type { Command, CommandResult } from "./cli-contract";
 import { parseArg } from "./cli-flags";
-import { AnyRow, type HeldRecordWait, readRows } from "./db";
+import { AnyRow, type RecordAccess, readRows } from "./db";
 import { sqliteCode, sqliteMissingColumn } from "./db-error";
 import { readingRecord } from "./db-read";
 import { errorDetail } from "./error-read";
@@ -88,8 +88,8 @@ function readStatement(db: Database, statement: string, maxRows: number): Rows {
   }
 }
 
-function answer(path: string, wait: HeldRecordWait, statement: string, maxRows: number): CommandResult {
-  return readingRecord(path, wait, (db) => {
+function answer(path: string, access: RecordAccess, statement: string, maxRows: number): CommandResult {
+  return readingRecord(path, access, (db) => {
     const { columns, rows } = readStatement(db, statement, maxRows);
     const result = {
       denominator: SQL_DENOMINATOR,

@@ -99,6 +99,7 @@ describe("the command contract", () => {
       "./cli-contract",
       "./cli-main",
       "./env",
+      "./update-channel",
     ]);
   });
 

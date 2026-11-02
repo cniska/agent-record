@@ -3,7 +3,7 @@ import { type AgentPlan, bootoutCommand, bootstrapCommand, planAgent } from "./a
 import { unreachable } from "./assert";
 import type { ProgramArguments, Runtime } from "./cli-contract";
 import { CodedError, isRefusal } from "./coded-error";
-import type { HeldRecordWait } from "./db";
+import type { RecordAccess } from "./db";
 import { readingRecord } from "./db-read";
 import { SCHEMA_VERSION } from "./db-schema";
 import type { Env } from "./env";
@@ -46,9 +46,9 @@ function refusalOr<T>(probe: () => T): T | CodedError {
   }
 }
 
-function recordHealth(env: Env, wait: HeldRecordWait): Health {
+function recordHealth(env: Env, access: RecordAccess): Health {
   const name = "record";
-  const read = refusalOr(() => readingRecord(dbPath(env), wait, () => null));
+  const read = refusalOr(() => readingRecord(dbPath(env), access, () => null));
   if (read instanceof CodedError) return { name, state: "fail", detail: read.message, fix: read.resolve };
   return { name, state: "ok", detail: `schema version ${SCHEMA_VERSION}`, fix: null };
 }

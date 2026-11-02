@@ -3,7 +3,7 @@ import { z } from "zod";
 import { unreachable } from "./assert";
 import { openDb, withDb, writeTransaction } from "./db";
 import { sqliteBusy } from "./db-error";
-import { NO_WAIT_MS } from "./db-read.test-support";
+import { NO_WAIT } from "./db-read.test-support";
 
 const CONTENDED_WAIT_MS = 5000;
 
@@ -42,7 +42,7 @@ function reportBusy(noWaitCall: () => void): void {
 }
 
 function reportBusyOnProbeConnection(call: (probe: Database) => void): void {
-  const probe = openDb(path, { heldRecordWaitMs: NO_WAIT_MS });
+  const probe = openDb(path, NO_WAIT);
   try {
     reportBusy(() => call(probe));
   } finally {
@@ -74,7 +74,7 @@ async function run(writerMode: WriterMode): Promise<void> {
       return;
     }
     case "write": {
-      const db = openDb(path, { heldRecordWaitMs: CONTENDED_WAIT_MS });
+      const db = openDb(path, { heldRecordWaitMs: CONTENDED_WAIT_MS, channel: null });
       console.log("opened");
       await nextLine();
       reportBusyOnProbeConnection(insertWho);
@@ -83,7 +83,7 @@ async function run(writerMode: WriterMode): Promise<void> {
       return;
     }
     case "read-write": {
-      const db = openDb(path, { heldRecordWaitMs: CONTENDED_WAIT_MS });
+      const db = openDb(path, { heldRecordWaitMs: CONTENDED_WAIT_MS, channel: null });
       console.log("opened");
       await nextLine();
       reportBusyOnProbeConnection(readThenInsertWho);
@@ -93,13 +93,13 @@ async function run(writerMode: WriterMode): Promise<void> {
     }
     case "open": {
       reportBusyOnProbeConnection(insertWho);
-      const db = openDb(path, { heldRecordWaitMs: CONTENDED_WAIT_MS });
+      const db = openDb(path, { heldRecordWaitMs: CONTENDED_WAIT_MS, channel: null });
       insertWho(db);
       db.close();
       return;
     }
     case "close":
-      withDb(path, { heldRecordWaitMs: CONTENDED_WAIT_MS }, (db) => {
+      withDb(path, { heldRecordWaitMs: CONTENDED_WAIT_MS, channel: null }, (db) => {
         insertWho(db);
         console.log("closing");
       });
@@ -107,12 +107,12 @@ async function run(writerMode: WriterMode): Promise<void> {
     case "initialize": {
       console.log("ready");
       await nextLine();
-      openDb(path, { heldRecordWaitMs: CONTENDED_WAIT_MS }).close();
+      openDb(path, { heldRecordWaitMs: CONTENDED_WAIT_MS, channel: null }).close();
       return;
     }
     case "initialize-contended":
-      reportBusy(() => openDb(path, { heldRecordWaitMs: NO_WAIT_MS }).close());
-      openDb(path, { heldRecordWaitMs: CONTENDED_WAIT_MS }).close();
+      reportBusy(() => openDb(path, NO_WAIT).close());
+      openDb(path, { heldRecordWaitMs: CONTENDED_WAIT_MS, channel: null }).close();
       return;
     default:
       return unreachable(writerMode);

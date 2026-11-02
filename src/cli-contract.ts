@@ -1,5 +1,6 @@
 import { refuser } from "./coded-error";
 import type { Env } from "./env";
+import type { Channel } from "./update-channel";
 
 export type Command = {
   name: string;
@@ -14,6 +15,7 @@ export type Runtime = {
   readonly env: Env;
   readonly command: ProgramArguments;
   readonly version: string;
+  readonly channel: Channel | null;
 };
 
 export const VERSION_FLAG = "--version";

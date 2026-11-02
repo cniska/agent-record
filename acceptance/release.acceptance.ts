@@ -1,5 +1,14 @@
 import { afterEach, expect, test } from "bun:test";
-import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import { version } from "../package.json";
@@ -16,7 +25,10 @@ import {
   SYSTEM_PATH,
   scratchDir,
   scratchHome,
+  setSchemaVersion,
+  schemaVersion,
   succeeded,
+  syncedHome,
   unameSaying,
   withFixtures,
 } from "./cli";
@@ -149,6 +161,71 @@ test(
 
     expect(versionOf(home, bins)).toEqual({ exitCode: 0, stdout: `${version}\n`, stderr: "" });
     expect(scheduledSync(home, bins)).toContain(runsSync(join(bin, "agent-record")));
+  },
+  BUILD_TIMEOUT_MS,
+);
+
+const INSTALLER_LINE =
+  "curl -fsSL https://github.com/cniska/agent-record/releases/latest/download/install.sh | sh";
+
+const CHANNEL_LAYOUTS = [
+  {
+    upgrade: "brew upgrade agent-record",
+    at: (root: string) => join(root, "homebrew", "Cellar", "agent-record", "0.3.0", "bin", "agent-record"),
+  },
+  {
+    upgrade: "npm update -g @cniska/agent-record",
+    at: (root: string) =>
+      join(root, "npm", "lib", "node_modules", "@cniska", "agent-record-darwin-arm64", "agent-record"),
+  },
+  {
+    upgrade: "bun update -g @cniska/agent-record",
+    at: (root: string) =>
+      join(
+        root,
+        ".bun",
+        "install",
+        "global",
+        "node_modules",
+        "@cniska",
+        "agent-record-darwin-arm64",
+        "agent-record",
+      ),
+  },
+  { upgrade: INSTALLER_LINE, at: (root: string) => join(root, ".local", "bin", "agent-record") },
+  {
+    upgrade: `upgrade agent-record the way it was installed: brew upgrade agent-record, npm update -g @cniska/agent-record, bun update -g @cniska/agent-record, or ${INSTALLER_LINE}`,
+    at: (root: string) => join(root, "Downloads", "agent-record"),
+  },
+] as const;
+
+function laidOut(binary: string, at: string): string {
+  mkdirSync(dirname(at), { recursive: true });
+  copyFileSync(binary, at);
+  chmodSync(at, 0o755);
+  return at;
+}
+
+test(
+  "AC-77 a release refuses a newer record naming the upgrade of the channel it was installed through, and every channel's where it cannot tell",
+  () => {
+    const binary = compiledRelease(scratchDir());
+    const home = syncedHome();
+    setSchemaVersion(home, schemaVersion(home) + 1);
+    const env = { XDG_DATA_HOME: join(home.root, "data"), XDG_STATE_HOME: join(home.root, "state") };
+
+    for (const { upgrade, at } of CHANNEL_LAYOUTS) {
+      const installed = laidOut(binary, at(home.root));
+      const error = refused(
+        runOnCleanMachine(home, [], [installed, "query", "search", "parser"], env),
+        "query",
+      );
+      expect({ installed, code: error.code, resolve: error.resolve }).toEqual({
+        installed,
+        code: "record_version",
+        resolve: upgrade,
+      });
+    }
   },
   BUILD_TIMEOUT_MS,
 );

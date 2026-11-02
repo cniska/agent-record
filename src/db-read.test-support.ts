@@ -3,14 +3,14 @@ import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Runtime } from "./cli-contract";
-import { type HeldRecordWait, openDb } from "./db";
+import { openDb, type RecordAccess } from "./db";
 import type { Env } from "./env";
 import { scratchEnv } from "./fixtures.test-support";
 import { dbPath } from "./paths";
 
 export const NO_WAIT_MS = 0;
 
-export const NO_WAIT: HeldRecordWait = { heldRecordWaitMs: NO_WAIT_MS };
+export const NO_WAIT: RecordAccess = { heldRecordWaitMs: NO_WAIT_MS, channel: null };
 
 export function testRuntime(env: Env): Runtime {
   return {
@@ -19,6 +19,7 @@ export function testRuntime(env: Env): Runtime {
     env,
     command: ["/opt/homebrew/bin/agent-record"],
     version: "0.1.0",
+    channel: null,
   };
 }
 
@@ -26,7 +27,7 @@ export function recordWithCommit(): { home: string; env: Env; path: string } {
   const home = mkdtempSync(join(tmpdir(), "agent-record-db-read-"));
   const env = scratchEnv(home);
   const path = dbPath(env);
-  const db = openDb(path, { heldRecordWaitMs: NO_WAIT_MS });
+  const db = openDb(path, NO_WAIT);
   db.run(
     "INSERT INTO repo_commit (sha, repo, label, ts, subject) VALUES ('abc123', '/repo', 'acme/demo', '2026-01-01T00:00:00Z', 'feat: stay as written')",
   );

@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { z } from "zod";
 import { openDb, readRows, recordVersion } from "./db";
-import { NO_WAIT_MS } from "./db-read.test-support";
+import { NO_WAIT, NO_WAIT_MS } from "./db-read.test-support";
 import { SCHEMA_VERSION } from "./db-schema";
 import type { Env } from "./env";
 import { scratchEnv, writeClaudeTranscript } from "./fixtures.test-support";
@@ -26,7 +26,7 @@ type Scratch = { db: Database; env: Env };
 function scratch(): Scratch {
   const home = mkdtempSync(join(tmpdir(), "agent-record-rebuild-"));
   const env = scratchEnv(home);
-  return { db: openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS }), env };
+  return { db: openDb(dbPath(env), NO_WAIT), env };
 }
 
 function fill(db: Database): void {
@@ -115,7 +115,11 @@ describe("absorbing a schema change", () => {
     db.run(`PRAGMA user_version = ${SCHEMA_VERSION - 1}`);
     db.close();
 
-    const reopened = openDb(dbPath(env), { admits: "any", heldRecordWaitMs: NO_WAIT_MS });
+    const reopened = openDb(dbPath(env), {
+      admits: "any",
+      heldRecordWaitMs: NO_WAIT_MS,
+      channel: null,
+    });
     rebuild(reopened, env, "archive alone");
 
     expect(columnsOf(reopened, "tool_call")).toContain("file_path");
@@ -213,7 +217,7 @@ describe("absorbing a schema change", () => {
     mkdirSync(target);
     mkdirSync(dirname(dirname(record)), { recursive: true });
     symlinkSync(target, dirname(record));
-    const db = openDb(record, { heldRecordWaitMs: NO_WAIT_MS });
+    const db = openDb(record, NO_WAIT);
     writeFileSync(`${record}.agent-record-backup`, "older");
 
     expect(rebuild(db, env, "archive alone").backup).toBe(`${record}.agent-record-backup-2`);
@@ -284,7 +288,7 @@ describe("a sync", () => {
   test("reads every source in the tool vocabulary's order", () => {
     const root = mkdtempSync(join(tmpdir(), "agent-record-tools-"));
     const env = scratchEnv(root);
-    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
+    const db = openDb(dbPath(env), NO_WAIT);
     try {
       expect(sync(db, env).sources).toEqual(TOOLS.map((tool) => ({ tool, files: 0 })));
     } finally {
@@ -306,7 +310,7 @@ describe("a sync", () => {
       agent: null,
     };
     writeFileSync(live, `${JSON.stringify({ ...prompt, cwd: "/w", tool: "Bash" })}\n{broken\n`);
-    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
+    const db = openDb(dbPath(env), NO_WAIT);
     const events = () => db.query("SELECT src_file, src_line, event, tool FROM hook_event").all();
     const copy = join(archiveDir(env), "plugin-data", "acme-kit", "events.jsonl");
     try {
@@ -343,7 +347,7 @@ describe("a sync", () => {
     writeFileSync(join(root, ".claude", "skills", "review", "SKILL.md"), "# Review");
     const empty = join(root, "empty-home");
     mkdirSync(empty);
-    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
+    const db = openDb(dbPath(env), NO_WAIT);
     const loads = () => db.query("SELECT session_id, message_id, skill_name, how FROM skill_load").all();
     try {
       sync(db, env);

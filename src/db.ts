@@ -8,6 +8,7 @@ import { sqliteBusy, sqliteCode } from "./db-error";
 import { SCHEMA_SQL, SCHEMA_VERSION } from "./db-schema";
 import { issuesOf } from "./error-read";
 import { nextBackupPath } from "./file-backup";
+import type { Channel } from "./update-channel";
 
 export type RowRead<Params extends SQLQueryBindings[]> = {
   readonly columns: readonly string[];
@@ -68,15 +69,18 @@ export function versionAndFreshnessInOneSnapshot(db: Database): {
   return { found: row.version, fresh: row.version === 0 && row.tables === 0 };
 }
 
-export function refuseOtherVersion(found: number): void {
-  if (found !== SCHEMA_VERSION) throw refuseRecord("record_version", { found, expected: SCHEMA_VERSION });
+export function refuseOtherVersion(found: number, { channel }: RecordAccess): void {
+  if (found !== SCHEMA_VERSION)
+    throw refuseRecord("record_version", { found, expected: SCHEMA_VERSION, channel });
 }
 
 function failNowIfUnopenable(db: Database): void {
   recordVersion(db);
 }
 
-export type HeldRecordWait = { readonly heldRecordWaitMs: number };
+type HeldRecordWait = { readonly heldRecordWaitMs: number };
+
+export type RecordAccess = HeldRecordWait & { readonly channel: Channel | null };
 
 const UNOPENABLE_CODES = ["SQLITE_CANTOPEN", "SQLITE_NOTADB"] as const;
 
@@ -101,7 +105,7 @@ export function openRecordFile(
 
 type Admits = "current" | "older" | "any";
 
-export type RecordOpening = HeldRecordWait & { readonly admits?: Admits };
+export type RecordOpening = RecordAccess & { readonly admits?: Admits };
 
 type OpenedRecord = { readonly db: Database; readonly older: number | null };
 
@@ -143,7 +147,7 @@ function openRecord(path: string, opts: RecordOpening): OpenedRecord {
   try {
     const { found, fresh } = versionAndFreshnessInOneSnapshot(db);
     if (!fresh && refusesVersion(admits, found))
-      throw refuseRecord("record_version", { found, expected: SCHEMA_VERSION });
+      throw refuseRecord("record_version", { found, expected: SCHEMA_VERSION, channel: opts.channel });
     const older = !fresh && found < SCHEMA_VERSION ? found : null;
     enableWalRetryingBusy(db, opts.heldRecordWaitMs);
     db.run("PRAGMA foreign_keys = ON");
@@ -155,7 +159,7 @@ function openRecord(path: string, opts: RecordOpening): OpenedRecord {
       });
     }
     if (admits === "any" || older !== null) return { db, older };
-    refuseOtherVersion(versionAndFreshnessInOneSnapshot(db).found);
+    refuseOtherVersion(versionAndFreshnessInOneSnapshot(db).found, opts);
     db.run(SCHEMA_SQL);
     return { db, older };
   } catch (error) {

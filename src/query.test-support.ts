@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import { openDb } from "./db";
-import { NO_WAIT_MS } from "./db-read.test-support";
+import { NO_WAIT } from "./db-read.test-support";
 import { SCHEMA_SQL } from "./db-schema";
 import { scratchEnv, writeClaudeTranscript, writeCodexRollout } from "./fixtures.test-support";
 import { probeCheckout } from "./git-probe";
@@ -46,7 +46,7 @@ export function syncedRecord(root: string): string {
   writeClaudeTranscript(env, "-Users-x-code-demo", SYNCED_SESSION);
   writeCodexRollout(env, "sessions", "0199c0de-0000-7000-8000-000000000001");
   const path = dbPath(env);
-  const db = openDb(path, { heldRecordWaitMs: NO_WAIT_MS });
+  const db = openDb(path, NO_WAIT);
   sync(db, env);
   db.close();
   return path;

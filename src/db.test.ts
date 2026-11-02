@@ -7,7 +7,7 @@ import { z } from "zod";
 import { CodedError, errorRecord } from "./coded-error";
 import { openDb, readRows, recordVersion, SqlFlag, withDb } from "./db";
 import { refuseRecord } from "./db-contract";
-import { NO_WAIT_MS } from "./db-read.test-support";
+import { NO_WAIT, NO_WAIT_MS } from "./db-read.test-support";
 import { SCHEMA_VERSION } from "./db-schema";
 import type { WriterMode } from "./db-writer.test-support";
 
@@ -115,21 +115,21 @@ describe("concurrent writers", () => {
     holder.run("PRAGMA journal_mode = WAL");
     holder.run("BEGIN IMMEDIATE");
     try {
-      expect(() => openDb(path, { heldRecordWaitMs: 50 })).toThrow(
+      expect(() => openDb(path, { heldRecordWaitMs: 50, channel: null })).toThrow(
         expect.objectContaining({ code: "SQLITE_BUSY" }),
       );
     } finally {
       holder.run("ROLLBACK");
       holder.close();
     }
-    const reopened = openDb(path, { heldRecordWaitMs: NO_WAIT_MS });
+    const reopened = openDb(path, NO_WAIT);
     expect(reopened.query("PRAGMA user_version").get()).toEqual({ user_version: SCHEMA_VERSION });
     reopened.close();
   });
 
   test("a connection closing while a reader holds a snapshot does not hold up another writer", async () => {
     const path = scratchPath();
-    const setup = openDb(path, { heldRecordWaitMs: NO_WAIT_MS });
+    const setup = openDb(path, NO_WAIT);
     setup.run("CREATE TABLE probe (who TEXT NOT NULL)");
     setup.close();
     const reader = new Database(path);
@@ -139,7 +139,7 @@ describe("concurrent writers", () => {
       const closer = spawnWriter("close", path, "closer");
       await closer.expectLine("closing");
       await Bun.sleep(HOLD_MS);
-      const writer = openDb(path, { heldRecordWaitMs: HOLD_MS });
+      const writer = openDb(path, { heldRecordWaitMs: HOLD_MS, channel: null });
       writer.run("INSERT INTO probe (who) VALUES ('writer')");
       writer.close();
       reader.run("COMMIT");
@@ -153,7 +153,7 @@ describe("concurrent writers", () => {
 
   test("an open under another's held write lock completes without waiting and its write waits", async () => {
     const path = scratchPath();
-    const setup = openDb(path, { heldRecordWaitMs: NO_WAIT_MS });
+    const setup = openDb(path, NO_WAIT);
     setup.run("CREATE TABLE probe (who TEXT NOT NULL)");
     setup.close();
 
@@ -171,7 +171,7 @@ describe("concurrent writers", () => {
 
   test("a writer already open waits for another's write lock and both commit", async () => {
     const path = scratchPath();
-    const setup = openDb(path, { heldRecordWaitMs: NO_WAIT_MS });
+    const setup = openDb(path, NO_WAIT);
     setup.run("CREATE TABLE probe (who TEXT NOT NULL)");
     setup.close();
 
@@ -191,7 +191,7 @@ describe("concurrent writers", () => {
 
   test("a transaction that reads before it writes waits for another's write lock and both commit", async () => {
     const path = scratchPath();
-    const setup = openDb(path, { heldRecordWaitMs: NO_WAIT_MS });
+    const setup = openDb(path, NO_WAIT);
     setup.run("CREATE TABLE probe (who TEXT NOT NULL)");
     setup.close();
 
@@ -211,13 +211,13 @@ describe("concurrent writers", () => {
 
   test("a lock held past the wait fails the writer with SQLITE_BUSY", () => {
     const path = scratchPath();
-    const setup = openDb(path, { heldRecordWaitMs: NO_WAIT_MS });
+    const setup = openDb(path, NO_WAIT);
     setup.run("CREATE TABLE probe (who TEXT NOT NULL)");
     setup.close();
 
     const holder = new Database(path);
     holder.run("BEGIN IMMEDIATE");
-    const writer = openDb(path, { heldRecordWaitMs: 50 });
+    const writer = openDb(path, { heldRecordWaitMs: 50, channel: null });
     try {
       expect(writer.query("PRAGMA busy_timeout").get()).toEqual({ timeout: 50 });
       let caught: unknown;
@@ -238,12 +238,12 @@ describe("concurrent writers", () => {
 describe("a writer on a record another process holds", () => {
   test("is refused as busy, naming the record", () => {
     const path = scratchPath();
-    openDb(path, { heldRecordWaitMs: NO_WAIT_MS }).close();
+    openDb(path, NO_WAIT).close();
     const holder = new Database(path);
     holder.run("PRAGMA locking_mode = EXCLUSIVE");
     holder.run("BEGIN IMMEDIATE");
     try {
-      expect(() => withDb(path, { heldRecordWaitMs: NO_WAIT_MS }, () => null)).toThrow(
+      expect(() => withDb(path, NO_WAIT, () => null)).toThrow(
         expect.objectContaining({ kind: "refusal", code: "record_busy", meta: { path } }),
       );
     } finally {
@@ -254,16 +254,14 @@ describe("a writer on a record another process holds", () => {
 });
 
 describe("a record of another version", () => {
-  test("is rebuilt when older, and met by an upgrade through each channel when newer", () => {
-    const older = refuseRecord("record_version", { found: 4, expected: 5 });
-    const newer = refuseRecord("record_version", { found: 6, expected: 5 });
+  test("is rebuilt when older, and met by the upgrade of the release's channel when newer", () => {
+    const older = refuseRecord("record_version", { found: 4, expected: 5, channel: "homebrew" });
+    const newer = refuseRecord("record_version", { found: 6, expected: 5, channel: "homebrew" });
     expect(older.resolve).toBe("the next agent-record sync rebuilds it, or run agent-record rebuild");
     expect(newer.message).toBe(
       "the record is schema version 6, newer than the version 5 this agent-record reads",
     );
-    expect(newer.resolve).toBe(
-      "upgrade agent-record the way it was installed: brew upgrade agent-record, npm update -g @cniska/agent-record, or curl -fsSL https://github.com/cniska/agent-record/releases/latest/download/install.sh | sh",
-    );
+    expect(newer.resolve).toBe("brew upgrade agent-record");
   });
 
   for (const found of [0, SCHEMA_VERSION + 1]) {
@@ -274,8 +272,11 @@ describe("a record of another version", () => {
       old.run(`PRAGMA user_version = ${found}`);
       old.close();
 
-      expect(() => openDb(path, { heldRecordWaitMs: NO_WAIT_MS })).toThrow(
-        expect.objectContaining({ code: "record_version", meta: { found, expected: SCHEMA_VERSION } }),
+      expect(() => openDb(path, NO_WAIT)).toThrow(
+        expect.objectContaining({
+          code: "record_version",
+          meta: { found, expected: SCHEMA_VERSION, channel: null },
+        }),
       );
 
       const after = new Database(path, { readonly: true });
@@ -290,7 +291,7 @@ describe("a record of another version", () => {
 
 function stampedOld(): string {
   const path = scratchPath();
-  const db = openDb(path, { heldRecordWaitMs: NO_WAIT_MS });
+  const db = openDb(path, NO_WAIT);
   db.run(`PRAGMA user_version = ${SCHEMA_VERSION - 1}`);
   db.close();
   return path;
@@ -298,7 +299,11 @@ function stampedOld(): string {
 
 describe("opening a database an older schema wrote", () => {
   test("opening for a rebuild leaves the old version in place", () => {
-    const db = openDb(stampedOld(), { admits: "any", heldRecordWaitMs: NO_WAIT_MS });
+    const db = openDb(stampedOld(), {
+      admits: "any",
+      heldRecordWaitMs: NO_WAIT_MS,
+      channel: null,
+    });
 
     expect(recordVersion(db)).toBe(SCHEMA_VERSION - 1);
     db.close();
@@ -307,9 +312,7 @@ describe("opening a database an older schema wrote", () => {
   test("opening for anything else refuses it", () => {
     const path = stampedOld();
 
-    expect(() => openDb(path, { heldRecordWaitMs: NO_WAIT_MS })).toThrow(
-      expect.objectContaining({ code: "record_version" }),
-    );
+    expect(() => openDb(path, NO_WAIT)).toThrow(expect.objectContaining({ code: "record_version" }));
   });
 });
 

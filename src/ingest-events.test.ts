@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { openDb, readRows } from "./db";
-import { NO_WAIT_MS } from "./db-read.test-support";
+import { NO_WAIT } from "./db-read.test-support";
 import { createEventIngester, ingestEventLog } from "./ingest-events";
 
 const roots: string[] = [];
@@ -19,7 +19,7 @@ function scratch(): { readonly db: Database; readonly log: string } {
   roots.push(root);
   mkdirSync(join(root, "plugin"), { recursive: true });
   return {
-    db: openDb(join(root, "sessions.db"), { heldRecordWaitMs: NO_WAIT_MS }),
+    db: openDb(join(root, "sessions.db"), NO_WAIT),
     log: join(root, "plugin", "events.jsonl"),
   };
 }

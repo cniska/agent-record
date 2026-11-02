@@ -11,4 +11,5 @@ await runCli({
   env: parseEnv(process.env),
   command: [process.execPath, resolve(import.meta.dir, "..", "src", "cli.ts")],
   version,
+  channel: null,
 });

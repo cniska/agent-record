@@ -8,7 +8,7 @@ import { z } from "zod";
 import { agentLoaded, agentPlistPath, installAgent } from "./agent-launchd";
 import { openDb } from "./db";
 import { refuseRecord } from "./db-contract";
-import { NO_WAIT_MS, testRuntime } from "./db-read.test-support";
+import { NO_WAIT, testRuntime } from "./db-read.test-support";
 import { recordDoctor } from "./doctor";
 import type { Env } from "./env";
 import { runCli, scratchEnv } from "./fixtures.test-support";
@@ -24,7 +24,7 @@ afterEach(() => {
 });
 
 function syncFinishedAt(env: Env, at: string): void {
-  const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
+  const db = openDb(dbPath(env), NO_WAIT);
   try {
     stampingOutcome({ now: () => new Date(at), env }, () => sync(db, env));
   } finally {
@@ -39,7 +39,7 @@ function newEnv(): Env {
 }
 
 function writeRecord(env: Env): void {
-  openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS }).close();
+  openDb(dbPath(env), NO_WAIT).close();
 }
 
 function check(env: Env, name: string, loaded = false) {
@@ -308,7 +308,7 @@ describe("agent-record doctor through the CLI", () => {
     mkdirSync(join(subagents, "agent-a1.meta.json"), { recursive: true });
     writeFileSync(join(subagents, "agent-a1.jsonl"), "\n");
 
-    const db = openDb(dbPath(env), { heldRecordWaitMs: NO_WAIT_MS });
+    const db = openDb(dbPath(env), NO_WAIT);
     try {
       const report = stampingOutcome(testRuntime(env), () => sync(db, env));
       expect(report.failures).toHaveLength(1);
