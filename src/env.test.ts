@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { type Invocation, releaseCommand } from "./env";
+import { type Invocation, parseEnv, releaseCommand } from "./env";
 
 const roots: string[] = [];
 
@@ -77,5 +77,33 @@ describe("the command a release was started as", () => {
     const raw = { PATH: join(root, "bin") };
     for (const argv0 of ["", "missing", "./missing", join(root, "Cellar")])
       expect(releaseCommand(invocation({ raw, argv0, cwd: root }))).toBe(EXEC_PATH);
+  });
+});
+
+describe("the update check", () => {
+  test("is on unless CI or AGENT_RECORD_NO_UPDATE_CHECK is set", () => {
+    const home = { HOME: "/home/owner" };
+    expect(parseEnv(home).updateCheck).toBe(true);
+    expect(parseEnv({ ...home, CI: "", AGENT_RECORD_NO_UPDATE_CHECK: " " }).updateCheck).toBe(true);
+    expect(parseEnv({ ...home, CI: "true" }).updateCheck).toBe(false);
+    expect(parseEnv({ ...home, AGENT_RECORD_NO_UPDATE_CHECK: "1" }).updateCheck).toBe(false);
+  });
+});
+
+describe("the launchd job", () => {
+  test("is the one running it, if any", () => {
+    const home = { HOME: "/home/owner" };
+    expect(parseEnv(home).launchdJob).toBeNull();
+    expect(parseEnv({ ...home, XPC_SERVICE_NAME: " " }).launchdJob).toBeNull();
+    expect(parseEnv({ ...home, XPC_SERVICE_NAME: "dev.agentrecord.sync" }).launchdJob).toBe(
+      "dev.agentrecord.sync",
+    );
+  });
+});
+
+describe("bun's global install", () => {
+  test("is under BUN_INSTALL, else ~/.bun", () => {
+    expect(parseEnv({ HOME: "/home/owner" }).bunInstall).toBe("/home/owner/.bun");
+    expect(parseEnv({ HOME: "/home/owner", BUN_INSTALL: "/opt/bun" }).bunInstall).toBe("/opt/bun");
   });
 });

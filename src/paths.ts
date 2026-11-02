@@ -31,6 +31,10 @@ export function syncStampPath(env: Env): string {
   return join(stateDir(env), "last-sync");
 }
 
+export function updateCheckPath(env: Env): string {
+  return join(stateDir(env), "update-check");
+}
+
 export function locksDir(env: Env): string {
   return join(stateDir(env), "locks");
 }

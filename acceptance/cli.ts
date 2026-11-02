@@ -310,6 +310,8 @@ export function curlServing(bin: string, assets: string): string {
   return bin;
 }
 
+export const UPDATE_CHECK_OFF = { AGENT_RECORD_NO_UPDATE_CHECK: "1" } as const;
+
 export function runOnCleanMachine(
   home: Home,
   bins: readonly string[],
@@ -317,7 +319,7 @@ export function runOnCleanMachine(
   env: RunEnv = {},
 ): Ran {
   const ran = Bun.spawnSync([...args], {
-    env: { PATH: [...bins, SYSTEM_PATH].join(":"), HOME: home.root, ...env },
+    env: { PATH: [...bins, SYSTEM_PATH].join(":"), HOME: home.root, ...UPDATE_CHECK_OFF, ...env },
   });
   return ranOf(ran);
 }
@@ -496,6 +498,12 @@ export function withSyncFinishedAt(home: Home, at: string): Home {
     join(home.state, "last-sync"),
     `${JSON.stringify({ kind: "finished", at, failures: null })}\n`,
   );
+  return home;
+}
+
+export function withUpdateCheckedAt(home: Home, channel: string, at: string, latest: string): Home {
+  mkdirSync(home.state, { recursive: true });
+  writeFileSync(join(home.state, "update-check"), `${JSON.stringify({ [channel]: { at, latest } })}\n`);
   return home;
 }
 

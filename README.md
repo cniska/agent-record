@@ -8,7 +8,7 @@ It keeps each session verbatim in one SQLite database, even after the tool that 
 
 - `agent-record sync` reads the session files of Claude Code, Codex, Grok, pi and omp into that database, with the commits of the repos those sessions worked in and the hook event log any Claude Code plugin writes in the format [`SPEC.md`](SPEC.md) §2.13 defines.
 - `agent-record query` and `agent-record sql` read it. Search comes first: `query search` finds where earlier work was said, decided or ran into friction, and `query thread` shows what happened around it.
-- It needs no credential, has no per-token cost and never reaches the network.
+- It needs no credential, has no per-token cost and reaches the network only to check once a day for a newer release.
 
 ## Install
 
@@ -38,8 +38,6 @@ With bun:
 bun add -g @cniska/agent-record
 ```
 
-Each channel updates the way it installed: `brew upgrade agent-record`, `npm update -g @cniska/agent-record`, `bun update -g @cniska/agent-record`, or the curl line run again.
-
 Then build the record and check it:
 
 ```bash
@@ -52,6 +50,18 @@ Then install the Claude Code plugin, the preferred way to keep the record curren
 ```bash
 claude plugin install cniska-record@cniska
 ```
+
+## Updates
+
+Each channel updates the way it installed: `brew upgrade agent-record`, `npm update -g @cniska/agent-record`, `bun update -g @cniska/agent-record`, or the curl line run again.
+
+Once a day, on the first command it runs, a release asks the channel it was installed through for its latest version, waiting about a second at most. While a newer one is out, every command ends its stderr with one line for the agent running it, such as:
+
+```text
+agent-record 0.3.1 is out (running 0.3.0): run brew upgrade agent-record; if you cannot, tell the user.
+```
+
+Stdout and the exit code stay the same. Set `AGENT_RECORD_NO_UPDATE_CHECK=1` to turn the check off; it is also off when `CI` is set, in the launchd agent's sync, and in the plugin's.
 
 ## Why
 

@@ -21,7 +21,10 @@ function binWith(cli: boolean): { bin: string; synced: string } {
   if (cli) {
     expect(Bun.spawnSync(["mkfifo", synced]).exitCode).toBe(0);
     const stub = join(bin, "agent-record");
-    writeFileSync(stub, `#!/bin/sh\necho "$@" > "${synced}"\n`);
+    writeFileSync(
+      stub,
+      `#!/bin/sh\necho "$@ update-check-off=$AGENT_RECORD_NO_UPDATE_CHECK" > "${synced}"\n`,
+    );
     chmodSync(stub, 0o755);
   }
   return { bin, synced };
@@ -33,12 +36,12 @@ function runHook(bin: string) {
 }
 
 describe("the plugin's session-start hook", () => {
-  test("starts a sync and prints the note that points the session at the record", async () => {
+  test("starts a sync with the update check off and prints the note that points the session at the record", async () => {
     const { bin, synced } = binWith(true);
     const ran = runHook(bin);
     expect(ran.exitCode).toBe(0);
     expect(ran.stdout).toBe(readFileSync(join(HOOKS, "note.md"), "utf8"));
-    expect(await readFile(synced, "utf8")).toBe("sync\n");
+    expect(await readFile(synced, "utf8")).toBe("sync update-check-off=1\n");
   });
 
   test("prints nothing when the CLI is not on PATH", () => {

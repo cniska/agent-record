@@ -1,7 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import { userInfo } from "node:os";
 import { parseEnv } from "./env";
-import { archiveDir, dbPath, locksDir, mirrorArchiveDir, mirrorStampPath, stateDir } from "./paths";
+import {
+  archiveDir,
+  dbPath,
+  locksDir,
+  mirrorArchiveDir,
+  mirrorStampPath,
+  stateDir,
+  updateCheckPath,
+} from "./paths";
 
 const HOME = "/home/owner";
 
@@ -19,6 +27,7 @@ describe("the XDG layout", () => {
     expect(archiveDir(env)).toBe("/x/data/agent-record/archive");
     expect(stateDir(env)).toBe("/x/state/agent-record");
     expect(locksDir(env)).toBe("/x/state/agent-record/locks");
+    expect(updateCheckPath(env)).toBe("/x/state/agent-record/update-check");
   });
 
   test("ignores a relative or empty XDG variable, as the XDG spec says", () => {

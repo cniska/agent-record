@@ -10,6 +10,8 @@ export type Env = {
   readonly tmpDir: string;
   readonly mirrorDir: string;
   readonly bunInstall: string;
+  readonly updateCheck: boolean;
+  readonly launchdJob: string | null;
 };
 
 export type RawEnv = Readonly<Record<string, string | undefined>>;
@@ -77,6 +79,12 @@ export function releaseCommand({ raw, argv0, cwd, execPath }: Invocation): strin
   return typedCommand(argv0, cwd, raw) ?? execPath;
 }
 
+const UPDATE_CHECK_OFF_VARIABLES = ["CI", "AGENT_RECORD_NO_UPDATE_CHECK"] as const;
+
+function updateCheckOn(raw: RawEnv): boolean {
+  return !UPDATE_CHECK_OFF_VARIABLES.some((variable) => filled(raw[variable]));
+}
+
 export function parseEnv(raw: RawEnv): Env {
   const home = homeOf(raw);
   return {
@@ -86,5 +94,7 @@ export function parseEnv(raw: RawEnv): Env {
     tmpDir: tempOf(raw),
     mirrorDir: absoluteOr(raw, "AGENT_RECORD_MIRROR", home, ICLOUD_DRIVE_MIRROR),
     bunInstall: absoluteOr(raw, "BUN_INSTALL", home, [".bun"]),
+    updateCheck: updateCheckOn(raw),
+    launchdJob: filled(raw.XPC_SERVICE_NAME) ? raw.XPC_SERVICE_NAME : null,
   };
 }

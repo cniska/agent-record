@@ -16,6 +16,8 @@ export function scratchEnv(root: string): Env {
     tmpDir: tmpdir(),
     mirrorDir: join(root, "mirror"),
     bunInstall: join(root, ".bun"),
+    updateCheck: false,
+    launchdJob: null,
   };
 }
 

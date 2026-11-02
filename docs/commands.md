@@ -2,7 +2,7 @@
 
 The `agent-record` commands, and where the record and its archive live.
 
-Each command prints one [TOON](https://toonformat.dev) document: its result on stdout, or its error on stderr with exit 1. A query or `sql` prints its rows as a table of every column it returns. The named queries cover the common questions; `agent-record sql` asks any other.
+Each command prints one [TOON](https://toonformat.dev) document: its result on stdout, or its error on stderr with exit 1. A release may end stderr with one update line after it, as the [README](../README.md#updates) says. A query or `sql` prints its rows as a table of every column it returns. The named queries cover the common questions; `agent-record sql` asks any other.
 
 | Command | Does |
 | --- | --- |

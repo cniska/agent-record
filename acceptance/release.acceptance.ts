@@ -29,6 +29,8 @@ import {
   schemaVersion,
   succeeded,
   syncedHome,
+  UPDATE_CHECK_OFF,
+  withUpdateCheckedAt,
   unameSaying,
   withFixtures,
 } from "./cli";
@@ -226,6 +228,48 @@ test(
         resolve: upgrade,
       });
     }
+  },
+  BUILD_TIMEOUT_MS,
+);
+
+const UPDATE_CHECK_ON = { AGENT_RECORD_NO_UPDATE_CHECK: "" } as const;
+
+test(
+  "AC-78 a release whose channel knows a newer version ends every command's stderr with one line naming that channel's upgrade, leaving stdout and the exit code, and prints none when the check is off, the version is current or the channel unknown",
+  () => {
+    const binary = compiledRelease(scratchDir());
+    const home = scratchHome();
+    const xdg = { XDG_DATA_HOME: join(home.root, "data"), XDG_STATE_HOME: join(home.root, "state") };
+    const curl = laidOut(binary, join(home.root, ".local", "bin", "agent-record"));
+    const elsewhere = laidOut(binary, join(home.root, "Downloads", "agent-record"));
+    const checkedNow = new Date().toISOString();
+    withUpdateCheckedAt(home, "curl", checkedNow, "99.0.0");
+    const line = `agent-record 99.0.0 is out (running ${version}): run ${INSTALLER_LINE}; if you cannot, tell the user.\n`;
+    const run = (build: string, args: readonly string[], env: Readonly<Record<string, string>> = {}) =>
+      runOnCleanMachine(home, [], [build, ...args], { ...xdg, ...UPDATE_CHECK_ON, ...env });
+
+    expect(run(curl, ["--version"])).toEqual({ exitCode: 0, stdout: `${version}\n`, stderr: line });
+    const refusal = run(curl, ["no-such-command"]);
+    expect({ exitCode: refusal.exitCode, stdout: refusal.stdout }).toEqual({ exitCode: 1, stdout: "" });
+    expect(refusal.stderr).toEndWith(`\n${line}`);
+    expect(refused({ ...refusal, stderr: refusal.stderr.slice(0, -line.length) }, "agent-record").code).toBe(
+      "unknown_command",
+    );
+
+    const offs: readonly Readonly<Record<string, string>>[] = [
+      UPDATE_CHECK_OFF,
+      { CI: "true" },
+      { XPC_SERVICE_NAME: "dev.agentrecord.sync" },
+    ];
+    for (const off of offs)
+      expect({ off, ran: run(curl, ["--version"], off) }).toEqual({
+        off,
+        ran: { exitCode: 0, stdout: `${version}\n`, stderr: "" },
+      });
+    expect(run(elsewhere, ["--version"])).toEqual({ exitCode: 0, stdout: `${version}\n`, stderr: "" });
+
+    withUpdateCheckedAt(home, "curl", checkedNow, version);
+    expect(run(curl, ["--version"])).toEqual({ exitCode: 0, stdout: `${version}\n`, stderr: "" });
   },
   BUILD_TIMEOUT_MS,
 );
